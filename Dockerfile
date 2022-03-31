@@ -1,13 +1,27 @@
-############# builder
-FROM eu.gcr.io/gardener-project/3rd/golang:1.17.6 AS builder
+FROM golang AS base
+ENV GO111MODULE=on
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+ENV GOARCH=amd64
+WORKDIR /src
 
-WORKDIR /go/src/github.com/gardener/gardener-extension-shoot-cert-service
-COPY . .
-RUN make install
+COPY go.* .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-############# gardener-extension-shoot-cert-service
-FROM alpine:3.15.0 AS gardener-extension-shoot-cert-service
+FROM base AS build
+# temp mount all files instead of loading into image with COPY
+# temp mount module cache
+# temp mount go build cache
+RUN --mount=target=. \
+    --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -ldflags="-w -s" -o /app/main ./cmd/gardener-extension-example/main.go
 
+# Import the binary from build stage
+FROM gcr.io/distroless/static:nonroot as prd
+COPY --from=build /app/main /
 COPY charts /charts
-COPY --from=builder /go/bin/gardener-extension-shoot-cert-service /gardener-extension-shoot-cert-service
-ENTRYPOINT ["/gardener-extension-shoot-cert-service"]
+# this is the numeric version of user nonroot:nonroot to check runAsNonRoot in kubernetes
+USER 65532:65532
+ENTRYPOINT ["/main"]

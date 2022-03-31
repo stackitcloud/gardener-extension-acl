@@ -1,4 +1,5 @@
-// Copyright (c) 2019 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+// Copyright (c) 2019 SAP SE or an SAP affiliate company. All rights reserved.
+// This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +16,7 @@
 package controller
 
 import (
-	controllerconfig "github.com/gardener/gardener-extension-shoot-cert-service/pkg/controller/config"
+	controllerconfig "github.com/stackitcloud/gardener-extension-example/pkg/controller/config"
 
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -24,11 +25,11 @@ import (
 
 const (
 	// Type is the type of Extension resource.
-	Type = "shoot-cert-service"
-	// ControllerName is the name of the shoot cert service controller.
-	ControllerName = "shoot_cert_service"
-	// FinalizerSuffix is the finalizer suffix for the shoot cert service controller.
-	FinalizerSuffix = "shoot-cert-service"
+	Type = "sample-extension"
+	// ControllerName is the name of the service controller.
+	ControllerName = "extension-service"
+	// FinalizerSuffix is the finalizer suffix for the service controller.
+	FinalizerSuffix = "extension-service"
 )
 
 var (
@@ -36,31 +37,26 @@ var (
 	DefaultAddOptions = AddOptions{}
 )
 
-// AddOptions are options to apply when adding the shoot cert service controller to the manager.
+// AddOptions are options to apply when adding the shoot service controller to the manager.
 type AddOptions struct {
 	// ControllerOptions contains options for the controller.
 	ControllerOptions controller.Options
-	// ServiceConfig contains configuration for the shoot cert service.
-	ServiceConfig controllerconfig.Config
+	// ExtensionConfig contains configuration for the extension service
+	ExtensionConfig controllerconfig.Config
 	// IgnoreOperationAnnotation specifies whether to ignore the operation annotation or not.
 	IgnoreOperationAnnotation bool
-	// UseTokenRequestor specifies whether the token requestor shall be used for the cert-controller.
-	UseTokenRequestor bool
-	// UseProjectedTokenMount specifies whether the projected token mount shall be used for the
-	// cert-controller.
-	UseProjectedTokenMount bool
 }
 
 // AddToManager adds a controller with the default Options to the given Controller Manager.
 func AddToManager(mgr manager.Manager) error {
-	return AddToManagerWithOptions(mgr, DefaultAddOptions)
+	return AddToManagerWithOptions(mgr, &DefaultAddOptions)
 }
 
 // AddToManagerWithOptions adds a controller with the given Options to the given manager.
 // The opts.Reconciler is being set with a newly instantiated actuator.
-func AddToManagerWithOptions(mgr manager.Manager, opts AddOptions) error {
+func AddToManagerWithOptions(mgr manager.Manager, opts *AddOptions) error {
 	return extension.Add(mgr, extension.AddArgs{
-		Actuator:          NewActuator(opts.ServiceConfig.Configuration, opts.UseTokenRequestor, opts.UseProjectedTokenMount),
+		Actuator:          NewActuator(opts.ExtensionConfig),
 		ControllerOptions: opts.ControllerOptions,
 		Name:              ControllerName,
 		FinalizerSuffix:   FinalizerSuffix,

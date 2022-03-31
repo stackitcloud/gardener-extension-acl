@@ -1,0 +1,70 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    helm.sh/chart: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Chart.Name }}
+spec:
+  revisionHistoryLimit: 0
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/instance: {{ .Chart.Name }}
+  template:
+    metadata:
+      annotations:
+        {{- if .Values.imageVectorOverwrite }}
+        checksum/configmap-extension-imagevector-overwrite: {{ include (print $.Template.BasePath "/configmap-imagevector-overwrite.yaml") . | sha256sum }}
+        {{- end }}
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/instance: {{ .Chart.Name }}
+    spec:
+      priorityClassName: {{ .Chart.Name }}
+      serviceAccountName: {{ .Chart.Name }}
+      containers:
+      - name: {{ .Chart.Name }}
+        image: {{ include "image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+        - --max-concurrent-reconciles={{ .Values.controllers.concurrentSyncs }}
+        - --healthcheck-max-concurrent-reconciles={{ .Values.controllers.healthcheck.concurrentSyncs }}
+        - --disable-controllers={{ .Values.disableControllers | join "," }}
+        - --ignore-operation-annotation={{ .Values.controllers.ignoreOperationAnnotation }}
+        - --leader-election-id={{ include "leaderelectionid" . }}
+        - --leader-election-resource-lock={{ .Values.leaderElection.resourceLock }}
+        - --chart-path=/charts
+        {{- if .Values.gardener.version }}
+        - --gardener-version={{ .Values.gardener.version }}
+        {{- end }}
+        env:
+        - name: LEADER_ELECTION_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        {{- if .Values.imageVectorOverwrite }}
+        - name: IMAGEVECTOR_OVERWRITE
+          value: /charts_overwrite/images_overwrite.yaml
+        {{- end }}
+        {{- if .Values.resources }}
+        resources:
+{{ toYaml .Values.resources | trim | indent 10 }}
+        {{- end }}
+        {{- if .Values.imageVectorOverwrite }}
+        volumeMounts:
+        - name: extension-imagevector-overwrite
+          mountPath: /charts_overwrite/
+          readOnly: true
+        {{- end }}
+      {{- if .Values.imageVectorOverwrite }}
+      volumes:
+      - name: extension-imagevector-overwrite
+        configMap:
+          name: {{ include "name" .}}-imagevector-overwrite
+          defaultMode: 420
+      {{- end }}

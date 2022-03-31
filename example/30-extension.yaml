@@ -1,37 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sample
 ---
 apiVersion: extensions.gardener.cloud/v1alpha1
 kind: Extension
 metadata:
-  name: shoot-cert-service
-  namespace: shoot--foo--bar
+  name: sample-extension
+  namespace: sample
 spec:
-  type: shoot-cert-service
+  type: sample-extension
   providerConfig:
-    apiVersion: service.cert.extensions.gardener.cloud/v1alpha1
-    kind: CertConfig
-    issuers:
-    - name: custom
-      server: https://acme-v02.api.letsencrypt.org/directory
-      email: john.doe@example.com
-      privateKeySecretName: custom-privatekey # referenced resource, the private key must be stored in the secret at `data.privateKey`
-    - name: custom-eab
-      server: https://acme.my-eab-ca-provider.com/v2/acme/directory/
-      email: john.doe@example.com
-      externalAccountBinding:
-        keyID: aaaabbbbccccddddeee
-        keySecretName: issuer-custom-eab-hmackey # referenced resource, the "MAC key" must be stored in the secret at `data.hmacKey`
-      skipDNSChallengeValidation: true
-      domains:
-        include:
-          - sub1.my-domain.com
-          - sub2.my-domain.com
-        exclude:
-          - private.sub1.my-domain.com
-    dnsChallengeOnShoot: # controls where the DNS entries for DNS01 challenges are created
-      enabled: false
-      # namespace: kube-system
-      # dnsClass: foo
-    #shootIssuers: # optionally overwrite global service configuration for issuers on shoot cluster
-    #  enabled: false
-
-    #precheckNameservers: "10.0.0.53,10.123.56.53,8.8.8.8" # optional comma separated list of DNS server IP addresses if public DNS servers are not sufficient for prechecking DNS challenges
+    sampleString: hello

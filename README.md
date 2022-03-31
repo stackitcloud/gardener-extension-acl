@@ -1,64 +1,72 @@
-# [Gardener Extension for certificate services](https://gardener.cloud)
+# Gardener Example Extension for Managed Resources
 
-[![CI Build status](https://concourse.ci.gardener.cloud/api/v1/teams/gardener/pipelines/gardener-extension-shoot-cert-service-master/jobs/master-head-update-job/badge)](https://concourse.ci.gardener.cloud/teams/gardener/pipelines/gardener-extension-shoot-cert-service-master/jobs/master-head-update-job)
-[![Go Report Card](https://goreportcard.com/badge/github.com/gardener/gardener-extension-shoot-cert-service)](https://goreportcard.com/report/github.com/gardener/gardener-extension-shoot-cert-service)
+## Make It Your Own
 
-Project Gardener implements the automated management and operation of [Kubernetes](https://kubernetes.io/) clusters as a service. Its main principle is to leverage Kubernetes concepts for all of its tasks.
+1. Define the name of your extension controller.
+   * Rename the `cmd/gardener-extension-example` directory. The naming
+     convention is to keep the `gardener-extension-` part.
+   * Do a search and replace in all files to update imports, the `go.mod`, etc.
+     Use `gardener-extension-example` as the search term.
+   * Update the `NAME` variable in the Makefile.
+2. Specify the Type of extension you want to reconcile.
+   * In the [controller options: Type constant](pkg/controller/add.go).
+   * Update the [extension example spec.type](example/30-extension.yaml)
+3. Add any configuration options for your extension to the `ExtensionOptions`
+   struct in the [command's options.go](pkg/cmd/options.go). They are CLI flags
+   for you to pass to the binary. Any  of these configuration options can be
+   passed to the `ControllerOptions` in the
+   [pkg/controller/config/config.go](pkg/controller/config/config.go) file.
+   (Using the `Apply()` method in [options.go](pkg/cmd/options.go))
 
-Recently, most of the vendor specific logic has been developed [in-tree](https://github.com/gardener/gardener). However, the project has grown to a size where it is very hard to extend, maintain, and test. With [GEP-1](https://github.com/gardener/gardener/blob/master/docs/proposals/01-extensibility.md) we have proposed how the architecture can be changed in a way to support external controllers that contain their very own vendor specifics. This way, we can keep Gardener core clean and independent.
+Now you can start to implement the [actuator](pkg/controller/actuator.go)
+methods (Reconcile, Delete, Migrate, Restore). Most likely, your extension
+controller will introduce additional Kubernetes resources, either to the seed or
+the shoot clusters. Consider Gardener's
+[ManagedResource](https://github.com/gardener/gardener/blob/master/docs/concepts/resource-manager.md)
+approach to implement this, and see the `charts` directory for sample
+implementations.
 
-## Configuration
+You can also add health checks to reflect the extension's state in its `Status`
+field. Read more about health checks below.
 
-Example configuration for this extension controller:
+## Healthchecks
 
-```yaml
-apiVersion: shoot-cert-service.extensions.config.gardener.cloud/v1alpha1
-kind: Configuration
-issuerName: gardener
-restrictIssuer: true # restrict issuer to any sub-domain of shoot.spec.dns.domain (default)
-acme:
-  email: john.doe@example.com
-  server: https://acme-v02.api.letsencrypt.org/directory
-# privateKey: | # Optional key for Let's Encrypt account.
-#   -----BEGIN BEGIN RSA PRIVATE KEY-----
-#   ...
-#   -----END RSA PRIVATE KEY-----
+Gardener provides a [Health Check Library](https://gardener.cloud/docs/gardener/extensions/healthcheck-library/)
+that we can use to monitor the health of resources that our extension is
+responsible for. Example: If the extension controller deploys a Gardener
+`ManagedResource`, we can define a health check on the extension that checks for
+the health of this `ManagedResource`. This lets the extension reflect the state
+of the resources it is responsible for. This is expressed by status conditions
+in the extension resource itself (one per health check).
+
+## Generating ControllerRegistration and ControllerDeployment
+
+Extensions are installed on a Gardener cluster by deploying a
+`ControllerRegistration` and a `ControllerDeployment` object to the garden
+cluster. In this repository, you find an example for both of these resources in
+the `example/controller-registration.yaml` file. 
+
+The `ProviderConfig.chart` field contains the entire Helm chart for your
+extension as a gzipped and then base64-encoded string. After you altered this
+Helm chart in the `charts/gardener-extension` directory, run `make generate` to
+re-create this value. The `providerConfig.values.image.tag` field is populated
+with the contents of the `VERSION` file in the repository root.
+
+**NOTE**: The contents of the `VERSION` file need to be a valid SemVer. So,
+during development, you need to first run `make generate` and then manually
+replace the `providerConfig.values.image.tag` field with the current ID of the
+feature branch concourse build.
+
+## Tests
+
+To run the test suite, execute:
+
+```bash
+make test
 ```
 
-## Extension-Resources
+Place all needed Gardener CRDs in the `upstream-crds` directory, they get
+installed automatically in the envtest cluster.
 
-Example extension resource:
-
-```yaml
-apiVersion: extensions.gardener.cloud/v1alpha1
-kind: Extension
-metadata:
-  name: "extension-certificate-service"
-  namespace: shoot--project--abc
-spec:
-  type: shoot-cert-service
-```
-
-When an extension resource is reconciled, the extension controller will create an instance of [Cert-Management](https://github.com/gardener/cert-management) as well as an `Issuer` with the ACME information provided in the [configuration](#Configuration) above. These resources are placed inside the shoot namespace on the seed. Also, the controller takes care about generating necessary `RBAC` resources for the seed as well as for the shoot.
-
-Please note, this extension controller relies on the [Gardener-Resource-Manager](https://github.com/gardener/gardener-resource-manager) to deploy k8s resources to seed and shoot clusters, i.e. it never deploys them directly.
-
-## How to start using or developing this extension controller locally
-
-You can run the controller locally on your machine by executing `make start`. Please make sure to have the kubeconfig to the cluster you want to connect to ready in the `./dev/kubeconfig` file.
-Static code checks and tests can be executed by running `make verify`. We are using Go modules for Golang package dependency management and [Ginkgo](https://github.com/onsi/ginkgo)/[Gomega](https://github.com/onsi/gomega) for testing.
-
-## Feedback and Support
-
-Feedback and contributions are always welcome. Please report bugs or suggestions as [GitHub issues](https://github.com/gardener/gardener-extension-shoot-cert-service/issues) or join our [Slack channel #gardener](https://kubernetes.slack.com/messages/gardener) (please invite yourself to the Kubernetes workspace [here](http://slack.k8s.io)).
-
-## Learn more!
-
-Please find further resources about out project here:
-
-* [Our landing page gardener.cloud](https://gardener.cloud/)
-* ["Gardener, the Kubernetes Botanist" blog on kubernetes.io](https://kubernetes.io/blog/2018/05/17/gardener/)
-* ["Gardener Project Update" blog on kubernetes.io](https://kubernetes.io/blog/2019/12/02/gardener-project-update/)
-* [Gardener Extensions Golang library](https://godoc.org/github.com/gardener/gardener/extensions/pkg)
-* [GEP-1 (Gardener Enhancement Proposal) on extensibility](https://github.com/gardener/gardener/blob/master/docs/proposals/01-extensibility.md)
-* [Extensibility API documentation](https://github.com/gardener/gardener/tree/master/docs/extensions)
+See the [actuator_test.go](./pkg/controller/actuator_test.go) for a minimal test
+case example.

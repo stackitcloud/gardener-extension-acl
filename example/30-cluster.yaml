@@ -2,7 +2,7 @@
 apiVersion: extensions.gardener.cloud/v1alpha1
 kind: Cluster
 metadata:
-  name: shoot--foo--bar
+  name: sample
 spec:
   cloudProfile:
     apiVersion: core.gardener.cloud/v1beta1

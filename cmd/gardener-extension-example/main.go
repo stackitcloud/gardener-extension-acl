@@ -13,29 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package imagevector
+package main
 
 import (
-	"strings"
+	"github.com/stackitcloud/gardener-extension-example/cmd/gardener-extension-example/app"
 
-	"github.com/gardener/gardener/pkg/utils/imagevector"
-	"github.com/stackitcloud/gardener-extension-example/charts"
-	"k8s.io/apimachinery/pkg/util/runtime"
+	controllercmd "github.com/gardener/gardener/extensions/pkg/controller/cmd"
+	"github.com/gardener/gardener/pkg/logger"
+	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
-var imageVector imagevector.ImageVector
+func main() {
+	runtimelog.SetLogger(logger.ZapLogger(false))
 
-func init() {
-	var err error
-
-	imageVector, err = imagevector.Read(strings.NewReader(charts.ImagesYAML))
-	runtime.Must(err)
-
-	imageVector, err = imagevector.WithEnvOverride(imageVector)
-	runtime.Must(err)
-}
-
-// ImageVector is the image vector that contains all the needed images.
-func ImageVector() imagevector.ImageVector {
-	return imageVector
+	ctx := signals.SetupSignalHandler()
+	if err := app.NewServiceControllerCommand().ExecuteContext(ctx); err != nil {
+		controllercmd.LogErrAndExit(err, "error executing the main controller command")
+	}
 }

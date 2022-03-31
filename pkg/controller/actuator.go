@@ -1,4 +1,5 @@
-// Copyright (c) 2019 SAP SE or an SAP affiliate company. All rights reserved. This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
+// Copyright (c) 2019 SAP SE or an SAP affiliate company. All rights reserved.
+// This file is licensed under the Apache Software License, v. 2 except as noted otherwise in the LICENSE file
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,33 +17,25 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/gardener/gardener-extension-shoot-cert-service/pkg/apis/config"
-	"github.com/gardener/gardener-extension-shoot-cert-service/pkg/apis/service"
-	"github.com/gardener/gardener-extension-shoot-cert-service/pkg/apis/service/v1alpha1"
-	"github.com/gardener/gardener-extension-shoot-cert-service/pkg/apis/service/validation"
-	"github.com/gardener/gardener-extension-shoot-cert-service/pkg/imagevector"
+	"github.com/stackitcloud/gardener-extension-example/pkg/controller/config"
+	"github.com/stackitcloud/gardener-extension-example/pkg/imagevector"
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	"github.com/gardener/gardener/extensions/pkg/util"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
-	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/chart"
-	gutil "github.com/gardener/gardener/pkg/utils/gardener"
 	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
-	"github.com/gardener/gardener/pkg/utils/secrets"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -52,29 +45,38 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// ActuatorName is the name of the Certificate Service actuator.
-const ActuatorName = "shoot-cert-service-actuator"
+const (
+	// ActuatorName is only used for the logger instance
+	ActuatorName      = "some-actuator"
+	ResourceNameShoot = "resource-name-shoot"
+	ChartNameShoot    = "example-shoot"
+	ResourceNameSeed  = "resource-name-seed"
+	ChartNameSeed     = "example-seed"
+	// ImageName is used for the image vector override.
+	// This is currently not implemented correctly.
+	ImageName       = "image-name"
+	deletionTimeout = 2 * time.Minute
+)
 
 // NewActuator returns an actuator responsible for Extension resources.
-func NewActuator(config config.Configuration, useTokenRequestor bool, useProjectedTokenMount bool) extension.Actuator {
+func NewActuator(cfg config.Config) extension.Actuator {
 	return &actuator{
-		logger:                 log.Log.WithName(ActuatorName),
-		serviceConfig:          config,
-		useTokenRequestor:      useTokenRequestor,
-		useProjectedTokenMount: useProjectedTokenMount,
+		logger:          log.Log.WithName(ActuatorName),
+		extensionConfig: cfg,
 	}
 }
 
 type actuator struct {
-	client  client.Client
-	config  *rest.Config
-	decoder runtime.Decoder
-
-	serviceConfig          config.Configuration
-	useTokenRequestor      bool
-	useProjectedTokenMount bool
+	client          client.Client
+	config          *rest.Config
+	decoder         runtime.Decoder
+	extensionConfig config.Config
 
 	logger logr.Logger
+}
+
+type ExtensionSpec struct {
+	SampleString string
 }
 
 // Reconcile the Extension resource.
@@ -86,33 +88,30 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 		return err
 	}
 
-	certConfig := &service.CertConfig{}
-	if ex.Spec.ProviderConfig != nil {
-		if _, _, err := a.decoder.Decode(ex.Spec.ProviderConfig.Raw, nil, certConfig); err != nil {
-			return fmt.Errorf("failed to decode provider config: %+v", err)
-		}
-		if errs := validation.ValidateCertConfig(certConfig, cluster); len(errs) > 0 {
-			return errs.ToAggregate()
-		}
+	// TODO unless you put anything in the ProviderConfig field of the extension
+	// object, this Unmarshal will fail with an invalid nil pointer dereference
+	extSpec := &ExtensionSpec{}
+	if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
+		return err
 	}
 
 	if !controller.IsHibernated(cluster) {
-		if err := a.createShootResources(ctx, certConfig, cluster, namespace); err != nil {
+		if err := a.createShootResources(ctx, extSpec, cluster, namespace); err != nil {
 			return err
 		}
 	}
 
-	if err := a.createSeedResources(ctx, certConfig, cluster, namespace); err != nil {
+	if err := a.createSeedResources(ctx, extSpec, cluster, namespace); err != nil {
 		return err
 	}
 
-	return a.updateStatus(ctx, ex, certConfig)
+	return a.updateStatus(ctx, ex, extSpec)
 }
 
 // Delete the Extension resource.
 func (a *actuator) Delete(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
 	namespace := ex.GetNamespace()
-	a.logger.Info("Component is being deleted", "component", "cert-management", "namespace", namespace)
+	a.logger.Info("Component is being deleted", "component", "", "namespace", namespace)
 	if err := a.deleteShootResources(ctx, namespace); err != nil {
 		return err
 	}
@@ -122,13 +121,22 @@ func (a *actuator) Delete(ctx context.Context, ex *extensionsv1alpha1.Extension)
 
 // Restore the Extension resource.
 func (a *actuator) Restore(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
+	// TODO If your extension needs to restore something from its state
+	//
+	// If everything concerning your extension can be restored by a simple
+	// reconciliation (i.e. if it's stateless), you do not need to do anything
+	// here. Otherwise, you have to recreate resources from the extension's
+	// Status.Resources field before you can trigger the reconcile.
 	return a.Reconcile(ctx, ex)
 }
 
 // Migrate the Extension resource.
 func (a *actuator) Migrate(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
-	// Keep objects for shoot managed resources so that they are not deleted from the shoot during the migration
-	if err := managedresources.SetKeepObjects(ctx, a.client, ex.GetNamespace(), v1alpha1.CertManagementResourceNameShoot, true); err != nil {
+	// TODO if your extension manages resources in shoot clusters
+	//
+	// Keep objects for shoot managed resources so that they are not deleted
+	// from the shoot during the migration
+	if err := managedresources.SetKeepObjects(ctx, a.client, ex.GetNamespace(), ResourceNameShoot, true); err != nil {
 		return err
 	}
 
@@ -136,14 +144,14 @@ func (a *actuator) Migrate(ctx context.Context, ex *extensionsv1alpha1.Extension
 }
 
 // InjectConfig injects the rest config to this actuator.
-func (a *actuator) InjectConfig(config *rest.Config) error {
-	a.config = config
+func (a *actuator) InjectConfig(cfg *rest.Config) error {
+	a.config = cfg
 	return nil
 }
 
 // InjectClient injects the controller runtime client into the reconciler.
-func (a *actuator) InjectClient(client client.Client) error {
-	a.client = client
+func (a *actuator) InjectClient(c client.Client) error {
+	a.client = c
 	return nil
 }
 
@@ -153,195 +161,15 @@ func (a *actuator) InjectScheme(scheme *runtime.Scheme) error {
 	return nil
 }
 
-func (a *actuator) createIssuerValues(cluster *controller.Cluster, issuers ...service.IssuerConfig) ([]map[string]interface{}, error) {
-	issuerList := []map[string]interface{}{
-		{
-			"name": a.serviceConfig.IssuerName,
-			"acme": map[string]interface{}{
-				"email":      a.serviceConfig.ACME.Email,
-				"server":     a.serviceConfig.ACME.Server,
-				"privateKey": a.serviceConfig.ACME.PrivateKey,
-			},
-		},
-	}
+// TODO use the extension spec and cluster resources, or remove them from
+// the function
+func (a *actuator) createSeedResources(ctx context.Context, _ *ExtensionSpec, _ *controller.Cluster, namespace string) error {
+	// TODO construct a map[string]interface{} that is passed to InjectImages
+	cfg := map[string]interface{}{}
 
-	for _, issuer := range issuers {
-		if issuer.Name == a.serviceConfig.IssuerName {
-			continue
-		}
-
-		acme := map[string]interface{}{
-			"email":  issuer.Email,
-			"server": issuer.Server,
-		}
-		issuerValues := map[string]interface{}{
-			"name": issuer.Name,
-			"acme": acme,
-		}
-		if issuer.PrivateKeySecretName != nil {
-			secretName := a.lookupReferencedSecret(cluster, *issuer.PrivateKeySecretName)
-			acme["privateKeySecretName"] = secretName
-		}
-		if issuer.ExternalAccountBinding != nil {
-			secretName := a.lookupReferencedSecret(cluster, issuer.ExternalAccountBinding.KeySecretName)
-			acme["externalAccountBinding"] = map[string]interface{}{
-				"keyID":         issuer.ExternalAccountBinding.KeyID,
-				"keySecretName": secretName,
-			}
-		}
-		if issuer.SkipDNSChallengeValidation != nil && *issuer.SkipDNSChallengeValidation {
-			acme["skipDNSChallengeValidation"] = true
-		}
-		if issuer.Domains != nil && len(issuer.Domains.Include)+len(issuer.Domains.Exclude) > 0 {
-			selection := map[string]interface{}{}
-			if issuer.Domains.Include != nil {
-				selection["include"] = issuer.Domains.Include
-			}
-			if issuer.Domains.Exclude != nil {
-				selection["exclude"] = issuer.Domains.Exclude
-			}
-			if len(selection) > 0 {
-				acme["domains"] = selection
-			}
-		}
-		if issuer.RequestsPerDayQuota != nil {
-			issuerValues["requestsPerDayQuota"] = *issuer.RequestsPerDayQuota
-		}
-		issuerList = append(issuerList, issuerValues)
-	}
-
-	return issuerList, nil
-}
-
-func (a *actuator) lookupReferencedSecret(cluster *controller.Cluster, refname string) string {
-	if cluster.Shoot != nil {
-		for _, ref := range cluster.Shoot.Spec.Resources {
-			if ref.Name == refname {
-				if ref.ResourceRef.Kind != "Secret" {
-					a.logger.Info("invalid referenced resource, expected kind Secret, not %s: %s", ref.ResourceRef.Kind, refname)
-					return "invalid-kind"
-				}
-				return v1beta1constants.ReferencedResourcesPrefix + ref.ResourceRef.Name
-			}
-		}
-	}
-	a.logger.Info("invalid referenced resource: %s", refname)
-	return "invalid"
-}
-
-func createDNSChallengeOnShootValues(cfg *service.DNSChallengeOnShoot) (map[string]interface{}, error) {
-	if cfg == nil || !cfg.Enabled {
-		return map[string]interface{}{
-			"enabled": false,
-		}, nil
-	}
-
-	if cfg.Namespace == "" {
-		return nil, fmt.Errorf("missing DNSChallengeOnShoot namespace")
-	}
-
-	values := map[string]interface{}{
-		"enabled":   true,
-		"namespace": cfg.Namespace,
-	}
-
-	if cfg.DNSClass != nil {
-		values["dnsClass"] = *cfg.DNSClass
-	}
-
-	return values, nil
-}
-
-func (a *actuator) createSeedResources(ctx context.Context, certConfig *service.CertConfig, cluster *controller.Cluster, namespace string) error {
-	issuers, err := a.createIssuerValues(cluster, certConfig.Issuers...)
+	cfg, err := chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})
 	if err != nil {
-		return err
-	}
-
-	dnsChallengeOnShoot, err := createDNSChallengeOnShootValues(certConfig.DNSChallengeOnShoot)
-	if err != nil {
-		return err
-	}
-
-	if cluster.Shoot.Spec.DNS == nil || cluster.Shoot.Spec.DNS.Domain == nil {
-		a.logger.Info("no domain given for shoot %s/%s - aborting", cluster.Shoot.Name, cluster.Shoot.Namespace)
-		return nil
-	}
-
-	var propagationTimeout string
-	if a.serviceConfig.ACME.PropagationTimeout != nil {
-		propagationTimeout = a.serviceConfig.ACME.PropagationTimeout.Duration.String()
-	}
-
-	var (
-		shootIssuers         = a.createShootIssuersValues(certConfig)
-		certManagementConfig = map[string]interface{}{
-			"replicaCount": controller.GetReplicas(cluster, 1),
-			"defaultIssuer": map[string]interface{}{
-				"name":       a.serviceConfig.IssuerName,
-				"restricted": *a.serviceConfig.RestrictIssuer,
-				"domains":    cluster.Shoot.Spec.DNS.Domain,
-			},
-			"issuers": issuers,
-			"configuration": map[string]interface{}{
-				"propagationTimeout": propagationTimeout,
-			},
-			"dnsChallengeOnShoot":    dnsChallengeOnShoot,
-			"shootIssuers":           shootIssuers,
-			"useProjectedTokenMount": a.useProjectedTokenMount,
-		}
-		secretNameToDelete string
-	)
-
-	if a.useTokenRequestor {
-		if err := gutil.NewShootAccessSecret(v1alpha1.ShootAccessSecretName, namespace).Reconcile(ctx, a.client); err != nil {
-			return err
-		}
-
-		certManagementConfig["shootClusterSecret"] = gutil.SecretNamePrefixShootAccess + v1alpha1.ShootAccessSecretName
-		certManagementConfig["useTokenRequestor"] = true
-		secretNameToDelete = v1alpha1.CertManagementKubecfg
-	} else {
-		shootKubeconfig, err := a.createKubeconfigForCertManagement(ctx, namespace)
-		if err != nil {
-			return err
-		}
-
-		certManagementConfig["shootClusterSecret"] = v1alpha1.CertManagementKubecfg
-		certManagementConfig["podAnnotations"] = map[string]interface{}{"checksum/secret-kubeconfig": utils.ComputeChecksum(shootKubeconfig.Data)}
-		secretNameToDelete = gutil.SecretNamePrefixShootAccess + v1alpha1.ShootAccessSecretName
-	}
-
-	// TODO(rfranzke): Remove in a future release.
-	if err := kutil.DeleteObject(ctx, a.client, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: secretNameToDelete, Namespace: namespace}}); err != nil {
-		return err
-	}
-
-	cfg := certManagementConfig["configuration"].(map[string]interface{})
-	if a.serviceConfig.DefaultRequestsPerDayQuota != nil {
-		cfg["defaultRequestsPerDayQuota"] = *a.serviceConfig.DefaultRequestsPerDayQuota
-	}
-
-	if a.serviceConfig.ACME.PrecheckNameservers != nil {
-		cfg["precheckNameservers"] = *a.serviceConfig.ACME.PrecheckNameservers
-	}
-	if certConfig.PrecheckNameservers != nil {
-		servers := *certConfig.PrecheckNameservers
-		if a.serviceConfig.ACME.PrecheckNameservers != nil {
-			servers = mergeServers(servers, *a.serviceConfig.ACME.PrecheckNameservers)
-		}
-		cfg["precheckNameservers"] = servers
-	}
-	if a.serviceConfig.ACME.CACertificates != nil {
-		cfg["caCertificates"] = *a.serviceConfig.ACME.CACertificates
-	}
-	if a.serviceConfig.ACME.DeactivateAuthorizations != nil {
-		cfg["deactivateAuthorizations"] = *a.serviceConfig.ACME.DeactivateAuthorizations
-	}
-
-	certManagementConfig, err = chart.InjectImages(certManagementConfig, imagevector.ImageVector(), []string{v1alpha1.CertManagementImageName})
-	if err != nil {
-		return fmt.Errorf("failed to find image version for %s: %v", v1alpha1.CertManagementImageName, err)
+		return fmt.Errorf("failed to find image version for %s: %v", ImageName, err)
 	}
 
 	renderer, err := chartrenderer.NewForConfig(a.config)
@@ -349,133 +177,88 @@ func (a *actuator) createSeedResources(ctx context.Context, certConfig *service.
 		return errors.Wrap(err, "could not create chart renderer")
 	}
 
-	a.logger.Info("Component is being applied", "component", "cert-management", "namespace", namespace)
+	a.logger.Info("Component is being applied", "component", "component-name", "namespace", namespace)
 
-	return a.createManagedResource(ctx, namespace, v1alpha1.CertManagementResourceNameSeed, "seed", renderer, v1alpha1.CertManagementChartNameSeed, namespace, certManagementConfig, nil)
+	return a.createManagedResource(ctx, namespace, ResourceNameSeed, "seed", renderer, ChartNameSeed, namespace, cfg, nil)
 }
 
-func (a *actuator) createShootResources(ctx context.Context, certConfig *service.CertConfig, cluster *controller.Cluster, namespace string) error {
-	dnsChallengeOnShoot, err := createDNSChallengeOnShootValues(certConfig.DNSChallengeOnShoot)
-	if err != nil {
-		return err
-	}
+// TODO use the extension spec
+func (a *actuator) createShootResources(ctx context.Context, _ *ExtensionSpec, cluster *controller.Cluster, namespace string) error {
 
-	shootIssuers := a.createShootIssuersValues(certConfig)
-
-	values := map[string]interface{}{
-		"dnsChallengeOnShoot": dnsChallengeOnShoot,
-		"shootIssuers":        shootIssuers,
-		"kubernetesVersion":   cluster.Shoot.Spec.Kubernetes.Version,
-	}
-
-	if a.useTokenRequestor {
-		values["useTokenRequestor"] = true
-		values["shootAccessServiceAccountName"] = v1alpha1.ShootAccessServiceAccountName
-	} else {
-		values["shootUserName"] = v1alpha1.CertManagementUserName
-	}
+	values := map[string]interface{}{}
 
 	renderer, err := util.NewChartRendererForShoot(cluster.Shoot.Spec.Kubernetes.Version)
 	if err != nil {
 		return errors.Wrap(err, "could not create chart renderer")
 	}
 
-	return a.createManagedResource(ctx, namespace, v1alpha1.CertManagementResourceNameShoot, "", renderer, v1alpha1.CertManagementChartNameShoot, metav1.NamespaceSystem, values, nil)
+	// TODO get these values from constants
+	return a.createManagedResource(ctx, namespace, ResourceNameShoot, "", renderer, ChartNameShoot, metav1.NamespaceSystem, values, nil)
 }
 
 func (a *actuator) deleteSeedResources(ctx context.Context, namespace string) error {
 	a.logger.Info("Deleting managed resource for seed", "namespace", namespace)
 
+	// TODO this code block is only needed if you have unmanaged resources to delete
 	if err := kutil.DeleteObjects(ctx, a.client,
-		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: v1alpha1.CertManagementKubecfg, Namespace: namespace}},
-		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: gutil.SecretNamePrefixShootAccess + v1alpha1.ShootAccessSecretName, Namespace: namespace}},
+		// TODO specify resources to be deleted that are not part of a ManagedResource
+		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "secret-name", Namespace: namespace}},
 	); err != nil {
 		return err
 	}
 
-	if err := managedresources.Delete(ctx, a.client, namespace, v1alpha1.CertManagementResourceNameSeed, false); err != nil {
+	if err := managedresources.Delete(ctx, a.client, namespace, ResourceNameSeed, false); err != nil {
 		return err
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	timeoutCtx, cancel := context.WithTimeout(ctx, deletionTimeout)
 	defer cancel()
-	return managedresources.WaitUntilDeleted(timeoutCtx, a.client, namespace, v1alpha1.CertManagementResourceNameSeed)
+	return managedresources.WaitUntilDeleted(timeoutCtx, a.client, namespace, ResourceNameSeed)
 }
 
 func (a *actuator) deleteShootResources(ctx context.Context, namespace string) error {
 	a.logger.Info("Deleting managed resource for shoot", "namespace", namespace)
-	if err := managedresources.Delete(ctx, a.client, namespace, v1alpha1.CertManagementResourceNameShoot, false); err != nil {
+	if err := managedresources.Delete(ctx, a.client, namespace, ResourceNameShoot, false); err != nil {
 		return err
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	timeoutCtx, cancel := context.WithTimeout(ctx, deletionTimeout)
 	defer cancel()
-	return managedresources.WaitUntilDeleted(timeoutCtx, a.client, namespace, v1alpha1.CertManagementResourceNameShoot)
+	return managedresources.WaitUntilDeleted(timeoutCtx, a.client, namespace, ResourceNameShoot)
 }
 
-func (a *actuator) createKubeconfigForCertManagement(ctx context.Context, namespace string) (*corev1.Secret, error) {
-	certConfig := secrets.CertificateSecretConfig{
-		Name:       v1alpha1.CertManagementKubecfg,
-		CommonName: v1alpha1.CertManagementUserName,
-	}
-
-	return util.GetOrCreateShootKubeconfig(ctx, a.client, certConfig, namespace)
-}
-
-func (a *actuator) createManagedResource(ctx context.Context, namespace, name, class string, renderer chartrenderer.Interface, chartName, chartNamespace string, chartValues map[string]interface{}, injectedLabels map[string]string) error {
-	chartPath := filepath.Join(v1alpha1.ChartsPath, chartName)
-	chart, err := renderer.Render(chartPath, chartName, chartNamespace, chartValues)
+func (a *actuator) createManagedResource(
+	ctx context.Context,
+	namespace, name, class string,
+	renderer chartrenderer.Interface,
+	chartName, chartNamespace string,
+	chartValues map[string]interface{},
+	injectedLabels map[string]string,
+) error {
+	chartPath := filepath.Join(a.extensionConfig.ChartPath, chartName)
+	renderedChart, err := renderer.Render(chartPath, chartName, chartNamespace, chartValues)
 	if err != nil {
 		return err
 	}
 
-	data := map[string][]byte{chartName: chart.Manifest()}
+	data := map[string][]byte{chartName: renderedChart.Manifest()}
 	keepObjects := false
 	forceOverwriteAnnotations := false
-	return managedresources.Create(ctx, a.client, namespace, name, false, class, data, &keepObjects, injectedLabels, &forceOverwriteAnnotations)
+	return managedresources.Create(
+		ctx, a.client, namespace, name, false, class, data, &keepObjects, injectedLabels, &forceOverwriteAnnotations,
+	)
 }
 
-func (a *actuator) updateStatus(ctx context.Context, ex *extensionsv1alpha1.Extension, certConfig *service.CertConfig) error {
+// TODO collect resources that you want to put in the status
+//
+// shoot-cert-service uses ResourceReferences to do this, but this doesn't
+// convey any information about the resource other than its name. So, if you
+// want to restore any information after a migration (of resources that are
+// not part of a ManagedResource), you need to save it here.
+func (a *actuator) updateStatus(ctx context.Context, ex *extensionsv1alpha1.Extension, _ *ExtensionSpec) error {
 	var resources []gardencorev1beta1.NamedResourceReference
-	for _, issuerConfig := range certConfig.Issuers {
-		name := "extension-shoot-cert-service-issuer-" + issuerConfig.Name
-		resources = append(resources, gardencorev1beta1.NamedResourceReference{
-			Name: name,
-			ResourceRef: autoscalingv1.CrossVersionObjectReference{
-				Kind:       "Secret",
-				Name:       name,
-				APIVersion: "v1",
-			},
-		})
-	}
 
 	patch := client.MergeFrom(ex.DeepCopy())
 	ex.Status.Resources = resources
 	return a.client.Status().Patch(ctx, ex, patch)
-}
-
-func (a *actuator) createShootIssuersValues(certConfig *service.CertConfig) map[string]interface{} {
-	shootIssuersEnabled := false
-	if certConfig.ShootIssuers != nil {
-		shootIssuersEnabled = certConfig.ShootIssuers.Enabled
-	} else if a.serviceConfig.ShootIssuers != nil {
-		shootIssuersEnabled = a.serviceConfig.ShootIssuers.Enabled
-	}
-	return map[string]interface{}{
-		"enabled": shootIssuersEnabled,
-	}
-}
-
-func mergeServers(serversList ...string) string {
-	existing := map[string]struct{}{}
-	merged := []string{}
-	for _, servers := range serversList {
-		for _, item := range strings.Split(servers, ",") {
-			if _, ok := existing[item]; !ok {
-				existing[item] = struct{}{}
-				merged = append(merged, item)
-			}
-		}
-	}
-	return strings.Join(merged, ",")
 }

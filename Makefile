@@ -13,7 +13,7 @@
 # limitations under the License.
 
 EXTENSION_PREFIX            := gardener-extension
-NAME                        := shoot-cert-service
+NAME                        := example
 REGISTRY                    := eu.gcr.io/gardener-project/gardener
 IMAGE_PREFIX                := $(REGISTRY)/extensions
 REPO_ROOT                   := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
@@ -21,7 +21,8 @@ HACK_DIR                    := $(REPO_ROOT)/hack
 VERSION                     := $(shell cat "$(REPO_ROOT)/VERSION")
 LD_FLAGS                    := "-w -X github.com/gardener/$(EXTENSION_PREFIX)-$(NAME)/pkg/version.Version=$(IMAGE_TAG)"
 LEADER_ELECTION             := false
-IGNORE_OPERATION_ANNOTATION := true
+IGNORE_OPERATION_ANNOTATION := false
+GOLANGCI_VERSION            := 1.42.1
 
 #########################################
 # Rules for local development scenarios #
@@ -35,21 +36,11 @@ start:
 		./cmd/$(EXTENSION_PREFIX)-$(NAME) \
 		--ignore-operation-annotation=$(IGNORE_OPERATION_ANNOTATION) \
 		--leader-election=$(LEADER_ELECTION) \
-		--config=./example/00-config.yaml \
 		--gardener-version="v1.39.0"
 
 #################################################################
 # Rules related to binary build, Docker image build and release #
 #################################################################
-
-.PHONY: install
-install:
-	@LD_FLAGS="-w -X github.com/gardener/$(EXTENSION_PREFIX)-$(NAME)/pkg/version.Version=$(VERSION)" \
-	$(REPO_ROOT)/vendor/github.com/gardener/gardener/hack/install.sh ./...
-
-.PHONY: docker-login
-docker-login:
-	@gcloud auth activate-service-account --key-file .kube-secrets/gcr/gcr-readwrite.json
 
 .PHONY: docker-images
 docker-images:
@@ -72,13 +63,12 @@ revendor:
 	@GO111MODULE=on go mod tidy
 	@chmod +x $(REPO_ROOT)/vendor/github.com/gardener/gardener/hack/*
 	@chmod +x $(REPO_ROOT)/vendor/github.com/gardener/gardener/hack/.ci/*
-	@$(REPO_ROOT)/hack/update-github-templates.sh
-	@ln -sf ../vendor/github.com/gardener/gardener/hack/cherry-pick-pull.sh $(HACK_DIR)/cherry-pick-pull.sh
 
 .PHONY: clean
-clean:
+clean: clean-envtest
 	@$(shell find ./example -type f -name "controller-registration.yaml" -exec rm '{}' \;)
 	@$(REPO_ROOT)/vendor/github.com/gardener/gardener/hack/clean.sh ./cmd/... ./pkg/... ./test/...
+	@rm -rf bin out
 
 .PHONY: check-generate
 check-generate:
@@ -91,15 +81,19 @@ check:
 
 .PHONY: generate
 generate:
-	@$(REPO_ROOT)/vendor/github.com/gardener/gardener/hack/generate.sh ./charts/... ./cmd/... ./pkg/... ./test/...
+	@$(REPO_ROOT)/vendor/github.com/gardener/gardener/hack/generate-controller-registration.sh $(EXTENSION_PREFIX)-$(NAME) ./charts/gardener-extension $(shell cat ./VERSION) ./example/controller-registration.yaml Extension:$(NAME)
 
 .PHONY: format
 format:
 	@$(REPO_ROOT)/vendor/github.com/gardener/gardener/hack/format.sh ./cmd ./pkg ./test
 
-.PHONY: test
-test:
-	@$(REPO_ROOT)/vendor/github.com/gardener/gardener/hack/test.sh ./cmd/... ./pkg/...
+RUN_ENVTEST = bin/setup-envtest --bin-dir $(PWD)/bin
+SOURCE_ENVTEST = eval `$(RUN_ENVTEST) use -p env $(KUBERNETES_VERSION)`
+test: bin/setup-envtest ## Runs all tests
+	@$(SOURCE_ENVTEST) && go test ./...
+
+clean-envtest:
+	@$(RUN_ENVTEST) cleanup "<=$(KUBERNETES_VERSION)" 2> /dev/null || echo "skipping envtest cleanup"
 
 .PHONY: test-cov
 test-cov:
@@ -114,3 +108,70 @@ verify: check format test
 
 .PHONY: verify-extended
 verify-extended: install-requirements check-generate check format test-cov test-clean
+
+download: ## Downloads the dependencies
+	@go mod download
+
+fmt: ## Formats all code with go fmt
+	@go fmt ./...
+
+GOLANGCI_LINT = bin/golangci-lint-$(GOLANGCI_VERSION)
+$(GOLANGCI_LINT):
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | bash -s -- -b bin v$(GOLANGCI_VERSION)
+	@mv bin/golangci-lint "$(@)"
+
+lint: fmt $(GOLANGCI_LINT) download ## Lints all code with golangci-lint
+	@$(GOLANGCI_LINT) run
+
+lint-reports: out/lint.xml
+
+.PHONY: out/lint.xml
+out/lint.xml: $(GOLANGCI_LINT) out download
+	@$(GOLANGCI_LINT) run ./... --out-format checkstyle | tee "$(@)"
+
+coverage: out/report.json ## Displays coverage per func on cli
+	go tool cover -func=out/cover.out
+
+html-coverage: out/report.json ## Displays the coverage results in the browser
+	go tool cover -html=out/cover.out
+
+test-reports: out/report.json
+
+.PHONY: out/report.json
+out/report.json: out bin/setup-envtest
+	@$(SOURCE_ENVTEST) && go test ./... -coverprofile=out/cover.out --json | tee "$(@)"
+
+out:
+	@mkdir -pv "$(@)"
+
+define make-go-dependency
+  # target template for go tools, can be referenced e.g. via /bin/<tool>
+  bin/$(notdir $1):
+	GOBIN=$(PWD)/bin go install $1
+endef
+
+# this creates a target for each go dependency to be referenced in other targets
+$(foreach dep, $(GO_DEPENDENCIES), $(eval $(call make-go-dependency, $(dep))))
+
+ci: lint-reports test-reports ## Executes lint and test and generates reports
+
+# Go dependencies versioned through tools.go
+GO_DEPENDENCIES = sigs.k8s.io/controller-runtime/tools/setup-envtest
+
+# target template for go tools, can be referenced e.g. via /bin/<tool>
+define make-go-dependency
+bin/$(notdir $1):
+	GOBIN=$(PWD)/bin go install $1
+endef
+
+# this creates a target for each go dependency to be referenced in other targets
+$(foreach dep, $(GO_DEPENDENCIES), $(eval $(call make-go-dependency, $(dep))))
+
+help: ## Shows the help
+	@echo 'Usage: make <OPTIONS> ... <TARGETS>'
+	@echo ''
+	@echo 'Available targets are:'
+	@echo ''
+	@grep -E '^[ a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+        awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo ''

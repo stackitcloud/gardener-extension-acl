@@ -1,0 +1,9 @@
+# Ignore git items
+.gitignore
+.git/
+:include .gitignore
+
+# test files
+*_test.go
+
+example/

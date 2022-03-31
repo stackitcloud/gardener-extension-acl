@@ -1,0 +1,13 @@
+{{- if .Values.imageVectorOverwrite }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Chart.Name }}-imagevector-overwrite
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Chart.Name }}
+data:
+  images_overwrite.yaml: |
+{{ .Values.imageVectorOverwrite | indent 4 }}
+{{- end }}
