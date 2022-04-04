@@ -38,7 +38,7 @@ var (
 
 // RegisterHealthChecks registers health checks for each extension resource
 // HealthChecks are grouped by extension (e.g worker), extension.type (e.g aws) and  Health Check Type (e.g SystemComponentsHealthy)
-func RegisterHealthChecks(mgr manager.Manager, opts healthcheck.DefaultAddArgs) error {
+func RegisterHealthChecks(mgr manager.Manager, opts *healthcheck.DefaultAddArgs) error {
 	preCheckFunc := func(_ client.Object, cluster *extensionscontroller.Cluster) bool {
 		// TODO custom precheck logic
 		// example: return cluster.Shoot.Spec.DNS != nil && cluster.Shoot.Spec.DNS.Domain != nil
@@ -51,7 +51,7 @@ func RegisterHealthChecks(mgr manager.Manager, opts healthcheck.DefaultAddArgs) 
 		func() client.ObjectList { return &extensionsv1alpha1.ExtensionList{} },
 		func() extensionsv1alpha1.Object { return &extensionsv1alpha1.Extension{} },
 		mgr,
-		opts,
+		*opts,
 		nil,
 		[]healthcheck.ConditionTypeToHealthCheck{
 			{
@@ -73,5 +73,5 @@ func RegisterHealthChecks(mgr manager.Manager, opts healthcheck.DefaultAddArgs) 
 
 // AddToManager adds a controller with the default Options.
 func AddToManager(mgr manager.Manager) error {
-	return RegisterHealthChecks(mgr, DefaultAddOptions)
+	return RegisterHealthChecks(mgr, &DefaultAddOptions)
 }
