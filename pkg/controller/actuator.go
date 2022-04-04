@@ -184,7 +184,6 @@ func (a *actuator) createSeedResources(ctx context.Context, _ *ExtensionSpec, _ 
 
 // TODO use the extension spec
 func (a *actuator) createShootResources(ctx context.Context, _ *ExtensionSpec, cluster *controller.Cluster, namespace string) error {
-
 	values := map[string]interface{}{}
 
 	renderer, err := util.NewChartRendererForShoot(cluster.Shoot.Spec.Kubernetes.Version)
