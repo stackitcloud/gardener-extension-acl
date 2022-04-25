@@ -81,7 +81,7 @@ check:
 
 .PHONY: generate
 generate:
-	@$(REPO_ROOT)/vendor/github.com/gardener/gardener/hack/generate-controller-registration.sh $(EXTENSION_PREFIX)-$(NAME) ./charts/gardener-extension $(shell cat ./VERSION) ./example/controller-registration.yaml Extension:$(NAME)
+	@$(REPO_ROOT)/vendor/github.com/gardener/gardener/hack/generate-controller-registration.sh $(NAME) ./charts/gardener-extension $(shell cat ./VERSION) ./example/controller-registration.yaml Extension:$(NAME)
 
 .PHONY: format
 format:
