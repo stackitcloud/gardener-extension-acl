@@ -84,14 +84,15 @@ install-requirements:
 
 generate-deploy:
     FROM nixery.dev/shell/envsubst/gzip/gnutar
-    COPY --dir charts/ example/ .
+    COPY --dir charts/gardener-extension example/ .
     COPY +set-version/VERSION .
-    ARG CHART_SOURCE=charts/gardener-extension
+    ARG CHART_SOURCE=gardener-extension/
     ARG TEMPLATE=example/deployment.tpl.yaml
     ARG TARGET=controller-registration.yaml
     ENV ENCODED_CHART
     ENV TAG
-    RUN ENCODED_CHART=$(tar -zcf - $CHART_SOURCE | base64 -w0) && \
+    RUN ENCODED_CHART=$(cd $CHART_SOURCE && \
+        tar --format=gnu --sort=name --owner=root:0 --group=root:0 --numeric-owner --mtime='UTC 2019-01-01' -zcf - . | base64 -w0) && \
         TAG=$(cat VERSION) && \
         envsubst < $TEMPLATE > $TARGET
     SAVE ARTIFACT $TARGET AS LOCAL deploy/$TARGET
