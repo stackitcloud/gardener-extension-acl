@@ -2,7 +2,7 @@
 apiVersion: core.gardener.cloud/v1beta1
 kind: ControllerDeployment
 metadata:
-  name: example
+  name: gardener-extension-example
 type: helm
 providerConfig:
   # ENCODED_CHART="$(tar -zcf - chart | base64 -w0)" envsubst < example/deployment.yaml > test.yaml
@@ -14,7 +14,7 @@ providerConfig:
 apiVersion: core.gardener.cloud/v1beta1
 kind: ControllerRegistration
 metadata:
-  name: example
+  name: gardener-extension-example  name: example
 spec:
   deployment:
     deploymentRefs:
