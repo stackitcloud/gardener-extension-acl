@@ -14,7 +14,7 @@ providerConfig:
 apiVersion: core.gardener.cloud/v1beta1
 kind: ControllerRegistration
 metadata:
-  name: gardener-extension-example  name: example
+  name: gardener-extension-example
 spec:
   deployment:
     deploymentRefs:
