@@ -18,7 +18,7 @@ metadata:
 spec:
   deployment:
     deploymentRefs:
-      - name: example
+      - name: gardener-extension-example
   resources:
     - kind: Extension
       type: example
