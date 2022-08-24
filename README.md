@@ -1,4 +1,4 @@
-# Gardener Example Extension for Managed Resources
+# Gardener ACL Extension
 
 ## Healthchecks
 
