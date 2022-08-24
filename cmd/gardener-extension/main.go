@@ -16,7 +16,7 @@
 package main
 
 import (
-	"github.com/stackitcloud/gardener-extension-example/cmd/gardener-extension-example/app"
+	"github.com/stackitcloud/gardener-extension-acl/cmd/gardener-extension/app"
 
 	controllercmd "github.com/gardener/gardener/extensions/pkg/controller/cmd"
 	"github.com/gardener/gardener/pkg/logger"

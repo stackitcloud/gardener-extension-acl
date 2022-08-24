@@ -1,34 +1,5 @@
 # Gardener Example Extension for Managed Resources
 
-## Make It Your Own
-
-1. Define the name of your extension controller.
-   * Rename the `cmd/gardener-extension-example` directory. The naming
-     convention is to keep the `gardener-extension-` part.
-   * Do a search and replace in all files to update imports, the `go.mod`, etc.
-     Use `gardener-extension-example` as the search term.
-   * Update the `NAME` variable in the Makefile.
-2. Specify the Type of extension you want to reconcile.
-   * In the [controller options: Type constant](pkg/controller/add.go).
-   * Update the [extension example spec.type](example/30-extension.yaml)
-3. Add any configuration options for your extension to the `ExtensionOptions`
-   struct in the [command's options.go](pkg/cmd/options.go). They are CLI flags
-   for you to pass to the binary. Any  of these configuration options can be
-   passed to the `ControllerOptions` in the
-   [pkg/controller/config/config.go](pkg/controller/config/config.go) file.
-   (Using the `Apply()` method in [options.go](pkg/cmd/options.go))
-
-Now you can start to implement the [actuator](pkg/controller/actuator.go)
-methods (Reconcile, Delete, Migrate, Restore). Most likely, your extension
-controller will introduce additional Kubernetes resources, either to the seed or
-the shoot clusters. Consider Gardener's
-[ManagedResource](https://github.com/gardener/gardener/blob/master/docs/concepts/resource-manager.md)
-approach to implement this, and see the `charts` directory for sample
-implementations.
-
-You can also add health checks to reflect the extension's state in its `Status`
-field. Read more about health checks below.
-
 ## Healthchecks
 
 Gardener provides a [Health Check Library](https://gardener.cloud/docs/gardener/extensions/healthcheck-library/)
@@ -62,7 +33,7 @@ feature branch concourse build.
 To run the test suite, execute:
 
 ```bash
-make test
+earthly +test
 ```
 
 Place all needed Gardener CRDs in the `upstream-crds` directory, they get

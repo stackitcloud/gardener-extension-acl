@@ -22,12 +22,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/stackitcloud/gardener-extension-example/pkg/controller/config"
-	"github.com/stackitcloud/gardener-extension-example/pkg/imagevector"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
-	"github.com/gardener/gardener/extensions/pkg/util"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
@@ -47,13 +46,12 @@ import (
 
 const (
 	// ActuatorName is only used for the logger instance
-	ActuatorName      = "some-actuator"
-	ResourceNameShoot = "resource-name-shoot"
-	ChartNameShoot    = "example-shoot"
-	ResourceNameSeed  = "resource-name-seed"
-	ChartNameSeed     = "example-seed"
+	ActuatorName     = "acl-actuator"
+	ResourceNameSeed = "acl-seed"
+	ChartNameSeed    = "seed"
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
+	// TODO implement
 	ImageName       = "image-name"
 	deletionTimeout = 2 * time.Minute
 )
@@ -95,12 +93,6 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 		return err
 	}
 
-	if !controller.IsHibernated(cluster) {
-		if err := a.createShootResources(ctx, extSpec, cluster, namespace); err != nil {
-			return err
-		}
-	}
-
 	if err := a.createSeedResources(ctx, extSpec, cluster, namespace); err != nil {
 		return err
 	}
@@ -112,9 +104,6 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 func (a *actuator) Delete(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
 	namespace := ex.GetNamespace()
 	a.logger.Info("Component is being deleted", "component", "", "namespace", namespace)
-	if err := a.deleteShootResources(ctx, namespace); err != nil {
-		return err
-	}
 
 	return a.deleteSeedResources(ctx, namespace)
 }
@@ -132,14 +121,6 @@ func (a *actuator) Restore(ctx context.Context, ex *extensionsv1alpha1.Extension
 
 // Migrate the Extension resource.
 func (a *actuator) Migrate(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
-	// TODO if your extension manages resources in shoot clusters
-	//
-	// Keep objects for shoot managed resources so that they are not deleted
-	// from the shoot during the migration
-	if err := managedresources.SetKeepObjects(ctx, a.client, ex.GetNamespace(), ResourceNameShoot, true); err != nil {
-		return err
-	}
-
 	return a.Delete(ctx, ex)
 }
 
@@ -182,19 +163,6 @@ func (a *actuator) createSeedResources(ctx context.Context, _ *ExtensionSpec, _ 
 	return a.createManagedResource(ctx, namespace, ResourceNameSeed, "seed", renderer, ChartNameSeed, namespace, cfg, nil)
 }
 
-// TODO use the extension spec
-func (a *actuator) createShootResources(ctx context.Context, _ *ExtensionSpec, cluster *controller.Cluster, namespace string) error {
-	values := map[string]interface{}{}
-
-	renderer, err := util.NewChartRendererForShoot(cluster.Shoot.Spec.Kubernetes.Version)
-	if err != nil {
-		return errors.Wrap(err, "could not create chart renderer")
-	}
-
-	// TODO get these values from constants
-	return a.createManagedResource(ctx, namespace, ResourceNameShoot, "", renderer, ChartNameShoot, metav1.NamespaceSystem, values, nil)
-}
-
 func (a *actuator) deleteSeedResources(ctx context.Context, namespace string) error {
 	a.logger.Info("Deleting managed resource for seed", "namespace", namespace)
 
@@ -213,17 +181,6 @@ func (a *actuator) deleteSeedResources(ctx context.Context, namespace string) er
 	timeoutCtx, cancel := context.WithTimeout(ctx, deletionTimeout)
 	defer cancel()
 	return managedresources.WaitUntilDeleted(timeoutCtx, a.client, namespace, ResourceNameSeed)
-}
-
-func (a *actuator) deleteShootResources(ctx context.Context, namespace string) error {
-	a.logger.Info("Deleting managed resource for shoot", "namespace", namespace)
-	if err := managedresources.Delete(ctx, a.client, namespace, ResourceNameShoot, false); err != nil {
-		return err
-	}
-
-	timeoutCtx, cancel := context.WithTimeout(ctx, deletionTimeout)
-	defer cancel()
-	return managedresources.WaitUntilDeleted(timeoutCtx, a.client, namespace, ResourceNameShoot)
 }
 
 func (a *actuator) createManagedResource(

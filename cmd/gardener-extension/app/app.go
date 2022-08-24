@@ -29,8 +29,8 @@ import (
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/util"
 
-	"github.com/stackitcloud/gardener-extension-example/pkg/controller"
-	"github.com/stackitcloud/gardener-extension-example/pkg/controller/healthcheck"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
 )
 
 // NewServiceControllerCommand creates a new command that is used to start the service controller.
@@ -38,8 +38,8 @@ func NewServiceControllerCommand() *cobra.Command {
 	options := NewOptions()
 
 	cmd := &cobra.Command{
-		Use:           "example-controller",
-		Short:         "Karp Controller",
+		Use:           "acl-controller",
+		Short:         "ACL Extension Controller",
 		SilenceErrors: true,
 
 		RunE: func(cmd *cobra.Command, args []string) error {

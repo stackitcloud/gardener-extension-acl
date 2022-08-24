@@ -1,4 +1,4 @@
-module github.com/stackitcloud/gardener-extension-example
+module github.com/stackitcloud/gardener-extension-acl
 
 go 1.18
 

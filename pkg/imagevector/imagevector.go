@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/gardener/gardener/pkg/utils/imagevector"
-	"github.com/stackitcloud/gardener-extension-example/charts"
+	"github.com/stackitcloud/gardener-extension-acl/charts"
 	"k8s.io/apimachinery/pkg/util/runtime"
 )
 

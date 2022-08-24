@@ -17,5 +17,5 @@ scheduling.k8s.io/v1alpha1
 {{- end -}}
 
 {{- define "leaderelectionid" -}}
-extension-example-leader-election
+extension-acl-leader-election
 {{- end -}}
