@@ -1,0 +1,14 @@
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: apiserver-{{ .Values.shootName }}
+  namespace: {{ .Values.targetNamespace }}
+spec: {{ .Values.apiserverRule | toYaml | nindent 2 }}
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: vpn-{{ .Values.shootName }}
+  namespace: {{ .Values.targetNamespace }}
+spec: {{ .Values.vpnRule | toYaml | nindent 2 }}

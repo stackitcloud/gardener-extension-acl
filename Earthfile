@@ -121,12 +121,12 @@ test:
     COPY +gotools/bin/setup-envtest $BINPATH
     # install envtest in its own layer
     RUN setup-envtest use $KUBERNETES_VERSION
-    COPY --dir controllers/ pkg/ cmd/ upstream-crds/ charts/ .
+    COPY --dir pkg/ cmd/ upstream-crds/ charts/ .
     ARG GO_TEST="go test"
     RUN --mount=type=cache,target=$GOCACHE \
         if [ ! "$(ls -A $GOCACHE)" ]; then echo "WAITING FOR GO TEST TO BUILD TESTING BIN"; fi && \
         eval `setup-envtest use -p env $KUBERNETES_VERSION` && \
-        eval "$GO_TEST ./controllers/..."
+        eval "$GO_TEST ./pkg/..."
 
 test-output:
     FROM +test --GO_TEST="go test -count 1 -coverprofile=cover.out"

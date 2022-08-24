@@ -1,4 +1,4 @@
-# Gardener Example Extension for Managed Resources
+# Gardener ACL Extension
 
 ## Healthchecks
 
@@ -19,12 +19,12 @@ the `example/controller-registration.yaml` file.
 
 The `ProviderConfig.chart` field contains the entire Helm chart for your
 extension as a gzipped and then base64-encoded string. After you altered this
-Helm chart in the `charts/gardener-extension` directory, run `make generate` to
+Helm chart in the `charts/gardener-extension` directory, run `earthly +generate-deploy` to
 re-create this value. The `providerConfig.values.image.tag` field is populated
 with the contents of the `VERSION` file in the repository root.
 
 **NOTE**: The contents of the `VERSION` file need to be a valid SemVer. So,
-during development, you need to first run `make generate` and then manually
+during development, you need to first run `earthly +generate-deploy` and then manually
 replace the `providerConfig.values.image.tag` field with the current ID of the
 feature branch concourse build.
 
@@ -39,5 +39,5 @@ earthly +test
 Place all needed Gardener CRDs in the `upstream-crds` directory, they get
 installed automatically in the envtest cluster.
 
-See the [actuator_test.go](./pkg/controller/actuator_test.go) for a minimal test
+See the [actuator_test.go](pkg/controller/actuator_test.go) for a minimal test
 case example.
