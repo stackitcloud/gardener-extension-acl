@@ -35,6 +35,8 @@ import (
 	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	istioapisecurityv1beta1 "istio.io/api/security/v1beta1"
+	istiov1beta1 "istio.io/api/type/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -74,7 +76,18 @@ type actuator struct {
 }
 
 type ExtensionSpec struct {
-	SampleString string
+	// Action is the action to take on the source of request.
+	Action *string
+	// IPBlocks is list of IP blocks (Ipv4 & Ipv6), populated from the source address of the IP packet.
+	// Single IP (e.g. "1.2.3.4") and CIDR (e.g. "1.2.3.0/24") are supported.
+	IPBlocks []string
+	// NotIPBlocks is a list of negative match of IP blocks.
+	NotIPBlocks []string
+	// RemoteIPBlocks is a list of IP blocks, populated from X-Forwarded-For header or proxy protocol.
+	// Single IP (e.g. “1.2.3.4”) and CIDR (e.g. “1.2.3.0/24”) are supported.
+	RemoteIPBlocks []string
+	// NotRemoteIPBlocks is a list of negative match of remote IP blocks.
+	NotRemoteIPBlocks []string
 }
 
 // Reconcile the Extension resource.
@@ -144,11 +157,25 @@ func (a *actuator) InjectScheme(scheme *runtime.Scheme) error {
 
 // TODO use the extension spec and cluster resources, or remove them from
 // the function
-func (a *actuator) createSeedResources(ctx context.Context, _ *ExtensionSpec, _ *controller.Cluster, namespace string) error {
-	// TODO construct a map[string]interface{} that is passed to InjectImages
-	cfg := map[string]interface{}{}
+func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec, cluster *controller.Cluster, namespace string) error {
+	var err error
 
-	cfg, err := chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})
+	hosts := []string{
+		"localhost",
+		"test.me.svc",
+	}
+
+	apiServerRule, err := a.getAccessControlAPIServerSpec(spec, hosts)
+	vpnServerRule, err := a.getAccessControlVPNServerSpec(spec, cluster.ObjectMeta.Name)
+
+	cfg := map[string]interface{}{
+		"shootName":       cluster.Shoot.Name,
+		"targetNamespace": "istio-ingress",
+		"apiServerRule":   apiServerRule,
+		"vpnRule":         vpnServerRule,
+	}
+
+	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})
 	if err != nil {
 		return fmt.Errorf("failed to find image version for %s: %v", ImageName, err)
 	}
@@ -217,4 +244,96 @@ func (a *actuator) updateStatus(ctx context.Context, ex *extensionsv1alpha1.Exte
 	patch := client.MergeFrom(ex.DeepCopy())
 	ex.Status.Resources = resources
 	return a.client.Status().Patch(ctx, ex, patch)
+}
+
+func (a *actuator) getAccessControlSpec(spec *ExtensionSpec) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
+	if spec == nil {
+		return nil, errors.New("spec is nil")
+	}
+
+	ac := *spec
+	action := istioapisecurityv1beta1.AuthorizationPolicy_ALLOW
+
+	var err error
+	if ac.Action != nil {
+		action, err = toIstioAuthPolicyAction(*ac.Action)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	rules := []*istioapisecurityv1beta1.Rule{{
+		From: []*istioapisecurityv1beta1.Rule_From{{
+			Source: &istioapisecurityv1beta1.Source{
+				IpBlocks:          notNilSlice(ac.IPBlocks),
+				NotIpBlocks:       notNilSlice(ac.NotIPBlocks),
+				RemoteIpBlocks:    notNilSlice(ac.RemoteIPBlocks),
+				NotRemoteIpBlocks: notNilSlice(ac.NotRemoteIPBlocks),
+			},
+		}},
+	}}
+
+	accessControlSpec := istioapisecurityv1beta1.AuthorizationPolicy{
+		Selector: &istiov1beta1.WorkloadSelector{
+			// TODO get these dynamically
+			MatchLabels: map[string]string{
+				"app":   "istio-ingressgateway",
+				"istio": "ingressgateway",
+			},
+		},
+		Action: action,
+		Rules:  rules,
+	}
+	return &accessControlSpec, nil
+}
+
+func (a *actuator) getAccessControlAPIServerSpec(spec *ExtensionSpec, hosts []string) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
+	control, err := a.getAccessControlSpec(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range control.Rules {
+		control.Rules[i].When = []*istioapisecurityv1beta1.Condition{{
+			Key:    "connection.sni",
+			Values: hosts,
+		}}
+	}
+
+	return control, nil
+}
+
+func (a *actuator) getAccessControlVPNServerSpec(spec *ExtensionSpec, namespace string) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
+	control, err := a.getAccessControlSpec(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range control.Rules {
+		control.Rules[i].When = []*istioapisecurityv1beta1.Condition{{
+			Key:    "request.headers[reversed-vpn]",
+			Values: []string{fmt.Sprintf("outbound|1194||vpn-seed-server.%s.svc.cluster.local", namespace)},
+		}}
+	}
+
+	return control, nil
+}
+
+// notNilSlice returns either the passed slice or an empty slice (not nil) if the length is zero.
+func notNilSlice[T any](t []T) []T {
+	if len(t) > 0 {
+		return t
+	}
+	return []T{}
+}
+
+func toIstioAuthPolicyAction(action string) (istioapisecurityv1beta1.AuthorizationPolicy_Action, error) {
+	switch action {
+	case "ALLOW":
+		return istioapisecurityv1beta1.AuthorizationPolicy_ALLOW, nil
+	case "DENY":
+		return istioapisecurityv1beta1.AuthorizationPolicy_DENY, nil
+	default:
+		return istioapisecurityv1beta1.AuthorizationPolicy_Action(0), fmt.Errorf("unsupported authorization policy action: %s", action)
+	}
 }
