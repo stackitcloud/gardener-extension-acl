@@ -30,7 +30,7 @@ var k8sClient client.Client
 var testEnv *envtest.Environment
 var clientScheme *runtime.Scheme
 var logger logr.Logger
-var ctx = context.Background()
+var ctx = context.TODO()
 var extensionCounter = 1
 var namespaceCounter = 1
 
@@ -77,7 +77,7 @@ var _ = AfterSuite(func() {
 })
 
 func createNewNamespace() string {
-	generatedName := "acl-test-" + strconv.Itoa(namespaceCounter)
+	generatedName := "extension-test-" + strconv.Itoa(namespaceCounter)
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: generatedName,
@@ -101,7 +101,7 @@ func getNewExtension(namespace string) *extensionsv1alpha1.Extension {
 	extensionCounter++
 	return &extensionsv1alpha1.Extension{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "acl-" + strconv.Itoa(extensionCounter),
+			Name:      "extension-" + strconv.Itoa(extensionCounter),
 			Namespace: namespace,
 			Annotations: map[string]string{
 				"key": "value",

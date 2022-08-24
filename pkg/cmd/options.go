@@ -68,7 +68,7 @@ func (o *ExtensionOptions) ApplyHealthCheckConfig(config *healthcheckconfig.Heal
 // ControllerSwitches are the cmd.SwitchOptions for the provider controllers.
 func ControllerSwitches() *cmd.SwitchOptions {
 	return cmd.NewSwitchOptions(
-		cmd.Switch(controller.ControllerName, controller.AddToManager),
+		cmd.Switch(controller.Type, controller.AddToManager),
 		cmd.Switch(extensionshealthcheckcontroller.ControllerName, healthcheckcontroller.AddToManager),
 	)
 }

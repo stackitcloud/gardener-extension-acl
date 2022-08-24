@@ -25,7 +25,7 @@ import (
 )
 
 // ExtensionName is the name of the extension.
-const ExtensionName = "acl"
+const ExtensionName = "acl-extension"
 
 // Options holds configuration passed to the service controller.
 type Options struct {

@@ -25,11 +25,8 @@ import (
 
 const (
 	// Type is the type of Extension resource.
-	Type = "acl"
-	// ControllerName is the name of the service controller.
-	ControllerName = "extension-service"
-	// FinalizerSuffix is the finalizer suffix for the service controller.
-	FinalizerSuffix = "extension-service"
+	Type   = "acl"
+	Suffix = "-extension-service"
 )
 
 var (
@@ -58,8 +55,8 @@ func AddToManagerWithOptions(mgr manager.Manager, opts *AddOptions) error {
 	return extension.Add(mgr, extension.AddArgs{
 		Actuator:          NewActuator(opts.ExtensionConfig),
 		ControllerOptions: opts.ControllerOptions,
-		Name:              ControllerName,
-		FinalizerSuffix:   FinalizerSuffix,
+		Name:              Type + Suffix,
+		FinalizerSuffix:   Type + Suffix,
 		Resync:            0,
 		Predicates:        extension.DefaultPredicates(DefaultAddOptions.IgnoreOperationAnnotation),
 		Type:              Type,
