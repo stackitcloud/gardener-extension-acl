@@ -18,9 +18,9 @@ package cmd
 import (
 	"time"
 
-	"github.com/stackitcloud/gardener-extension-example/pkg/controller"
-	controllerconfig "github.com/stackitcloud/gardener-extension-example/pkg/controller/config"
-	healthcheckcontroller "github.com/stackitcloud/gardener-extension-example/pkg/controller/healthcheck"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
+	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
+	healthcheckcontroller "github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
 
 	"github.com/gardener/gardener/extensions/pkg/controller/cmd"
 	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"

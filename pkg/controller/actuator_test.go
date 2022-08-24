@@ -3,7 +3,7 @@ package controller
 import (
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/stackitcloud/gardener-extension-example/pkg/controller/config"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

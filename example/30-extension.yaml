@@ -6,9 +6,9 @@ metadata:
 apiVersion: extensions.gardener.cloud/v1alpha1
 kind: Extension
 metadata:
-  name: sample-extension
+  name: acl
   namespace: sample
 spec:
-  type: sample-extension
+  type: acl
   providerConfig:
     sampleString: hello

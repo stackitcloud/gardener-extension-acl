@@ -1,9 +1,9 @@
 VERSION 0.6
 FROM golang:1.18-alpine
-ARG DOCKER_REPO=reg.infra.ske.eu01.stackit.cloud/ske/gardener-extension-example
+ARG NAME=acl
+ARG DOCKER_REPO=reg.infra.ske.eu01.stackit.cloud/ske/gardener-extension-$NAME
 ARG BINPATH=/usr/local/bin/
 ARG GOCACHE=/go-cache
-ARG NAME=example
 
 local-setup:
     LOCALLY
@@ -24,14 +24,14 @@ build-extension-controller:
     ARG GOOS=linux
     ARG GOARCH=amd64
     RUN --mount=type=cache,target=$GOCACHE \
-        go build -ldflags="-w -s" -o app/gardener-extension-$NAME ./cmd/gardener-extension-$NAME/main.go
-    SAVE ARTIFACT app/gardener-extension-$NAME
+        go build -ldflags="-w -s" -o app/gardener-extension ./cmd/gardener-extension/main.go
+    SAVE ARTIFACT app/gardener-extension
 
 build-local:
     ARG USEROS
     ARG USERARCH
-    COPY (+build-extension-controller/gardener-extension-$NAME --GOOS=$USEROS --GOARCH=$USERARCH) /gardener-extension-$NAME
-    SAVE ARTIFACT /gardener-extension-$NAME AS LOCAL out/gardener-extension-$NAME
+    COPY (+build-extension-controller/gardener-extension --GOOS=$USEROS --GOARCH=$USERARCH) /gardener-extension
+    SAVE ARTIFACT /gardener-extension AS LOCAL out/gardener-extension
 
 build-test:
     FROM +deps
@@ -59,7 +59,7 @@ docker:
     FROM --platform=$TARGETPLATFORM \
         gcr.io/distroless/static:nonroot
     COPY --platform=$USERPLATFORM \
-        (+build-extension-controller/gardener-extension-$NAME --GOOS=$TARGETOS --GOARCH=$TARGETARCH) /gardener-extension
+        (+build-extension-controller/gardener-extension --GOOS=$TARGETOS --GOARCH=$TARGETARCH) /gardener-extension
     COPY --dir charts/ /charts
     BUILD +set-version
     USER 65532:65532
@@ -160,15 +160,12 @@ snyk-helm:
 
 all:
     BUILD +deps
-    BUILD +generate
-    BUILD +manifests
     BUILD +generate-deploy
     BUILD +snyk-scan
     BUILD +snyk-helm
-    BUILD +semgrep
+    #BUILD +semgrep # TODO semgrep
     BUILD +lint
     BUILD +coverage
-    BUILD +integration-test
     BUILD +docker
 
 ###########

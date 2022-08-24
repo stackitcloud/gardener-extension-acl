@@ -18,14 +18,14 @@ package app
 import (
 	"os"
 
-	extensioncmd "github.com/stackitcloud/gardener-extension-example/pkg/cmd"
+	extensioncmd "github.com/stackitcloud/gardener-extension-acl/pkg/cmd"
 
 	controllercmd "github.com/gardener/gardener/extensions/pkg/controller/cmd"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
 
 // ExtensionName is the name of the extension.
-const ExtensionName = "sample-extension"
+const ExtensionName = "acl"
 
 // Options holds configuration passed to the service controller.
 type Options struct {

@@ -16,7 +16,7 @@
 package controller
 
 import (
-	controllerconfig "github.com/stackitcloud/gardener-extension-example/pkg/controller/config"
+	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -25,7 +25,7 @@ import (
 
 const (
 	// Type is the type of Extension resource.
-	Type = "sample-extension"
+	Type = "acl"
 	// ControllerName is the name of the service controller.
 	ControllerName = "extension-service"
 	// FinalizerSuffix is the finalizer suffix for the service controller.
