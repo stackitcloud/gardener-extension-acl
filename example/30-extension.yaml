@@ -1,14 +1,7 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: acl
----
 apiVersion: extensions.gardener.cloud/v1alpha1
 kind: Extension
 metadata:
   name: acl
-  namespace: acl
+  namespace: shoot--local--local
 spec:
   type: acl
-  providerConfig:
-    sampleString: hello

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
@@ -31,14 +32,11 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/utils/chart"
-	kutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	istioapisecurityv1beta1 "istio.io/api/security/v1beta1"
 	istiov1beta1 "istio.io/api/type/v1beta1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
@@ -99,11 +97,11 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 		return err
 	}
 
-	// TODO unless you put anything in the ProviderConfig field of the extension
-	// object, this Unmarshal will fail with an invalid nil pointer dereference
 	extSpec := &ExtensionSpec{}
-	if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
-		return err
+	if ex.Spec.ProviderConfig != nil && ex.Spec.ProviderConfig.Raw != nil {
+		if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
+			return err
+		}
 	}
 
 	if err := a.createSeedResources(ctx, extSpec, cluster, namespace); err != nil {
@@ -123,12 +121,6 @@ func (a *actuator) Delete(ctx context.Context, ex *extensionsv1alpha1.Extension)
 
 // Restore the Extension resource.
 func (a *actuator) Restore(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
-	// TODO If your extension needs to restore something from its state
-	//
-	// If everything concerning your extension can be restored by a simple
-	// reconciliation (i.e. if it's stateless), you do not need to do anything
-	// here. Otherwise, you have to recreate resources from the extension's
-	// Status.Resources field before you can trigger the reconcile.
 	return a.Reconcile(ctx, ex)
 }
 
@@ -155,23 +147,27 @@ func (a *actuator) InjectScheme(scheme *runtime.Scheme) error {
 	return nil
 }
 
-// TODO use the extension spec and cluster resources, or remove them from
-// the function
 func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec, cluster *controller.Cluster, namespace string) error {
 	var err error
 
-	hosts := []string{
-		"localhost",
-		"test.me.svc",
+	hosts := make([]string, 0)
+	for _, address := range cluster.Shoot.Status.AdvertisedAddresses {
+		hosts = append(hosts, strings.Split(address.URL, "//")[1])
 	}
 
 	apiServerRule, err := a.getAccessControlAPIServerSpec(spec, hosts)
+	if err != nil {
+		return err
+	}
 	vpnServerRule, err := a.getAccessControlVPNServerSpec(spec, cluster.ObjectMeta.Name)
+	if err != nil {
+		return err
+	}
 
 	cfg := map[string]interface{}{
 		"shootName":       cluster.Shoot.Name,
 		"targetNamespace": "istio-ingress",
-		"apiServerRule":   apiServerRule,
+		"apiserverRule":   apiServerRule,
 		"vpnRule":         vpnServerRule,
 	}
 
@@ -192,14 +188,6 @@ func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec,
 
 func (a *actuator) deleteSeedResources(ctx context.Context, namespace string) error {
 	a.logger.Info("Deleting managed resource for seed", "namespace", namespace)
-
-	// TODO this code block is only needed if you have unmanaged resources to delete
-	if err := kutil.DeleteObjects(ctx, a.client,
-		// TODO specify resources to be deleted that are not part of a ManagedResource
-		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "secret-name", Namespace: namespace}},
-	); err != nil {
-		return err
-	}
 
 	if err := managedresources.Delete(ctx, a.client, namespace, ResourceNameSeed, false); err != nil {
 		return err
@@ -232,12 +220,6 @@ func (a *actuator) createManagedResource(
 	)
 }
 
-// TODO collect resources that you want to put in the status
-//
-// shoot-cert-service uses ResourceReferences to do this, but this doesn't
-// convey any information about the resource other than its name. So, if you
-// want to restore any information after a migration (of resources that are
-// not part of a ManagedResource), you need to save it here.
 func (a *actuator) updateStatus(ctx context.Context, ex *extensionsv1alpha1.Extension, _ *ExtensionSpec) error {
 	var resources []gardencorev1beta1.NamedResourceReference
 
@@ -253,6 +235,7 @@ func (a *actuator) getAccessControlSpec(spec *ExtensionSpec) (*istioapisecurityv
 
 	ac := *spec
 	action := istioapisecurityv1beta1.AuthorizationPolicy_ALLOW
+	rules := []*istioapisecurityv1beta1.Rule{{From: []*istioapisecurityv1beta1.Rule_From{}}}
 
 	var err error
 	if ac.Action != nil {
@@ -262,16 +245,18 @@ func (a *actuator) getAccessControlSpec(spec *ExtensionSpec) (*istioapisecurityv
 		return nil, err
 	}
 
-	rules := []*istioapisecurityv1beta1.Rule{{
-		From: []*istioapisecurityv1beta1.Rule_From{{
-			Source: &istioapisecurityv1beta1.Source{
-				IpBlocks:          notNilSlice(ac.IPBlocks),
-				NotIpBlocks:       notNilSlice(ac.NotIPBlocks),
-				RemoteIpBlocks:    notNilSlice(ac.RemoteIPBlocks),
-				NotRemoteIpBlocks: notNilSlice(ac.NotRemoteIPBlocks),
-			},
-		}},
-	}}
+	if ac.IPBlocks != nil || ac.NotIPBlocks != nil || ac.RemoteIPBlocks != nil || ac.NotRemoteIPBlocks != nil {
+		rules = []*istioapisecurityv1beta1.Rule{{
+			From: []*istioapisecurityv1beta1.Rule_From{{
+				Source: &istioapisecurityv1beta1.Source{
+					IpBlocks:          notNilSlice(ac.IPBlocks),
+					NotIpBlocks:       notNilSlice(ac.NotIPBlocks),
+					RemoteIpBlocks:    notNilSlice(ac.RemoteIPBlocks),
+					NotRemoteIpBlocks: notNilSlice(ac.NotRemoteIPBlocks),
+				},
+			}},
+		}}
+	}
 
 	accessControlSpec := istioapisecurityv1beta1.AuthorizationPolicy{
 		Selector: &istiov1beta1.WorkloadSelector{
@@ -287,7 +272,9 @@ func (a *actuator) getAccessControlSpec(spec *ExtensionSpec) (*istioapisecurityv
 	return &accessControlSpec, nil
 }
 
-func (a *actuator) getAccessControlAPIServerSpec(spec *ExtensionSpec, hosts []string) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
+func (a *actuator) getAccessControlAPIServerSpec(
+	spec *ExtensionSpec, hosts []string,
+) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
 	control, err := a.getAccessControlSpec(spec)
 	if err != nil {
 		return nil, err
@@ -303,7 +290,9 @@ func (a *actuator) getAccessControlAPIServerSpec(spec *ExtensionSpec, hosts []st
 	return control, nil
 }
 
-func (a *actuator) getAccessControlVPNServerSpec(spec *ExtensionSpec, namespace string) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
+func (a *actuator) getAccessControlVPNServerSpec(
+	spec *ExtensionSpec, namespace string,
+) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
 	control, err := a.getAccessControlSpec(spec)
 	if err != nil {
 		return nil, err
