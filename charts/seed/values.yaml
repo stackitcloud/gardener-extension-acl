@@ -2,7 +2,7 @@
 # apiserverRule:
 #   action: ALLOW # ALLOW is default, user can overwrite
 #   rules:
-#     - from: {} # empty per default, can be filled with list by user
+#     - from: [] # empty per default, can be filled with list by user
 #       when:
 #         - key: connection.sni
 #           values:
@@ -14,7 +14,7 @@
 # vpnRule:
 #   action: ALLOW
 #   rules:
-#     - from: {}
+#     - from: []
 #       when:
 #         - key: request.headers[reversed-vpn]
 #           values:
