@@ -1,0 +1,39 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: authorization-policies
+  namespace: istio-ingress
+spec:
+  workloadSelector:
+    labels:
+      app: istio-ingressgateway
+      istio: ingressgateway
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        name: 0.0.0.0_8132
+    patch:
+      operation: INSERT_FIRST
+      value:
+        name: authorization-policies
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
+          stat_prefix: envoyrbac
+          rules:
+            action: DENY
+            policies:
+              authorization-policies:
+                permissions:
+                - any: true
+                principals:
+                - and_ids:
+                    ids:
+                    - header:
+                        name: "reversed-vpn"
+                        string_match:
+                          contains: "shoot"
+                    - remote_ip:
+                        address_prefix: 0.0.0.0
+                        prefix_len: 0
