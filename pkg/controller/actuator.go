@@ -35,8 +35,6 @@ import (
 	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	istioapisecurityv1beta1 "istio.io/api/security/v1beta1"
-	istiov1beta1 "istio.io/api/type/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
@@ -73,19 +71,39 @@ type actuator struct {
 	logger logr.Logger
 }
 
+// kind: Shoot
+// spec:
+//   extensions:
+//   - type: acl
+//     providerConfig:
+//     - cidrs:
+//       - x.x.x.x/24
+//       - y.y.y.y/24
+//       action: ALLOW # default
+//       type: ip|remote # use IPBlocks or RemoteIPBlocks
+//     - cidrs:
+//       - ......
+
 type ExtensionSpec struct {
-	// Action is the action to take on the source of request.
-	Action *string
-	// IPBlocks is list of IP blocks (Ipv4 & Ipv6), populated from the source address of the IP packet.
-	// Single IP (e.g. "1.2.3.4") and CIDR (e.g. "1.2.3.0/24") are supported.
-	IPBlocks []string
-	// NotIPBlocks is a list of negative match of IP blocks.
-	NotIPBlocks []string
-	// RemoteIPBlocks is a list of IP blocks, populated from X-Forwarded-For header or proxy protocol.
-	// Single IP (e.g. “1.2.3.4”) and CIDR (e.g. “1.2.3.0/24”) are supported.
-	RemoteIPBlocks []string
-	// NotRemoteIPBlocks is a list of negative match of remote IP blocks.
-	NotRemoteIPBlocks []string
+	// Rules contains a list of user-defined Access Control Rules
+	Rules []AclRule `json:"rules"`
+}
+
+type AclRule struct {
+	// Cidrs contains a list of CIDR blocks to which the ACL rule applies
+	Cidrs []Cidr `json:"cidrs"`
+	// Action defines if the rule is a DENY or an ALLOW rule
+	Action string `json:"action"`
+	// Type can either be ip, remote, or source
+	Type string `json:"type"`
+}
+
+// TODO maybe use cidrs in format or ip/length ? for easier typing?
+type Cidr struct {
+	// AddressPrefix contains an IP subnet address prefix
+	AddressPrefix string `json:"addressPrefix"`
+	// PrefixLength determines the length of the address prefix to consider
+	PrefixLength int `json:"prefixLength"`
 }
 
 // Reconcile the Extension resource.
@@ -155,11 +173,7 @@ func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec,
 		hosts = append(hosts, strings.Split(address.URL, "//")[1])
 	}
 
-	apiServerRule, err := a.getAccessControlAPIServerSpec(spec, hosts)
-	if err != nil {
-		return err
-	}
-	vpnServerRule, err := a.getAccessControlVPNServerSpec(spec, cluster.ObjectMeta.Name)
+	apiEnvoyFilterSpec, err := a.buildEnvoyFilterSpec(spec, hosts)
 	if err != nil {
 		return err
 	}
@@ -167,8 +181,7 @@ func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec,
 	cfg := map[string]interface{}{
 		"shootName":       cluster.Shoot.Name,
 		"targetNamespace": "istio-ingress",
-		"apiserverRule":   apiServerRule,
-		"vpnRule":         vpnServerRule,
+		"envoyFilterSpec": apiEnvoyFilterSpec,
 	}
 
 	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})
@@ -228,101 +241,131 @@ func (a *actuator) updateStatus(ctx context.Context, ex *extensionsv1alpha1.Exte
 	return a.client.Status().Patch(ctx, ex, patch)
 }
 
-func (a *actuator) getAccessControlSpec(spec *ExtensionSpec) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
-	if spec == nil {
-		return nil, errors.New("spec is nil")
+func (a *actuator) buildEnvoyFilterSpec(
+	spec *ExtensionSpec, hosts []string,
+) (map[string]interface{}, error) {
+	configPatches := []map[string]interface{}{}
+
+	for i := range spec.Rules {
+		rule := &spec.Rules[i]
+		// TODO check if rule is well defined
+
+		apiConfigPatch, err := a.createAPIConfigPatchFromRule(rule, hosts)
+		if err != nil {
+			return nil, err
+		}
+
+		vpnConfigPatch, err := a.createVPNConfigPatchFromRule(rule, "TODO-shoot-name")
+		if err != nil {
+			return nil, err
+		}
+
+		configPatches = append(configPatches, apiConfigPatch, vpnConfigPatch)
 	}
 
-	ac := *spec
-	action := istioapisecurityv1beta1.AuthorizationPolicy_ALLOW
-	rules := []*istioapisecurityv1beta1.Rule{{From: []*istioapisecurityv1beta1.Rule_From{}}}
-
-	var err error
-	if ac.Action != nil {
-		action, err = toIstioAuthPolicyAction(*ac.Action)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	if ac.IPBlocks != nil || ac.NotIPBlocks != nil || ac.RemoteIPBlocks != nil || ac.NotRemoteIPBlocks != nil {
-		rules = []*istioapisecurityv1beta1.Rule{{
-			From: []*istioapisecurityv1beta1.Rule_From{{
-				Source: &istioapisecurityv1beta1.Source{
-					IpBlocks:          notNilSlice(ac.IPBlocks),
-					NotIpBlocks:       notNilSlice(ac.NotIPBlocks),
-					RemoteIpBlocks:    notNilSlice(ac.RemoteIPBlocks),
-					NotRemoteIpBlocks: notNilSlice(ac.NotRemoteIPBlocks),
-				},
-			}},
-		}}
-	}
-
-	accessControlSpec := istioapisecurityv1beta1.AuthorizationPolicy{
-		Selector: &istiov1beta1.WorkloadSelector{
-			// TODO get these dynamically
-			MatchLabels: map[string]string{
+	return map[string]interface{}{
+		"workloadSelector": map[string]interface{}{
+			"labels": map[string]interface{}{
 				"app":   "istio-ingressgateway",
 				"istio": "ingressgateway",
 			},
 		},
-		Action: action,
-		Rules:  rules,
-	}
-	return &accessControlSpec, nil
+		"configPatches": configPatches,
+	}, nil
 }
 
-func (a *actuator) getAccessControlAPIServerSpec(
-	spec *ExtensionSpec, hosts []string,
-) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
-	control, err := a.getAccessControlSpec(spec)
-	if err != nil {
-		return nil, err
+func (a *actuator) createAPIConfigPatchFromRule(rule *AclRule, hosts []string) (map[string]interface{}, error) {
+	// TODO use all hosts?
+	host := hosts[0]
+	rbacName := "acl-api"
+	principals := []map[string]interface{}{}
+
+	for i := range rule.Cidrs {
+		cidr := &rule.Cidrs[i]
+		principals = append(principals, ruleCidrToPrincipal(cidr, rule.Type))
 	}
 
-	for i := range control.Rules {
-		control.Rules[i].When = []*istioapisecurityv1beta1.Condition{{
-			Key:    "connection.sni",
-			Values: hosts,
-		}}
-	}
-
-	return control, nil
+	return map[string]interface{}{
+		"applyTo": "NETWORK_FILTER",
+		"match": map[string]interface{}{
+			"context": "GATEWAY",
+			"listener": map[string]interface{}{
+				"filterChain": map[string]interface{}{
+					"sni": host,
+				},
+			},
+		},
+		"patch": principalsToPatch(rbacName, rule.Action, "network", principals),
+	}, nil
 }
 
-func (a *actuator) getAccessControlVPNServerSpec(
-	spec *ExtensionSpec, namespace string,
-) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
-	control, err := a.getAccessControlSpec(spec)
-	if err != nil {
-		return nil, err
+func (a *actuator) createVPNConfigPatchFromRule(rule *AclRule, shootName string) (map[string]interface{}, error) {
+	rbacName := "acl-vpn"
+	andedPrincipals := []map[string]interface{}{}
+
+	for i := range rule.Cidrs {
+		cidr := &rule.Cidrs[i]
+		andedPrincipals = append(andedPrincipals, ruleCidrToPrincipal(cidr, rule.Type))
 	}
 
-	for i := range control.Rules {
-		control.Rules[i].When = []*istioapisecurityv1beta1.Condition{{
-			Key:    "request.headers[reversed-vpn]",
-			Values: []string{fmt.Sprintf("outbound|1194||vpn-seed-server.%s.svc.cluster.local", namespace)},
-		}}
+	andedPrincipals = append(andedPrincipals, map[string]interface{}{
+		"header": map[string]interface{}{
+			"name": "reversed-vpn",
+			"string_match": map[string]interface{}{
+				"contains": shootName,
+			},
+		},
+	})
+
+	principals := []map[string]interface{}{
+		{
+			"and_ids": map[string]interface{}{
+				"ids": andedPrincipals,
+			},
+		},
 	}
 
-	return control, nil
+	return map[string]interface{}{
+		"applyTo": "HTTP_FILTER",
+		"match": map[string]interface{}{
+			"context": "GATEWAY",
+			"listener": map[string]interface{}{
+				"name": "0.0.0.0_8132",
+			},
+		},
+		"patch": principalsToPatch(rbacName, rule.Action, "http", principals),
+	}, nil
 }
 
-// notNilSlice returns either the passed slice or an empty slice (not nil) if the length is zero.
-func notNilSlice[T any](t []T) []T {
-	if len(t) > 0 {
-		return t
+func ruleCidrToPrincipal(cidr *Cidr, ruleType string) map[string]interface{} {
+	return map[string]interface{}{
+		ruleType: map[string]interface{}{
+			"address_prefix": cidr.AddressPrefix,
+			"prefix_len":     cidr.PrefixLength,
+		},
 	}
-	return []T{}
 }
 
-func toIstioAuthPolicyAction(action string) (istioapisecurityv1beta1.AuthorizationPolicy_Action, error) {
-	switch action {
-	case "ALLOW":
-		return istioapisecurityv1beta1.AuthorizationPolicy_ALLOW, nil
-	case "DENY":
-		return istioapisecurityv1beta1.AuthorizationPolicy_DENY, nil
-	default:
-		return istioapisecurityv1beta1.AuthorizationPolicy_Action(0), fmt.Errorf("unsupported authorization policy action: %s", action)
+func principalsToPatch(rbacName, ruleAction, filterType string, principals []map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"operation": "INSERT_FIRST",
+		"value": map[string]interface{}{
+			"name": rbacName,
+			"typed_config": map[string]interface{}{
+				"@type":       "type.googleapis.com/envoy.extensions.filters." + filterType + ".rbac.v3.RBAC",
+				"stat_prefix": "envoyrbac",
+				"rules": map[string]interface{}{
+					"action": ruleAction,
+					"policies": map[string]interface{}{
+						rbacName: map[string]interface{}{
+							"permissions": []map[string]interface{}{
+								{"any": true},
+							},
+							"principals": principals,
+						},
+					},
+				},
+			},
+		},
 	}
 }
