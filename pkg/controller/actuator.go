@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
@@ -47,6 +48,7 @@ const (
 	ActuatorName     = "acl-actuator"
 	ResourceNameSeed = "acl-seed"
 	ChartNameSeed    = "seed"
+	IngressNamespace = "istio-ingress"
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
 	// TODO implement
@@ -56,54 +58,29 @@ const (
 
 // NewActuator returns an actuator responsible for Extension resources.
 func NewActuator(cfg config.Config) extension.Actuator {
+	logger := log.Log.WithName(ActuatorName)
 	return &actuator{
-		logger:          log.Log.WithName(ActuatorName),
+		logger:          logger,
 		extensionConfig: cfg,
+		envoyfilterService: envoyfilters.EnvoyFilterService{
+			Logger: logger,
+		},
 	}
 }
 
 type actuator struct {
-	client          client.Client
-	config          *rest.Config
-	decoder         runtime.Decoder
-	extensionConfig config.Config
+	client             client.Client
+	config             *rest.Config
+	decoder            runtime.Decoder
+	extensionConfig    config.Config
+	envoyfilterService envoyfilters.EnvoyFilterService
 
 	logger logr.Logger
 }
 
-// kind: Shoot
-// spec:
-//   extensions:
-//   - type: acl
-//     providerConfig:
-//     - cidrs:
-//       - x.x.x.x/24
-//       - y.y.y.y/24
-//       action: ALLOW # default
-//       type: ip|remote # use IPBlocks or RemoteIPBlocks
-//     - cidrs:
-//       - ......
-
 type ExtensionSpec struct {
 	// Rules contains a list of user-defined Access Control Rules
-	Rules []AclRule `json:"rules"`
-}
-
-type AclRule struct {
-	// Cidrs contains a list of CIDR blocks to which the ACL rule applies
-	Cidrs []Cidr `json:"cidrs"`
-	// Action defines if the rule is a DENY or an ALLOW rule
-	Action string `json:"action"`
-	// Type can either be ip, remote, or source
-	Type string `json:"type"`
-}
-
-// TODO maybe use cidrs in format or ip/length ? for easier typing?
-type Cidr struct {
-	// AddressPrefix contains an IP subnet address prefix
-	AddressPrefix string `json:"addressPrefix"`
-	// PrefixLength determines the length of the address prefix to consider
-	PrefixLength int `json:"prefixLength"`
+	Rules []envoyfilters.AclRule `json:"rules"`
 }
 
 // Reconcile the Extension resource.
@@ -156,6 +133,7 @@ func (a *actuator) InjectConfig(cfg *rest.Config) error {
 // InjectClient injects the controller runtime client into the reconciler.
 func (a *actuator) InjectClient(c client.Client) error {
 	a.client = c
+	a.envoyfilterService.Client = c
 	return nil
 }
 
@@ -173,14 +151,14 @@ func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec,
 		hosts = append(hosts, strings.Split(address.URL, "//")[1])
 	}
 
-	apiEnvoyFilterSpec, err := a.buildEnvoyFilterSpec(spec, hosts)
+	apiEnvoyFilterSpec, err := a.buildEnvoyFilterSpecForHelmChart(spec, hosts, cluster.Shoot.Name)
 	if err != nil {
 		return err
 	}
 
 	cfg := map[string]interface{}{
 		"shootName":       cluster.Shoot.Name,
-		"targetNamespace": "istio-ingress",
+		"targetNamespace": IngressNamespace,
 		"envoyFilterSpec": apiEnvoyFilterSpec,
 	}
 
@@ -241,8 +219,8 @@ func (a *actuator) updateStatus(ctx context.Context, ex *extensionsv1alpha1.Exte
 	return a.client.Status().Patch(ctx, ex, patch)
 }
 
-func (a *actuator) buildEnvoyFilterSpec(
-	spec *ExtensionSpec, hosts []string,
+func (a *actuator) buildEnvoyFilterSpecForHelmChart(
+	spec *ExtensionSpec, hosts []string, shootName string,
 ) (map[string]interface{}, error) {
 	configPatches := []map[string]interface{}{}
 
@@ -250,12 +228,12 @@ func (a *actuator) buildEnvoyFilterSpec(
 		rule := &spec.Rules[i]
 		// TODO check if rule is well defined
 
-		apiConfigPatch, err := a.createAPIConfigPatchFromRule(rule, hosts)
+		apiConfigPatch, err := a.envoyfilterService.CreateAPIConfigPatchFromRule(rule, hosts)
 		if err != nil {
 			return nil, err
 		}
 
-		vpnConfigPatch, err := a.createVPNConfigPatchFromRule(rule, "TODO-shoot-name")
+		vpnConfigPatch, err := a.envoyfilterService.CreateVPNConfigPatchFromRule(rule, shootName)
 		if err != nil {
 			return nil, err
 		}
@@ -272,100 +250,4 @@ func (a *actuator) buildEnvoyFilterSpec(
 		},
 		"configPatches": configPatches,
 	}, nil
-}
-
-func (a *actuator) createAPIConfigPatchFromRule(rule *AclRule, hosts []string) (map[string]interface{}, error) {
-	// TODO use all hosts?
-	host := hosts[0]
-	rbacName := "acl-api"
-	principals := []map[string]interface{}{}
-
-	for i := range rule.Cidrs {
-		cidr := &rule.Cidrs[i]
-		principals = append(principals, ruleCidrToPrincipal(cidr, rule.Type))
-	}
-
-	return map[string]interface{}{
-		"applyTo": "NETWORK_FILTER",
-		"match": map[string]interface{}{
-			"context": "GATEWAY",
-			"listener": map[string]interface{}{
-				"filterChain": map[string]interface{}{
-					"sni": host,
-				},
-			},
-		},
-		"patch": principalsToPatch(rbacName, rule.Action, "network", principals),
-	}, nil
-}
-
-func (a *actuator) createVPNConfigPatchFromRule(rule *AclRule, shootName string) (map[string]interface{}, error) {
-	rbacName := "acl-vpn"
-	andedPrincipals := []map[string]interface{}{}
-
-	for i := range rule.Cidrs {
-		cidr := &rule.Cidrs[i]
-		andedPrincipals = append(andedPrincipals, ruleCidrToPrincipal(cidr, rule.Type))
-	}
-
-	andedPrincipals = append(andedPrincipals, map[string]interface{}{
-		"header": map[string]interface{}{
-			"name": "reversed-vpn",
-			"string_match": map[string]interface{}{
-				"contains": shootName,
-			},
-		},
-	})
-
-	principals := []map[string]interface{}{
-		{
-			"and_ids": map[string]interface{}{
-				"ids": andedPrincipals,
-			},
-		},
-	}
-
-	return map[string]interface{}{
-		"applyTo": "HTTP_FILTER",
-		"match": map[string]interface{}{
-			"context": "GATEWAY",
-			"listener": map[string]interface{}{
-				"name": "0.0.0.0_8132",
-			},
-		},
-		"patch": principalsToPatch(rbacName, rule.Action, "http", principals),
-	}, nil
-}
-
-func ruleCidrToPrincipal(cidr *Cidr, ruleType string) map[string]interface{} {
-	return map[string]interface{}{
-		ruleType: map[string]interface{}{
-			"address_prefix": cidr.AddressPrefix,
-			"prefix_len":     cidr.PrefixLength,
-		},
-	}
-}
-
-func principalsToPatch(rbacName, ruleAction, filterType string, principals []map[string]interface{}) map[string]interface{} {
-	return map[string]interface{}{
-		"operation": "INSERT_FIRST",
-		"value": map[string]interface{}{
-			"name": rbacName,
-			"typed_config": map[string]interface{}{
-				"@type":       "type.googleapis.com/envoy.extensions.filters." + filterType + ".rbac.v3.RBAC",
-				"stat_prefix": "envoyrbac",
-				"rules": map[string]interface{}{
-					"action": ruleAction,
-					"policies": map[string]interface{}{
-						rbacName: map[string]interface{}{
-							"permissions": []map[string]interface{}{
-								{"any": true},
-							},
-							"principals": principals,
-						},
-					},
-				},
-			},
-		},
-	}
 }
