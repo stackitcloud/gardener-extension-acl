@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	InternalEnvoyFilterName       = "proxy-protocol"
+	ShootFilterPrefix             = "shoot--"
+	ExtensionName                 = "acl"
 	AllowedReasonNoPatchNecessary = "No patch necessary"
 )
 
@@ -31,53 +32,53 @@ type EnvoyFilterWebhook struct {
 }
 
 func (e *EnvoyFilterWebhook) Handle(ctx context.Context, req admission.Request) admission.Response {
-	// decode envoyfilter
 	filter := &istionetworkingClientGo.EnvoyFilter{}
 	if err := e.decoder.Decode(req, filter); err != nil {
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	if !strings.HasPrefix(filter.Name, "shoot--") {
+	// filter out envoyfilter that are not managed by this webhook
+	if !strings.HasPrefix(filter.Name, ShootFilterPrefix) {
 		return admission.Allowed(AllowedReasonNoPatchNecessary)
 	}
 
 	aclExtension := &extensions.Extension{}
-	err := e.Client.Get(ctx, types.NamespacedName{Name: "acl", Namespace: filter.Name}, aclExtension)
+	err := e.Client.Get(ctx, types.NamespacedName{Name: ExtensionName, Namespace: filter.Name}, aclExtension)
 
 	if client.IgnoreNotFound(err) != nil {
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	if err != nil {
-		// TODO remove existing rules if ACL extensions got deleted
-		return admission.Allowed(AllowedReasonNoPatchNecessary)
-	}
+	filters := []map[string]interface{}{}
 
-	// extract rules
-	extSpec := &controller.ExtensionSpec{}
-	err = json.Unmarshal(aclExtension.Spec.ProviderConfig.Raw, extSpec)
-
-	additionalFilters := []map[string]interface{}{}
-
-	for i := range extSpec.Rules {
-		rule := &extSpec.Rules[i]
-		// TODO check if rule is well defined
-		filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(rule)
-		if err != nil {
+	// patch envoyfilter according to rules
+	// otherwhise just the original filter will be applied
+	if err == nil && aclExtension.DeletionTimestamp.IsZero() {
+		extSpec := &controller.ExtensionSpec{}
+		if err := json.Unmarshal(aclExtension.Spec.ProviderConfig.Raw, extSpec); err != nil {
 			return admission.Errored(http.StatusInternalServerError, err)
 		}
-		additionalFilters = append(additionalFilters, filter)
+
+		for i := range extSpec.Rules {
+			rule := &extSpec.Rules[i]
+			// TODO check if rule is well defined
+			filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(rule)
+			if err != nil {
+				return admission.Errored(http.StatusInternalServerError, err)
+			}
+
+			filters = append(filters, filter)
+		}
 	}
 
-	lastOriginalFilterJSON := gjson.Get(string(req.Object.Raw), `spec.configPatches.0.patch.value.filters.#(name="envoy.filters.network.tcp_proxy")`)
-
-	lastOriginalFilterMap := map[string]interface{}{}
-
-	if err := json.Unmarshal([]byte(lastOriginalFilterJSON.Raw), &lastOriginalFilterMap); err != nil {
+	originalFilter := gjson.Get(string(req.Object.Raw), `spec.configPatches.0.patch.value.filters.#(name="envoy.filters.network.tcp_proxy")`)
+	originalFilterMap := map[string]interface{}{}
+	if err := json.Unmarshal([]byte(originalFilter.Raw), &originalFilterMap); err != nil {
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	filters := append(additionalFilters, lastOriginalFilterMap)
+	// make sure the original filter is the last
+	filters = append(filters, originalFilterMap)
 
 	pt := v1.PatchTypeJSONPatch
 	return admission.Response{
