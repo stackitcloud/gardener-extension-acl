@@ -31,6 +31,8 @@ import (
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
+
+	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
 // NewServiceControllerCommand creates a new command that is used to start the service controller.
@@ -77,6 +79,10 @@ func (o *Options) run(ctx context.Context) error {
 	}
 
 	if err := extensionscontroller.AddToScheme(mgr.GetScheme()); err != nil {
+		return fmt.Errorf("could not update manager scheme: %s", err)
+	}
+
+	if err := istionetworkingClientGo.AddToScheme(mgr.GetScheme()); err != nil {
 		return fmt.Errorf("could not update manager scheme: %s", err)
 	}
 

@@ -17,6 +17,8 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -38,17 +40,21 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
 const (
 	// ActuatorName is only used for the logger instance
-	ActuatorName     = "acl-actuator"
-	ResourceNameSeed = "acl-seed"
-	ChartNameSeed    = "seed"
-	IngressNamespace = "istio-ingress"
+	ActuatorName       = "acl-actuator"
+	ResourceNameSeed   = "acl-seed"
+	ChartNameSeed      = "seed"
+	IngressNamespace   = "istio-ingress"
+	HashAnnotationName = "acl-ext-rule-hash"
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
 	// TODO implement
@@ -97,6 +103,10 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 		}
 	}
 
+	if err := a.updateEnvoyFilterHash(ctx, namespace, extSpec, false); err != nil {
+		return err
+	}
+
 	if err := a.createSeedResources(ctx, extSpec, cluster, namespace); err != nil {
 		return err
 	}
@@ -108,6 +118,10 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 func (a *actuator) Delete(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
 	namespace := ex.GetNamespace()
 	a.logger.Info("Component is being deleted", "component", "", "namespace", namespace)
+
+	if err := a.updateEnvoyFilterHash(ctx, namespace, nil, true); err != nil {
+		return err
+	}
 
 	return a.deleteSeedResources(ctx, namespace)
 }
@@ -215,6 +229,58 @@ func (a *actuator) updateStatus(ctx context.Context, ex *extensionsv1alpha1.Exte
 	patch := client.MergeFrom(ex.DeepCopy())
 	ex.Status.Resources = resources
 	return a.client.Status().Patch(ctx, ex, patch)
+}
+
+func (a *actuator) updateEnvoyFilterHash(ctx context.Context, shootName string, extSpec *ExtensionSpec, inDeletion bool) error {
+	// get envoyfilter with the shoot's name
+	envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
+	namespacedName := types.NamespacedName{
+		Namespace: IngressNamespace,
+		Name:      shootName,
+	}
+
+	if err := a.client.Get(ctx, namespacedName, envoyFilter); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+
+	if inDeletion {
+		delete(envoyFilter.Annotations, HashAnnotationName)
+		return a.client.Update(ctx, envoyFilter)
+	}
+
+	// calculate the new hash
+	newHashString, err := HashData(extSpec.Rules)
+	if err != nil {
+		return err
+	}
+
+	// get the annotation hash
+	if envoyFilter.Annotations == nil {
+		envoyFilter.Annotations = map[string]string{}
+	}
+
+	oldHashString, ok := envoyFilter.Annotations[HashAnnotationName]
+
+	// set hash if not present or different
+	if !ok || oldHashString != newHashString {
+		envoyFilter.Annotations[HashAnnotationName] = newHashString
+		return a.client.Update(ctx, envoyFilter)
+	}
+
+	// hash unchanged, do nothing
+	return nil
+}
+
+// HashData returns a 16 char hash for the given object.
+func HashData(data interface{}) (string, error) {
+	var jsonSpec []byte
+	var err error
+	if jsonSpec, err = json.Marshal(data); err != nil {
+		return "", err
+	}
+
+	bytes := sha256.Sum256(jsonSpec)
+	return strings.ToLower(base32.StdEncoding.EncodeToString(bytes[:]))[:16], nil
 }
 
 func (a *actuator) buildEnvoyFilterSpecForHelmChart(
