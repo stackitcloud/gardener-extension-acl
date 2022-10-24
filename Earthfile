@@ -27,11 +27,22 @@ build-extension-controller:
         go build -ldflags="-w -s" -o app/gardener-extension ./cmd/gardener-extension/main.go
     SAVE ARTIFACT app/gardener-extension
 
+build-webhook:
+    FROM +deps
+    COPY --dir pkg/ cmd/ charts/ .
+    ARG GOOS=linux
+    ARG GOARCH=amd64
+    RUN --mount=type=cache,target=$GOCACHE \
+        go build -ldflags="-w -s" -o app/webhook ./cmd/webhook/main.go
+    SAVE ARTIFACT app/webhook
+
 build-local:
     ARG USEROS
     ARG USERARCH
     COPY (+build-extension-controller/gardener-extension --GOOS=$USEROS --GOARCH=$USERARCH) /gardener-extension
+    COPY (+build-webhook/webhook --GOOS=$USEROS --GOARCH=$USERARCH) /webhook
     SAVE ARTIFACT /gardener-extension AS LOCAL out/gardener-extension
+    SAVE ARTIFACT /webhook AS LOCAL out/webhook
 
 build-test:
     FROM +deps
@@ -50,8 +61,12 @@ ci:
     FROM busybox
     COPY +set-version/VERSION .
     BUILD +docker --DOCKER_TAG=$(cat VERSION)
-
+    
 docker:
+    BUILD +docker-extension
+    BUILD +docker-webhook
+
+docker-extension:
     ARG TARGETPLATFORM
     ARG TARGETOS
     ARG TARGETARCH
@@ -65,6 +80,21 @@ docker:
     USER 65532:65532
     ENTRYPOINT ["/gardener-extension"]
     SAVE IMAGE --push $DOCKER_REPO:$DOCKER_TAG
+
+docker-webhook:
+    ARG TARGETPLATFORM
+    ARG TARGETOS
+    ARG TARGETARCH
+    ARG DOCKER_TAG
+    FROM --platform=$TARGETPLATFORM \
+        gcr.io/distroless/static:nonroot
+    COPY --platform=$USERPLATFORM \
+        (+build-webhook/webhook --GOOS=$TARGETOS --GOARCH=$TARGETARCH) /webhook
+    COPY --dir charts/ /charts
+    BUILD +set-version
+    USER 65532:65532
+    ENTRYPOINT ["/webhook"]
+    SAVE IMAGE --push $DOCKER_REPO-webhook:$DOCKER_TAG
 
 revendor:
     FROM +deps

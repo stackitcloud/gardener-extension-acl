@@ -1,5 +1,5 @@
-webhookController:
-  image: bla
+webhook:
+  image: <// TODO replace with correct image repo>
   tag: latest
   pullPolicy: IfNotPresent
 

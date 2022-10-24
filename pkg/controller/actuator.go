@@ -84,7 +84,7 @@ type actuator struct {
 
 type ExtensionSpec struct {
 	// Rules contains a list of user-defined Access Control Rules
-	Rules []envoyfilters.AclRule `json:"rules"`
+	Rules []envoyfilters.ACLRule `json:"rules"`
 }
 
 // Reconcile the Extension resource.

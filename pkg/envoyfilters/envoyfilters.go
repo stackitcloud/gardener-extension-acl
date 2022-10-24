@@ -10,7 +10,7 @@ type EnvoyFilterService struct {
 	Client client.Client
 }
 
-type AclRule struct {
+type ACLRule struct {
 	// Cidrs contains a list of CIDR blocks to which the ACL rule applies
 	Cidrs []Cidr `json:"cidrs"`
 	// Action defines if the rule is a DENY or an ALLOW rule
@@ -27,7 +27,7 @@ type Cidr struct {
 	PrefixLength int `json:"prefixLength"`
 }
 
-func (e *EnvoyFilterService) CreateAPIConfigPatchFromRule(rule *AclRule, hosts []string) (map[string]interface{}, error) {
+func (e *EnvoyFilterService) CreateAPIConfigPatchFromRule(rule *ACLRule, hosts []string) (map[string]interface{}, error) {
 	// TODO use all hosts?
 	host := hosts[0]
 	rbacName := "acl-api"
@@ -52,7 +52,7 @@ func (e *EnvoyFilterService) CreateAPIConfigPatchFromRule(rule *AclRule, hosts [
 	}, nil
 }
 
-func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(rule *AclRule, shootName string) (map[string]interface{}, error) {
+func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(rule *ACLRule, shootName string) (map[string]interface{}, error) {
 	rbacName := "acl-vpn"
 
 	// In the case of VPN, we need to nest the principal rules in a EnvoyFilter
@@ -94,7 +94,7 @@ func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(rule *AclRule, shootNa
 	}, nil
 }
 
-func (e *EnvoyFilterService) CreateInternalFilterPatchFromRule(rule *AclRule) (map[string]interface{}, error) {
+func (e *EnvoyFilterService) CreateInternalFilterPatchFromRule(rule *ACLRule) (map[string]interface{}, error) {
 	rbacName := "acl-internal"
 	principals := []map[string]interface{}{}
 

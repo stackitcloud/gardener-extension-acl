@@ -31,6 +31,7 @@ type EnvoyFilterWebhook struct {
 	decoder            *admission.Decoder
 }
 
+//nolint:gocritic // the signature is forced by kubebuilder
 func (e *EnvoyFilterWebhook) Handle(ctx context.Context, req admission.Request) admission.Response {
 	filter := &istionetworkingClientGo.EnvoyFilter{}
 	if err := e.decoder.Decode(req, filter); err != nil {
