@@ -60,11 +60,9 @@ const (
 func NewActuator(cfg config.Config) extension.Actuator {
 	logger := log.Log.WithName(ActuatorName)
 	return &actuator{
-		logger:          logger,
-		extensionConfig: cfg,
-		envoyfilterService: envoyfilters.EnvoyFilterService{
-			Logger: logger,
-		},
+		logger:             logger,
+		extensionConfig:    cfg,
+		envoyfilterService: envoyfilters.EnvoyFilterService{},
 	}
 }
 

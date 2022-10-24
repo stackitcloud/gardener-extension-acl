@@ -14,6 +14,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 	aclwebhook "github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 )
 
@@ -24,6 +27,7 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(extensionsv1alpha1.AddToScheme(scheme))
 }
 
 func main() {
@@ -67,6 +71,9 @@ func main() {
 
 	server.Register("/mutate", &webhook.Admission{Handler: &aclwebhook.EnvoyFilterWebhook{
 		Client: mgr.GetClient(),
+		EnvoyFilterService: envoyfilters.EnvoyFilterService{
+			Client: mgr.GetClient(),
+		},
 	}})
 
 	mgr.Add(server)

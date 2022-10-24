@@ -1,13 +1,13 @@
 package envoyfilters
 
 import (
-	"github.com/go-logr/logr"
+	"strings"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type EnvoyFilterService struct {
 	Client client.Client
-	Logger logr.Logger
 }
 
 type AclRule struct {
@@ -94,6 +94,21 @@ func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(rule *AclRule, shootNa
 	}, nil
 }
 
+func (e *EnvoyFilterService) CreateInternalFilterPatchFromRule(rule *AclRule) (map[string]interface{}, error) {
+	rbacName := "acl-internal"
+	principals := []map[string]interface{}{}
+
+	for i := range rule.Cidrs {
+		cidr := &rule.Cidrs[i]
+		principals = append(principals, ruleCidrToPrincipal(cidr, rule.Type))
+	}
+
+	return map[string]interface{}{
+		"name":         rbacName + "-" + strings.ToLower(rule.Type),
+		"typed_config": typedConfigToPatch(rbacName, rule.Action, "network", principals),
+	}, nil
+}
+
 func ruleCidrToPrincipal(cidr *Cidr, ruleType string) map[string]interface{} {
 	return map[string]interface{}{
 		ruleType: map[string]interface{}{
@@ -107,20 +122,24 @@ func principalsToPatch(rbacName, ruleAction, filterType string, principals []map
 	return map[string]interface{}{
 		"operation": "INSERT_FIRST",
 		"value": map[string]interface{}{
-			"name": rbacName,
-			"typed_config": map[string]interface{}{
-				"@type":       "type.googleapis.com/envoy.extensions.filters." + filterType + ".rbac.v3.RBAC",
-				"stat_prefix": "envoyrbac",
-				"rules": map[string]interface{}{
-					"action": ruleAction,
-					"policies": map[string]interface{}{
-						rbacName: map[string]interface{}{
-							"permissions": []map[string]interface{}{
-								{"any": true},
-							},
-							"principals": principals,
-						},
+			"name":         rbacName,
+			"typed_config": typedConfigToPatch(rbacName, ruleAction, filterType, principals),
+		},
+	}
+}
+
+func typedConfigToPatch(rbacName, ruleAction, filterType string, principals []map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"@type":       "type.googleapis.com/envoy.extensions.filters." + filterType + ".rbac.v3.RBAC",
+		"stat_prefix": "envoyrbac",
+		"rules": map[string]interface{}{
+			"action": ruleAction,
+			"policies": map[string]interface{}{
+				rbacName: map[string]interface{}{
+					"permissions": []map[string]interface{}{
+						{"any": true},
 					},
+					"principals": principals,
 				},
 			},
 		},
