@@ -9,6 +9,16 @@ metadata:
     app.kubernetes.io/instance: {{ .Chart.Name }}
 rules:
 - apiGroups:
+  - networking.istio.io
+  verbs:
+  - get
+  - list
+  - watch
+  - patch
+  - update
+  resources:
+  - envoyfilters
+- apiGroups:
   - extensions.gardener.cloud
   resources:
   - clusters
