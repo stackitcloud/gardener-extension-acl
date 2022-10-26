@@ -1,0 +1,34 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: authorization-policies
+  namespace: istio-ingress
+spec:
+  workloadSelector:
+    labels:
+      app: istio-ingressgateway
+      istio: ingressgateway
+  configPatches:
+  - applyTo: NETWORK_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        filterChain:
+          sni: api.shoot.garden.s.rebase22.dev.ske.eu01.stackit.cloud
+    patch:
+      operation: INSERT_FIRST
+      value:
+        name: authorization-policies
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC
+          stat_prefix: envoyrbac
+          rules:
+            action: DENY
+            policies:
+              authorization-policies:
+                permissions:
+                - any: true
+                principals:
+                - direct_remote_ip:
+                    address_prefix: 0.0.0.0
+                    prefix_len: 0

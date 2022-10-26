@@ -17,6 +17,8 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -24,6 +26,7 @@ import (
 	"time"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
@@ -35,20 +38,23 @@ import (
 	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	istioapisecurityv1beta1 "istio.io/api/security/v1beta1"
-	istiov1beta1 "istio.io/api/type/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
 const (
 	// ActuatorName is only used for the logger instance
-	ActuatorName     = "acl-actuator"
-	ResourceNameSeed = "acl-seed"
-	ChartNameSeed    = "seed"
+	ActuatorName       = "acl-actuator"
+	ResourceNameSeed   = "acl-seed"
+	ChartNameSeed      = "seed"
+	IngressNamespace   = "istio-ingress"
+	HashAnnotationName = "acl-ext-rule-hash"
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
 	// TODO implement
@@ -58,34 +64,27 @@ const (
 
 // NewActuator returns an actuator responsible for Extension resources.
 func NewActuator(cfg config.Config) extension.Actuator {
+	logger := log.Log.WithName(ActuatorName)
 	return &actuator{
-		logger:          log.Log.WithName(ActuatorName),
-		extensionConfig: cfg,
+		logger:             logger,
+		extensionConfig:    cfg,
+		envoyfilterService: envoyfilters.EnvoyFilterService{},
 	}
 }
 
 type actuator struct {
-	client          client.Client
-	config          *rest.Config
-	decoder         runtime.Decoder
-	extensionConfig config.Config
+	client             client.Client
+	config             *rest.Config
+	decoder            runtime.Decoder
+	extensionConfig    config.Config
+	envoyfilterService envoyfilters.EnvoyFilterService
 
 	logger logr.Logger
 }
 
 type ExtensionSpec struct {
-	// Action is the action to take on the source of request.
-	Action *string
-	// IPBlocks is list of IP blocks (Ipv4 & Ipv6), populated from the source address of the IP packet.
-	// Single IP (e.g. "1.2.3.4") and CIDR (e.g. "1.2.3.0/24") are supported.
-	IPBlocks []string
-	// NotIPBlocks is a list of negative match of IP blocks.
-	NotIPBlocks []string
-	// RemoteIPBlocks is a list of IP blocks, populated from X-Forwarded-For header or proxy protocol.
-	// Single IP (e.g. “1.2.3.4”) and CIDR (e.g. “1.2.3.0/24”) are supported.
-	RemoteIPBlocks []string
-	// NotRemoteIPBlocks is a list of negative match of remote IP blocks.
-	NotRemoteIPBlocks []string
+	// Rules contains a list of user-defined Access Control Rules
+	Rules []envoyfilters.ACLRule `json:"rules"`
 }
 
 // Reconcile the Extension resource.
@@ -104,6 +103,10 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 		}
 	}
 
+	if err := a.updateEnvoyFilterHash(ctx, namespace, extSpec, false); err != nil {
+		return err
+	}
+
 	if err := a.createSeedResources(ctx, extSpec, cluster, namespace); err != nil {
 		return err
 	}
@@ -115,6 +118,10 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 func (a *actuator) Delete(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
 	namespace := ex.GetNamespace()
 	a.logger.Info("Component is being deleted", "component", "", "namespace", namespace)
+
+	if err := a.updateEnvoyFilterHash(ctx, namespace, nil, true); err != nil {
+		return err
+	}
 
 	return a.deleteSeedResources(ctx, namespace)
 }
@@ -138,6 +145,7 @@ func (a *actuator) InjectConfig(cfg *rest.Config) error {
 // InjectClient injects the controller runtime client into the reconciler.
 func (a *actuator) InjectClient(c client.Client) error {
 	a.client = c
+	a.envoyfilterService.Client = c
 	return nil
 }
 
@@ -155,20 +163,15 @@ func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec,
 		hosts = append(hosts, strings.Split(address.URL, "//")[1])
 	}
 
-	apiServerRule, err := a.getAccessControlAPIServerSpec(spec, hosts)
-	if err != nil {
-		return err
-	}
-	vpnServerRule, err := a.getAccessControlVPNServerSpec(spec, cluster.ObjectMeta.Name)
+	apiEnvoyFilterSpec, err := a.buildEnvoyFilterSpecForHelmChart(spec, hosts, cluster.Shoot.Name)
 	if err != nil {
 		return err
 	}
 
 	cfg := map[string]interface{}{
 		"shootName":       cluster.Shoot.Name,
-		"targetNamespace": "istio-ingress",
-		"apiserverRule":   apiServerRule,
-		"vpnRule":         vpnServerRule,
+		"targetNamespace": IngressNamespace,
+		"envoyFilterSpec": apiEnvoyFilterSpec,
 	}
 
 	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})
@@ -228,101 +231,87 @@ func (a *actuator) updateStatus(ctx context.Context, ex *extensionsv1alpha1.Exte
 	return a.client.Status().Patch(ctx, ex, patch)
 }
 
-func (a *actuator) getAccessControlSpec(spec *ExtensionSpec) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
-	if spec == nil {
-		return nil, errors.New("spec is nil")
+func (a *actuator) updateEnvoyFilterHash(ctx context.Context, shootName string, extSpec *ExtensionSpec, inDeletion bool) error {
+	// get envoyfilter with the shoot's name
+	envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
+	namespacedName := types.NamespacedName{
+		Namespace: IngressNamespace,
+		Name:      shootName,
 	}
 
-	ac := *spec
-	action := istioapisecurityv1beta1.AuthorizationPolicy_ALLOW
-	rules := []*istioapisecurityv1beta1.Rule{{From: []*istioapisecurityv1beta1.Rule_From{}}}
-
-	var err error
-	if ac.Action != nil {
-		action, err = toIstioAuthPolicyAction(*ac.Action)
+	if err := a.client.Get(ctx, namespacedName, envoyFilter); err != nil {
+		return client.IgnoreNotFound(err)
 	}
+
+	if inDeletion {
+		delete(envoyFilter.Annotations, HashAnnotationName)
+		return a.client.Update(ctx, envoyFilter)
+	}
+
+	// calculate the new hash
+	newHashString, err := HashData(extSpec.Rules)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if ac.IPBlocks != nil || ac.NotIPBlocks != nil || ac.RemoteIPBlocks != nil || ac.NotRemoteIPBlocks != nil {
-		rules = []*istioapisecurityv1beta1.Rule{{
-			From: []*istioapisecurityv1beta1.Rule_From{{
-				Source: &istioapisecurityv1beta1.Source{
-					IpBlocks:          notNilSlice(ac.IPBlocks),
-					NotIpBlocks:       notNilSlice(ac.NotIPBlocks),
-					RemoteIpBlocks:    notNilSlice(ac.RemoteIPBlocks),
-					NotRemoteIpBlocks: notNilSlice(ac.NotRemoteIPBlocks),
-				},
-			}},
-		}}
+	// get the annotation hash
+	if envoyFilter.Annotations == nil {
+		envoyFilter.Annotations = map[string]string{}
 	}
 
-	accessControlSpec := istioapisecurityv1beta1.AuthorizationPolicy{
-		Selector: &istiov1beta1.WorkloadSelector{
-			// TODO get these dynamically
-			MatchLabels: map[string]string{
+	oldHashString, ok := envoyFilter.Annotations[HashAnnotationName]
+
+	// set hash if not present or different
+	if !ok || oldHashString != newHashString {
+		envoyFilter.Annotations[HashAnnotationName] = newHashString
+		return a.client.Update(ctx, envoyFilter)
+	}
+
+	// hash unchanged, do nothing
+	return nil
+}
+
+// HashData returns a 16 char hash for the given object.
+func HashData(data interface{}) (string, error) {
+	var jsonSpec []byte
+	var err error
+	if jsonSpec, err = json.Marshal(data); err != nil {
+		return "", err
+	}
+
+	bytes := sha256.Sum256(jsonSpec)
+	return strings.ToLower(base32.StdEncoding.EncodeToString(bytes[:]))[:16], nil
+}
+
+func (a *actuator) buildEnvoyFilterSpecForHelmChart(
+	spec *ExtensionSpec, hosts []string, shootName string,
+) (map[string]interface{}, error) {
+	configPatches := []map[string]interface{}{}
+
+	for i := range spec.Rules {
+		rule := &spec.Rules[i]
+		// TODO check if rule is well defined
+
+		apiConfigPatch, err := a.envoyfilterService.CreateAPIConfigPatchFromRule(rule, hosts)
+		if err != nil {
+			return nil, err
+		}
+
+		vpnConfigPatch, err := a.envoyfilterService.CreateVPNConfigPatchFromRule(rule, shootName)
+		if err != nil {
+			return nil, err
+		}
+
+		configPatches = append(configPatches, apiConfigPatch, vpnConfigPatch)
+	}
+
+	return map[string]interface{}{
+		"workloadSelector": map[string]interface{}{
+			"labels": map[string]interface{}{
 				"app":   "istio-ingressgateway",
 				"istio": "ingressgateway",
 			},
 		},
-		Action: action,
-		Rules:  rules,
-	}
-	return &accessControlSpec, nil
-}
-
-func (a *actuator) getAccessControlAPIServerSpec(
-	spec *ExtensionSpec, hosts []string,
-) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
-	control, err := a.getAccessControlSpec(spec)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range control.Rules {
-		control.Rules[i].When = []*istioapisecurityv1beta1.Condition{{
-			Key:    "connection.sni",
-			Values: hosts,
-		}}
-	}
-
-	return control, nil
-}
-
-func (a *actuator) getAccessControlVPNServerSpec(
-	spec *ExtensionSpec, namespace string,
-) (*istioapisecurityv1beta1.AuthorizationPolicy, error) {
-	control, err := a.getAccessControlSpec(spec)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range control.Rules {
-		control.Rules[i].When = []*istioapisecurityv1beta1.Condition{{
-			Key:    "request.headers[reversed-vpn]",
-			Values: []string{fmt.Sprintf("outbound|1194||vpn-seed-server.%s.svc.cluster.local", namespace)},
-		}}
-	}
-
-	return control, nil
-}
-
-// notNilSlice returns either the passed slice or an empty slice (not nil) if the length is zero.
-func notNilSlice[T any](t []T) []T {
-	if len(t) > 0 {
-		return t
-	}
-	return []T{}
-}
-
-func toIstioAuthPolicyAction(action string) (istioapisecurityv1beta1.AuthorizationPolicy_Action, error) {
-	switch action {
-	case "ALLOW":
-		return istioapisecurityv1beta1.AuthorizationPolicy_ALLOW, nil
-	case "DENY":
-		return istioapisecurityv1beta1.AuthorizationPolicy_DENY, nil
-	default:
-		return istioapisecurityv1beta1.AuthorizationPolicy_Action(0), fmt.Errorf("unsupported authorization policy action: %s", action)
-	}
+		"configPatches": configPatches,
+	}, nil
 }

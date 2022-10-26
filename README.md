@@ -41,3 +41,35 @@ installed automatically in the envtest cluster.
 
 See the [actuator_test.go](pkg/controller/actuator_test.go) for a minimal test
 case example.
+
+## Webhook Development
+
+The `controller-runtime` package always creates a Webhook Server that relies on
+TLS, and therefore requires a certificate. As this complicates local
+development, you can use the following approach to tunnel the server running
+locally with a self-signed certificate through `localtunnel`, exposing it via
+public TLS which the Kubernetes API server accepts.
+
+Generate selfsigned *certificates*:
+
+```bash
+bash hack/gen-certs.sh
+```
+
+Start the local webhook server with the certs configured:
+
+```bash
+go run cmd/webhook/main.go --cert-dir certs --key-name server.key --cert-name server.crt
+```
+
+Create a tunnel that exposes your local server:
+
+```bash
+npx localtunnel --port 9443 --local-https --local-ca certs/ca.crt --local-cert certs/server.crt --local-key certs/server.key --subdomain webhook-dev
+```
+
+Finally, apply the `MutatingWebhookConfiguration`:
+
+```bash
+kubectl apply -f example/40-webhook.yaml
+```

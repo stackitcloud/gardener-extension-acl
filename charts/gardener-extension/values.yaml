@@ -1,3 +1,8 @@
+webhook:
+  image: <// TODO replace with correct image repo>
+  tag: latest
+  pullPolicy: IfNotPresent
+
 image:
   repository: <// TODO replace with correct image repo>
   tag: latest

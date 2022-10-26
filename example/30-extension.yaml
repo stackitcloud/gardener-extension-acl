@@ -2,6 +2,23 @@ apiVersion: extensions.gardener.cloud/v1alpha1
 kind: Extension
 metadata:
   name: acl
-  namespace: shoot--local--local
+  namespace: shoot
 spec:
   type: acl
+  providerConfig:
+    rules:
+      - action: DENY
+        type: remote_ip
+        cidrs:
+          - addressPrefix: 0.0.0.0
+            prefixLength: 0
+      - action: DENY
+        type: direct_remote_ip
+        cidrs:
+          - addressPrefix: 0.0.0.0
+            prefixLength: 0
+      - action: DENY
+        type: source_ip
+        cidrs:
+          - addressPrefix: 0.0.0.0
+            prefixLength: 0

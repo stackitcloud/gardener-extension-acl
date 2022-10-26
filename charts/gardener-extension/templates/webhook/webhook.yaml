@@ -1,0 +1,30 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ .Chart.Name }}-webhook
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ .Chart.Name }}-webhook
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      namespace: {{ .Release.Namespace }}
+      name: {{ .Chart.Name }}-webhook
+      port: 9443
+      path: "/mutate"
+  failurePolicy: Fail
+  name: acl.stackit.cloud
+  rules:
+  - apiGroups:
+    - "networking.istio.io"
+    apiVersions:
+    - v1alpha3
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - envoyfilters
+  sideEffects: None
+
