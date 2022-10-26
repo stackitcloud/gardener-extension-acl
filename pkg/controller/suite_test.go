@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
+	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	//+kubebuilder:scaffold:imports
 )
@@ -57,6 +58,7 @@ var _ = BeforeSuite(func() {
 	Expect(extensionsv1alpha1.AddToScheme(clientScheme)).To(Succeed())
 	Expect(resourcesv1alpha1.AddToScheme(clientScheme)).To(Succeed())
 	Expect(apiextensions.AddToScheme(clientScheme)).To(Succeed())
+	Expect(istionetworkingClientGo.AddToScheme(clientScheme)).To(Succeed())
 
 	cfg, err = testEnv.Start()
 	Expect(err).ToNot(HaveOccurred())
@@ -68,6 +70,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
+	createIngressNamespace()
 })
 
 var _ = AfterSuite(func() {
@@ -86,6 +89,15 @@ func createNewNamespace() string {
 	Expect(k8sClient.Create(ctx, namespace)).ShouldNot(HaveOccurred())
 	namespaceCounter++
 	return generatedName
+}
+
+func createIngressNamespace() {
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: IngressNamespace,
+		},
+	}
+	Expect(k8sClient.Create(ctx, namespace)).ShouldNot(HaveOccurred())
 }
 
 func deleteNamespace(name string) {

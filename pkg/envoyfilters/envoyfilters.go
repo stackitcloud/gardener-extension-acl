@@ -16,7 +16,7 @@ type ACLRule struct {
 	Cidrs []string `json:"cidrs"`
 	// Action defines if the rule is a DENY or an ALLOW rule
 	Action string `json:"action"`
-	// Type can either be remote_ip, direct_remote_ip or source_ip
+	// Type can either be "source_ip", "direct_remote_ip" or "remote_ip"
 	Type string `json:"type"`
 }
 
