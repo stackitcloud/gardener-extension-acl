@@ -40,7 +40,7 @@ func (e *EnvoyFilterService) CreateAPIConfigPatchFromRule(rule *ACLRule, hosts [
 	}, nil
 }
 
-func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(rule *ACLRule, shootName string) (map[string]interface{}, error) {
+func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(rule *ACLRule, technicalShootID string) (map[string]interface{}, error) {
 	rbacName := "acl-vpn"
 
 	// In the case of VPN, we need to nest the principal rules in a EnvoyFilter
@@ -53,7 +53,7 @@ func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(rule *ACLRule, shootNa
 		"header": map[string]interface{}{
 			"name": "reversed-vpn",
 			"string_match": map[string]interface{}{
-				"contains": shootName,
+				"contains": technicalShootID,
 			},
 		},
 	})

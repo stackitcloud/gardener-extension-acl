@@ -216,7 +216,7 @@ func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec,
 		hosts = append(hosts, strings.Split(address.URL, "//")[1])
 	}
 
-	apiEnvoyFilterSpec, err := a.buildEnvoyFilterSpecForHelmChart(spec, hosts, cluster.Shoot.Name)
+	apiEnvoyFilterSpec, err := a.buildEnvoyFilterSpecForHelmChart(spec, hosts, cluster.Shoot.Status.TechnicalID)
 	if err != nil {
 		return err
 	}
@@ -336,8 +336,14 @@ func HashData(data interface{}) (string, error) {
 	return strings.ToLower(base32.StdEncoding.EncodeToString(bytes[:]))[:16], nil
 }
 
+// buildEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for API server
+// and VPN networking for every rule in the extension spec.
+//
+// We use the technical ID of the shoot for the VPN rule, which is de facto the
+// same as the seed namespace of the shoot. (Gardener uses the seedNamespace
+// value in the botanist vpnshoot task.)
 func (a *actuator) buildEnvoyFilterSpecForHelmChart(
-	spec *ExtensionSpec, hosts []string, shootName string,
+	spec *ExtensionSpec, hosts []string, technicalShootID string,
 ) (map[string]interface{}, error) {
 	configPatches := []map[string]interface{}{}
 
@@ -348,7 +354,7 @@ func (a *actuator) buildEnvoyFilterSpecForHelmChart(
 			return nil, err
 		}
 
-		vpnConfigPatch, err := a.envoyfilterService.CreateVPNConfigPatchFromRule(rule, shootName)
+		vpnConfigPatch, err := a.envoyfilterService.CreateVPNConfigPatchFromRule(rule, technicalShootID)
 		if err != nil {
 			return nil, err
 		}

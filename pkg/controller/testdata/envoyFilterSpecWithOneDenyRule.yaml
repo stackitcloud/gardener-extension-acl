@@ -48,7 +48,7 @@ configPatches:
                   - header:
                       name: reversed-vpn
                       string_match:
-                        contains: test
+                        contains: shoot--projectname--shootname 
         stat_prefix: envoyrbac
 workloadSelector:
   labels:

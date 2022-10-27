@@ -4,7 +4,6 @@ import (
 	"os"
 	"path"
 
-	"github.com/gardener/gardener/extensions/pkg/controller"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
@@ -54,9 +53,9 @@ var _ = Describe("actuator unit test", func() {
 					"api.test.garden.s.testseed.dev.ske.eu01.stackit.cloud",
 					"api.test.garden.internal.testseed.dev.ske.eu01.stackit.cloud",
 				}
-				shootName := "test"
+				technicalShootID := "shoot--projectname--shootname"
 
-				result, err := a.buildEnvoyFilterSpecForHelmChart(extSpec, hosts, shootName)
+				result, err := a.buildEnvoyFilterSpecForHelmChart(extSpec, hosts, technicalShootID)
 
 				Expect(err).ToNot(HaveOccurred())
 				checkIfMapEqualsYAML(result, "envoyFilterSpecWithOneDenyRule.yaml")
@@ -136,13 +135,6 @@ func getNewActuator() *actuator {
 	}
 }
 
-func getClusterAsCtrlCluster(namespace string) *controller.Cluster {
-	// of course there are two different cluster types :)
-	ctrlCluster, err := controller.GetCluster(ctx, k8sClient, namespace)
-	Expect(err).ToNot(HaveOccurred())
-	return ctrlCluster
-}
-
 func getNewCluster(namespace string) *extensionsv1alpha1.Cluster {
 	return &extensionsv1alpha1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -176,21 +168,19 @@ func addRuleToSpec(extSpec *ExtensionSpec, action, ruleType, addPref string, pre
 }
 
 // checkIfMapEqualsYAML takes a map as input, and tries to compare its
-// marshalled contents to the string coming from the specified testdata file.
-// Fails the test if strings differ. The file contents are unmarshalled and
-// marshalled again to guarantee the strings are comparable at all.
+// marshaled contents to the string coming from the specified testdata file.
+// Fails the test if strings differ. The file contents are unmarshaled and
+// marshaled again to guarantee the strings are comparable.
 func checkIfMapEqualsYAML(input map[string]interface{}, relTestingFilePath string) {
 	goldenYAMLByteArray, err := os.ReadFile(path.Join("./testdata", relTestingFilePath))
 	Expect(err).ToNot(HaveOccurred())
 	goldenMap := map[string]interface{}{}
 	Expect(yaml.Unmarshal(goldenYAMLByteArray, goldenMap)).To(Succeed())
 	goldenYAMLProcessedByteArray, err := yaml.Marshal(goldenMap)
-
-	// we also have to mangle the input through a marshal+unmarshal step,
-	// because otherwise Go is too smart about the nested types of the map contents
 	Expect(err).ToNot(HaveOccurred())
 
 	inputByteArray, err := yaml.Marshal(input)
+	Expect(err).ToNot(HaveOccurred())
 
 	Expect(string(inputByteArray)).To(Equal(string(goldenYAMLProcessedByteArray)))
 }
