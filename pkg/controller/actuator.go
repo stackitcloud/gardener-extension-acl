@@ -21,6 +21,7 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"fmt"
+	"net"
 	"path/filepath"
 	"strings"
 	"time"
@@ -103,6 +104,10 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 		}
 	}
 
+	if err := ValidateExtensionSpec(extSpec); err != nil {
+		return err
+	}
+
 	if err := a.updateEnvoyFilterHash(ctx, namespace, extSpec, false); err != nil {
 		return err
 	}
@@ -112,6 +117,43 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 	}
 
 	return a.updateStatus(ctx, ex, extSpec)
+}
+
+func ValidateExtensionSpec(spec *ExtensionSpec) error {
+	for i := range spec.Rules {
+		rule := &spec.Rules[i]
+
+		// action
+		a := strings.ToLower(rule.Action)
+		if a != "allow" && a != "deny" {
+			return errors.New("action must either be 'ALLOW' or 'DENY'")
+		}
+
+		// type
+		t := strings.ToLower(rule.Type)
+		if t != "direct_remote_ip" &&
+			t != "remote_ip" &&
+			t != "source_ip" {
+			return errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
+		}
+
+		// cidrs
+		if len(rule.Cidrs) < 1 {
+			return errors.New("no cidrs are specified")
+		}
+
+		for ii := range rule.Cidrs {
+			_, mask, err := net.ParseCIDR(rule.Cidrs[ii])
+			if err != nil {
+				return err
+			}
+			if mask == nil {
+				return errors.New("failed parsing cidr")
+			}
+		}
+	}
+
+	return nil
 }
 
 // Delete the Extension resource.
@@ -290,8 +332,6 @@ func (a *actuator) buildEnvoyFilterSpecForHelmChart(
 
 	for i := range spec.Rules {
 		rule := &spec.Rules[i]
-		// TODO check if rule is well defined
-
 		apiConfigPatch, err := a.envoyfilterService.CreateAPIConfigPatchFromRule(rule, hosts)
 		if err != nil {
 			return nil, err
