@@ -63,6 +63,13 @@ const (
 	deletionTimeout = 2 * time.Minute
 )
 
+var (
+	ErrSpecAction = errors.New("action must either be 'ALLOW' or 'DENY'")
+	ErrSpecRules  = errors.New("rules must not be an empty list")
+	ErrSpecType   = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
+	ErrSpecCIDR   = errors.New("CIDRs must not be empty")
+)
+
 // NewActuator returns an actuator responsible for Extension resources.
 func NewActuator(cfg config.Config) extension.Actuator {
 	logger := log.Log.WithName(ActuatorName)
@@ -120,13 +127,17 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 }
 
 func ValidateExtensionSpec(spec *ExtensionSpec) error {
+	if len(spec.Rules) < 1 {
+		return ErrSpecRules
+	}
+
 	for i := range spec.Rules {
 		rule := &spec.Rules[i]
 
 		// action
 		a := strings.ToLower(rule.Action)
 		if a != "allow" && a != "deny" {
-			return errors.New("action must either be 'ALLOW' or 'DENY'")
+			return ErrSpecAction
 		}
 
 		// type
@@ -134,12 +145,12 @@ func ValidateExtensionSpec(spec *ExtensionSpec) error {
 		if t != "direct_remote_ip" &&
 			t != "remote_ip" &&
 			t != "source_ip" {
-			return errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
+			return ErrSpecType
 		}
 
 		// cidrs
 		if len(rule.Cidrs) < 1 {
-			return errors.New("no cidrs are specified")
+			return ErrSpecCIDR
 		}
 
 		for ii := range rule.Cidrs {
@@ -148,7 +159,7 @@ func ValidateExtensionSpec(spec *ExtensionSpec) error {
 				return err
 			}
 			if mask == nil {
-				return errors.New("failed parsing cidr")
+				return ErrSpecCIDR
 			}
 		}
 	}
