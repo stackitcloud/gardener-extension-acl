@@ -1,7 +1,6 @@
 package envoyfilters
 
 import (
-	"fmt"
 	"os"
 	"path"
 
@@ -23,18 +22,16 @@ var _ = Describe("EnoyFilter Unit Tests", func() {
 
 	})
 
-	Describe("buildEnvoyFilterSpecForHelmChart", func() {
+	Describe("BuildEnvoyFilterSpecForHelmChart", func() {
 		When("there is an extension resource with one rule", func() {
 			It("Should create a envoyFilter spec matching the expected one", func() {
 				rules := []ACLRule{}
-				rules = appendToRuleList(rules, "DENY", "source_ip", "0.0.0.0", 0)
+				rules = append(rules, *createRule("DENY", "source_ip", "0.0.0.0", 0))
 				hosts := []string{
 					"api.test.garden.s.testseed.dev.ske.eu01.stackit.cloud",
 					"api.test.garden.internal.testseed.dev.ske.eu01.stackit.cloud",
 				}
 				technicalShootID := "shoot--projectname--shootname"
-
-				fmt.Printf("%+v", rules)
 
 				result, err := e.BuildEnvoyFilterSpecForHelmChart(rules, hosts, technicalShootID)
 
@@ -43,10 +40,23 @@ var _ = Describe("EnoyFilter Unit Tests", func() {
 			})
 		})
 	})
+
+	Describe("CreateInternalFilterPatchFromRule", func() {
+		When("there is a deny rule", func() {
+			It("Should create a filter spec matching the expected one", func() {
+				rule := createRule("DENY", "remote_ip", "0.0.0.0", 0)
+
+				result, err := e.CreateInternalFilterPatchFromRule(rule)
+
+				Expect(err).ToNot(HaveOccurred())
+				checkIfMapEqualsYAML(result, "singleFiltersEntry.yaml")
+			})
+		})
+	})
 })
 
-func appendToRuleList(ruleList []ACLRule, action, ruleType, addPref string, prefLen int) []ACLRule {
-	return append(ruleList, ACLRule{
+func createRule(action, ruleType, addPref string, prefLen int) *ACLRule {
+	return &ACLRule{
 		Cidrs: []Cidr{
 			{
 				AddressPrefix: addPref,
@@ -55,7 +65,7 @@ func appendToRuleList(ruleList []ACLRule, action, ruleType, addPref string, pref
 		},
 		Action: action,
 		Type:   ruleType,
-	})
+	}
 }
 
 // checkIfMapEqualsYAML takes a map as input, and tries to compare its
