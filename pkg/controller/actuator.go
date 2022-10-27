@@ -198,7 +198,6 @@ func (a *actuator) InjectConfig(cfg *rest.Config) error {
 // InjectClient injects the controller runtime client into the reconciler.
 func (a *actuator) InjectClient(c client.Client) error {
 	a.client = c
-	a.envoyfilterService.Client = c
 	return nil
 }
 
@@ -216,7 +215,7 @@ func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec,
 		hosts = append(hosts, strings.Split(address.URL, "//")[1])
 	}
 
-	apiEnvoyFilterSpec, err := a.buildEnvoyFilterSpecForHelmChart(spec, hosts, cluster.Shoot.Status.TechnicalID)
+	apiEnvoyFilterSpec, err := a.envoyfilterService.BuildEnvoyFilterSpecForHelmChart(spec.Rules, hosts, cluster.Shoot.Status.TechnicalID)
 	if err != nil {
 		return err
 	}
@@ -334,41 +333,4 @@ func HashData(data interface{}) (string, error) {
 
 	bytes := sha256.Sum256(jsonSpec)
 	return strings.ToLower(base32.StdEncoding.EncodeToString(bytes[:]))[:16], nil
-}
-
-// buildEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for API server
-// and VPN networking for every rule in the extension spec.
-//
-// We use the technical ID of the shoot for the VPN rule, which is de facto the
-// same as the seed namespace of the shoot. (Gardener uses the seedNamespace
-// value in the botanist vpnshoot task.)
-func (a *actuator) buildEnvoyFilterSpecForHelmChart(
-	spec *ExtensionSpec, hosts []string, technicalShootID string,
-) (map[string]interface{}, error) {
-	configPatches := []map[string]interface{}{}
-
-	for i := range spec.Rules {
-		rule := &spec.Rules[i]
-		apiConfigPatch, err := a.envoyfilterService.CreateAPIConfigPatchFromRule(rule, hosts)
-		if err != nil {
-			return nil, err
-		}
-
-		vpnConfigPatch, err := a.envoyfilterService.CreateVPNConfigPatchFromRule(rule, technicalShootID)
-		if err != nil {
-			return nil, err
-		}
-
-		configPatches = append(configPatches, apiConfigPatch, vpnConfigPatch)
-	}
-
-	return map[string]interface{}{
-		"workloadSelector": map[string]interface{}{
-			"labels": map[string]interface{}{
-				"app":   "istio-ingressgateway",
-				"istio": "ingressgateway",
-			},
-		},
-		"configPatches": configPatches,
-	}, nil
 }

@@ -3,13 +3,9 @@ package envoyfilters
 import (
 	"net"
 	"strings"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type EnvoyFilterService struct {
-	Client client.Client
-}
+type EnvoyFilterService struct{}
 
 type ACLRule struct {
 	// Cidrs contains a list of CIDR blocks to which the ACL rule applies
@@ -18,6 +14,53 @@ type ACLRule struct {
 	Action string `json:"action"`
 	// Type can either be "source_ip", "direct_remote_ip" or "remote_ip"
 	Type string `json:"type"`
+}
+
+// TODO maybe use cidrs in format or ip/length ? for easier typing?
+type Cidr struct {
+	// AddressPrefix contains an IP subnet address prefix
+	AddressPrefix string `json:"addressPrefix"`
+	// PrefixLength determines the length of the address prefix to consider
+	PrefixLength int `json:"prefixLength"`
+}
+
+// buildEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for API server
+// and VPN networking for every rule in the extension spec.
+//
+// We use the technical ID of the shoot for the VPN rule, which is de facto the
+// same as the seed namespace of the shoot. (Gardener uses the seedNamespace
+// value in the botanist vpnshoot task.)
+func (e *EnvoyFilterService) BuildEnvoyFilterSpecForHelmChart(
+	rules []ACLRule, hosts []string, technicalShootID string,
+) (map[string]interface{}, error) {
+	configPatches := []map[string]interface{}{}
+
+	for i := range rules {
+		rule := &rules[i]
+		// TODO check if rule is well defined
+
+		apiConfigPatch, err := e.CreateAPIConfigPatchFromRule(rule, hosts)
+		if err != nil {
+			return nil, err
+		}
+
+		vpnConfigPatch, err := e.CreateVPNConfigPatchFromRule(rule, technicalShootID)
+		if err != nil {
+			return nil, err
+		}
+
+		configPatches = append(configPatches, apiConfigPatch, vpnConfigPatch)
+	}
+
+	return map[string]interface{}{
+		"workloadSelector": map[string]interface{}{
+			"labels": map[string]interface{}{
+				"app":   "istio-ingressgateway",
+				"istio": "ingressgateway",
+			},
+		},
+		"configPatches": configPatches,
+	}, nil
 }
 
 func (e *EnvoyFilterService) CreateAPIConfigPatchFromRule(rule *ACLRule, hosts []string) (map[string]interface{}, error) {

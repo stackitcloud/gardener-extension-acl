@@ -1,13 +1,9 @@
 package controller
 
 import (
-	"os"
-	"path"
-
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
-	"gopkg.in/yaml.v2"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -42,25 +38,6 @@ var _ = Describe("actuator unit test", func() {
 	AfterEach(func() {
 		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, ext))).To(Succeed())
 		deleteNamespace(namespace)
-	})
-
-	Describe("buildEnvoyFilterSpecForHelmChart", func() {
-		When("there is an extension resource with one rule", func() {
-			It("Should create a envoyFilter spec matching the expected one", func() {
-				extSpec := getExtensionSpec()
-				addRuleToSpec(extSpec, "DENY", "source_ip", "0.0.0.0", 0)
-				hosts := []string{
-					"api.test.garden.s.testseed.dev.ske.eu01.stackit.cloud",
-					"api.test.garden.internal.testseed.dev.ske.eu01.stackit.cloud",
-				}
-				technicalShootID := "shoot--projectname--shootname"
-
-				result, err := a.buildEnvoyFilterSpecForHelmChart(extSpec, hosts, technicalShootID)
-
-				Expect(err).ToNot(HaveOccurred())
-				checkIfMapEqualsYAML(result, "envoyFilterSpecWithOneDenyRule.yaml")
-			})
-		})
 	})
 
 	Describe("updateEnvoyFilterHash", func() {
@@ -165,22 +142,4 @@ func addRuleToSpec(extSpec *ExtensionSpec, action, ruleType, addPref string, pre
 		Action: action,
 		Type:   ruleType,
 	})
-}
-
-// checkIfMapEqualsYAML takes a map as input, and tries to compare its
-// marshaled contents to the string coming from the specified testdata file.
-// Fails the test if strings differ. The file contents are unmarshaled and
-// marshaled again to guarantee the strings are comparable.
-func checkIfMapEqualsYAML(input map[string]interface{}, relTestingFilePath string) {
-	goldenYAMLByteArray, err := os.ReadFile(path.Join("./testdata", relTestingFilePath))
-	Expect(err).ToNot(HaveOccurred())
-	goldenMap := map[string]interface{}{}
-	Expect(yaml.Unmarshal(goldenYAMLByteArray, goldenMap)).To(Succeed())
-	goldenYAMLProcessedByteArray, err := yaml.Marshal(goldenMap)
-	Expect(err).ToNot(HaveOccurred())
-
-	inputByteArray, err := yaml.Marshal(input)
-	Expect(err).ToNot(HaveOccurred())
-
-	Expect(string(inputByteArray)).To(Equal(string(goldenYAMLProcessedByteArray)))
 }

@@ -68,10 +68,8 @@ func main() {
 	}
 
 	server.Register("/mutate", &webhook.Admission{Handler: &aclwebhook.EnvoyFilterWebhook{
-		Client: mgr.GetClient(),
-		EnvoyFilterService: envoyfilters.EnvoyFilterService{
-			Client: mgr.GetClient(),
-		},
+		Client:             mgr.GetClient(),
+		EnvoyFilterService: envoyfilters.EnvoyFilterService{},
 	}})
 
 	mgr.Add(server)
