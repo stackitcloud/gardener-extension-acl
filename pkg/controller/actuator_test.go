@@ -55,7 +55,7 @@ var _ = Describe("actuator unit test", func() {
 			})
 			It("Should add an anotation with a hash", func() {
 				extSpec := getExtensionSpec()
-				addRuleToSpec(extSpec, "DENY", "source_ip", "0.0.0.0", 0)
+				addRuleToSpec(extSpec, "DENY", "source_ip", "0.0.0.0/0")
 
 				Expect(a.updateEnvoyFilterHash(ctx, shootName, extSpec, false)).To(Succeed())
 				Expect(k8sClient.Get(
@@ -131,13 +131,10 @@ func getExtensionSpec() *ExtensionSpec {
 	}
 }
 
-func addRuleToSpec(extSpec *ExtensionSpec, action, ruleType, addPref string, prefLen int) {
+func addRuleToSpec(extSpec *ExtensionSpec, action, ruleType, cidr string) {
 	extSpec.Rules = append(extSpec.Rules, envoyfilters.ACLRule{
-		Cidrs: []envoyfilters.Cidr{
-			{
-				AddressPrefix: addPref,
-				PrefixLength:  prefLen,
-			},
+		Cidrs: []string{
+			cidr,
 		},
 		Action: action,
 		Type:   ruleType,

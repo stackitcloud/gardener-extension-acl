@@ -26,7 +26,7 @@ var _ = Describe("EnoyFilter Unit Tests", func() {
 		When("there is an extension resource with one rule", func() {
 			It("Should create a envoyFilter spec matching the expected one", func() {
 				rules := []ACLRule{}
-				rules = append(rules, *createRule("DENY", "source_ip", "0.0.0.0", 0))
+				rules = append(rules, *createRule("DENY", "source_ip", "0.0.0.0/0"))
 				hosts := []string{
 					"api.test.garden.s.testseed.dev.ske.eu01.stackit.cloud",
 					"api.test.garden.internal.testseed.dev.ske.eu01.stackit.cloud",
@@ -44,7 +44,7 @@ var _ = Describe("EnoyFilter Unit Tests", func() {
 	Describe("CreateInternalFilterPatchFromRule", func() {
 		When("there is a deny rule", func() {
 			It("Should create a filter spec matching the expected one", func() {
-				rule := createRule("DENY", "remote_ip", "0.0.0.0", 0)
+				rule := createRule("DENY", "remote_ip", "0.0.0.0/0")
 
 				result, err := e.CreateInternalFilterPatchFromRule(rule)
 
@@ -55,13 +55,10 @@ var _ = Describe("EnoyFilter Unit Tests", func() {
 	})
 })
 
-func createRule(action, ruleType, addPref string, prefLen int) *ACLRule {
+func createRule(action, ruleType, cidr string) *ACLRule {
 	return &ACLRule{
-		Cidrs: []Cidr{
-			{
-				AddressPrefix: addPref,
-				PrefixLength:  prefLen,
-			},
+		Cidrs: []string{
+			cidr,
 		},
 		Action: action,
 		Type:   ruleType,
