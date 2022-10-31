@@ -34,6 +34,7 @@ var logger logr.Logger
 var ctx = context.TODO()
 var extensionCounter = 1
 var namespaceCounter = 1
+var filterObjectCounter = 1
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -126,4 +127,9 @@ func getNewExtension(namespace string) *extensionsv1alpha1.Extension {
 		},
 		Status: extensionsv1alpha1.ExtensionStatus{},
 	}
+}
+
+func GetUniqueShootName() string {
+	filterObjectCounter++
+	return "shoot" + strconv.Itoa(filterObjectCounter)
 }

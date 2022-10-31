@@ -42,7 +42,7 @@ var _ = Describe("actuator unit test", func() {
 
 	Describe("updateEnvoyFilterHash", func() {
 		When("there is an extension resource with one rule", func() {
-			shootName := "test-123"
+			shootName := GetUniqueShootName()
 			BeforeEach(func() {
 				envoyFilter = &istionetworkingClientGo.EnvoyFilter{
 					ObjectMeta: metav1.ObjectMeta{
@@ -70,7 +70,7 @@ var _ = Describe("actuator unit test", func() {
 			})
 		})
 		When("the extension resource is being deleted, and the envoyfilter has an annotation", func() {
-			shootName := "test-abc"
+			shootName := GetUniqueShootName()
 			BeforeEach(func() {
 				envoyFilter = &istionetworkingClientGo.EnvoyFilter{
 					ObjectMeta: metav1.ObjectMeta{
@@ -96,6 +96,79 @@ var _ = Describe("actuator unit test", func() {
 
 				_, ok := envoyFilter.Annotations[HashAnnotationName]
 				Expect(ok).To(BeFalse())
+			})
+		})
+	})
+
+	Describe("ValidateExtensionSpec", func() {
+		When("there is an extension resource with one valid rule", func() {
+			It("Should not return an error", func() {
+				extSpec := getExtensionSpec()
+				addRuleToSpec(extSpec, "DENY", "source_ip", "0.0.0.0/0")
+
+				Expect(ValidateExtensionSpec(extSpec)).To(Succeed())
+			})
+		})
+
+		When("there is an extension resource without rules", func() {
+			It("Should return an error", func() {
+				extSpec := getExtensionSpec()
+				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecRules))
+			})
+		})
+
+		When("there is an extension resource with a rule with invalid rule type", func() {
+			It("Should return the correct error", func() {
+				extSpec := getExtensionSpec()
+				addRuleToSpec(extSpec, "DENY", "nonexistent", "0.0.0.0/0")
+
+				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecType))
+			})
+		})
+
+		When("there is an extension resource with a rule with invalid rule action", func() {
+			It("Should return the correct error", func() {
+				extSpec := getExtensionSpec()
+				addRuleToSpec(extSpec, "NONEXISTENT", "remote_ip", "0.0.0.0/0")
+
+				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecAction))
+			})
+		})
+
+		When("there is an extension resource with CIDR", func() {
+			It("Should return the correct error", func() {
+				extSpec := getExtensionSpec()
+				addRuleToSpec(extSpec, "DENY", "remote_ip", "n0n3x1st3/nt")
+
+				// we're not testing for a specific error, as they come from the
+				// net package here - no need for us to test these
+				Expect(ValidateExtensionSpec(extSpec)).ToNot(Succeed())
+			})
+		})
+
+		When("there is an extension resource with a rule without CIDR", func() {
+			It("Should return the correct error", func() {
+				extSpec := getExtensionSpec()
+
+				extSpec.Rules = append(extSpec.Rules, envoyfilters.ACLRule{
+					Action: "DENY",
+					Type:   "remote_ip",
+				})
+
+				// we're not testing for a specific error, as they come from the
+				// net package here - no need for us to test these
+				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecCIDR))
+			})
+		})
+
+		When("there is an extension resource with a rule with invalid CIDR", func() {
+			It("Should return the correct error", func() {
+				extSpec := getExtensionSpec()
+				addRuleToSpec(extSpec, "DENY", "remote_ip", "n0n3x1st3/nt")
+
+				// we're not testing for a specific error, as they come from the
+				// net package here - no need for us to test these
+				Expect(ValidateExtensionSpec(extSpec)).ToNot(Succeed())
 			})
 		})
 	})
