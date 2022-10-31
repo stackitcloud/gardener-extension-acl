@@ -60,6 +60,10 @@ func (e *EnvoyFilterWebhook) Handle(ctx context.Context, req admission.Request) 
 			return admission.Errored(http.StatusInternalServerError, err)
 		}
 
+		if err := controller.ValidateExtensionSpec(extSpec); err != nil {
+			return admission.Errored(http.StatusBadRequest, err)
+		}
+
 		for i := range extSpec.Rules {
 			rule := &extSpec.Rules[i]
 			// TODO check if rule is well defined

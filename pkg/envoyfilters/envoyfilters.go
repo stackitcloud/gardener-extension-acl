@@ -1,6 +1,7 @@
 package envoyfilters
 
 import (
+	"net"
 	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -12,31 +13,18 @@ type EnvoyFilterService struct {
 
 type ACLRule struct {
 	// Cidrs contains a list of CIDR blocks to which the ACL rule applies
-	Cidrs []Cidr `json:"cidrs"`
+	Cidrs []string `json:"cidrs"`
 	// Action defines if the rule is a DENY or an ALLOW rule
 	Action string `json:"action"`
-	// Type can either be ip, remote, or source
+	// Type can either be remote_ip, direct_remote_ip or source_ip
 	Type string `json:"type"`
-}
-
-// TODO maybe use cidrs in format or ip/length ? for easier typing?
-type Cidr struct {
-	// AddressPrefix contains an IP subnet address prefix
-	AddressPrefix string `json:"addressPrefix"`
-	// PrefixLength determines the length of the address prefix to consider
-	PrefixLength int `json:"prefixLength"`
 }
 
 func (e *EnvoyFilterService) CreateAPIConfigPatchFromRule(rule *ACLRule, hosts []string) (map[string]interface{}, error) {
 	// TODO use all hosts?
 	host := hosts[0]
 	rbacName := "acl-api"
-	principals := []map[string]interface{}{}
-
-	for i := range rule.Cidrs {
-		cidr := &rule.Cidrs[i]
-		principals = append(principals, ruleCidrToPrincipal(cidr, rule.Type))
-	}
+	principals := ruleCidrsToPrincipal(rule.Cidrs, rule.Type)
 
 	return map[string]interface{}{
 		"applyTo": "NETWORK_FILTER",
@@ -58,12 +46,8 @@ func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(rule *ACLRule, shootNa
 	// In the case of VPN, we need to nest the principal rules in a EnvoyFilter
 	// "and_ids" structure, because we add an additional principal matching on
 	// the "reversed-vpn" header, which needs to be ANDed with the other rules.
-	andedPrincipals := []map[string]interface{}{}
 
-	for i := range rule.Cidrs {
-		cidr := &rule.Cidrs[i]
-		andedPrincipals = append(andedPrincipals, ruleCidrToPrincipal(cidr, rule.Type))
-	}
+	andedPrincipals := ruleCidrsToPrincipal(rule.Cidrs, rule.Type)
 
 	andedPrincipals = append(andedPrincipals, map[string]interface{}{
 		"header": map[string]interface{}{
@@ -96,12 +80,7 @@ func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(rule *ACLRule, shootNa
 
 func (e *EnvoyFilterService) CreateInternalFilterPatchFromRule(rule *ACLRule) (map[string]interface{}, error) {
 	rbacName := "acl-internal"
-	principals := []map[string]interface{}{}
-
-	for i := range rule.Cidrs {
-		cidr := &rule.Cidrs[i]
-		principals = append(principals, ruleCidrToPrincipal(cidr, rule.Type))
-	}
+	principals := ruleCidrsToPrincipal(rule.Cidrs, rule.Type)
 
 	return map[string]interface{}{
 		"name":         rbacName + "-" + strings.ToLower(rule.Type),
@@ -109,13 +88,24 @@ func (e *EnvoyFilterService) CreateInternalFilterPatchFromRule(rule *ACLRule) (m
 	}, nil
 }
 
-func ruleCidrToPrincipal(cidr *Cidr, ruleType string) map[string]interface{} {
-	return map[string]interface{}{
-		ruleType: map[string]interface{}{
-			"address_prefix": cidr.AddressPrefix,
-			"prefix_len":     cidr.PrefixLength,
-		},
+func ruleCidrsToPrincipal(cidrs []string, ruleType string) []map[string]interface{} {
+	principals := []map[string]interface{}{}
+
+	for _, cidr := range cidrs {
+		// rule gets validated early in the code
+		ip, mask, _ := net.ParseCIDR(cidr)
+		prefix, _ := mask.Mask.Size()
+
+		principals = append(principals, map[string]interface{}{
+			strings.ToLower(ruleType): map[string]interface{}{
+				// TODO use ip here or the one from the mask?
+				"address_prefix": ip.String(),
+				"prefix_len":     prefix,
+			},
+		})
 	}
+
+	return principals
 }
 
 func principalsToPatch(rbacName, ruleAction, filterType string, principals []map[string]interface{}) map[string]interface{} {
@@ -133,7 +123,7 @@ func typedConfigToPatch(rbacName, ruleAction, filterType string, principals []ma
 		"@type":       "type.googleapis.com/envoy.extensions.filters." + filterType + ".rbac.v3.RBAC",
 		"stat_prefix": "envoyrbac",
 		"rules": map[string]interface{}{
-			"action": ruleAction,
+			"action": strings.ToUpper(ruleAction),
 			"policies": map[string]interface{}{
 				rbacName: map[string]interface{}{
 					"permissions": []map[string]interface{}{

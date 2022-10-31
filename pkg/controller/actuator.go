@@ -21,6 +21,7 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"fmt"
+	"net"
 	"path/filepath"
 	"strings"
 	"time"
@@ -60,6 +61,13 @@ const (
 	// TODO implement
 	ImageName       = "image-name"
 	deletionTimeout = 2 * time.Minute
+)
+
+var (
+	ErrSpecAction = errors.New("action must either be 'ALLOW' or 'DENY'")
+	ErrSpecRules  = errors.New("rules must not be an empty list")
+	ErrSpecType   = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
+	ErrSpecCIDR   = errors.New("CIDRs must not be empty")
 )
 
 // NewActuator returns an actuator responsible for Extension resources.
@@ -103,6 +111,10 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 		}
 	}
 
+	if err := ValidateExtensionSpec(extSpec); err != nil {
+		return err
+	}
+
 	if err := a.updateEnvoyFilterHash(ctx, namespace, extSpec, false); err != nil {
 		return err
 	}
@@ -112,6 +124,47 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 	}
 
 	return a.updateStatus(ctx, ex, extSpec)
+}
+
+func ValidateExtensionSpec(spec *ExtensionSpec) error {
+	if len(spec.Rules) < 1 {
+		return ErrSpecRules
+	}
+
+	for i := range spec.Rules {
+		rule := &spec.Rules[i]
+
+		// action
+		a := strings.ToLower(rule.Action)
+		if a != "allow" && a != "deny" {
+			return ErrSpecAction
+		}
+
+		// type
+		t := strings.ToLower(rule.Type)
+		if t != "direct_remote_ip" &&
+			t != "remote_ip" &&
+			t != "source_ip" {
+			return ErrSpecType
+		}
+
+		// cidrs
+		if len(rule.Cidrs) < 1 {
+			return ErrSpecCIDR
+		}
+
+		for ii := range rule.Cidrs {
+			_, mask, err := net.ParseCIDR(rule.Cidrs[ii])
+			if err != nil {
+				return err
+			}
+			if mask == nil {
+				return ErrSpecCIDR
+			}
+		}
+	}
+
+	return nil
 }
 
 // Delete the Extension resource.
@@ -290,8 +343,6 @@ func (a *actuator) buildEnvoyFilterSpecForHelmChart(
 
 	for i := range spec.Rules {
 		rule := &spec.Rules[i]
-		// TODO check if rule is well defined
-
 		apiConfigPatch, err := a.envoyfilterService.CreateAPIConfigPatchFromRule(rule, hosts)
 		if err != nil {
 			return nil, err
