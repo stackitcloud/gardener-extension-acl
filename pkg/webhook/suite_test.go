@@ -1,7 +1,8 @@
-package controller
+package webhook
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,14 +34,12 @@ var testEnv *envtest.Environment
 var clientScheme *runtime.Scheme
 var logger logr.Logger
 var ctx = context.TODO()
-var extensionCounter = 1
 var namespaceCounter = 1
-var filterObjectCounter = 1
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "Extension Test Suite")
+	RunSpecs(t, "Webhook Test Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -81,7 +81,7 @@ var _ = AfterSuite(func() {
 })
 
 func createNewNamespace() string {
-	generatedName := "extension-test-" + strconv.Itoa(namespaceCounter)
+	generatedName := "shoot--project--" + strconv.Itoa(namespaceCounter)
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: generatedName,
@@ -95,7 +95,7 @@ func createNewNamespace() string {
 func createIngressNamespace() {
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: IngressNamespace,
+			Name: controller.IngressNamespace,
 		},
 	}
 	Expect(k8sClient.Create(ctx, namespace)).ShouldNot(HaveOccurred())
@@ -110,11 +110,13 @@ func deleteNamespace(name string) {
 	Expect(k8sClient.Delete(ctx, namespace)).ShouldNot(HaveOccurred())
 }
 
-func getNewExtension(namespace string) *extensionsv1alpha1.Extension {
-	extensionCounter++
+func getNewExtension(namespace string, spec controller.ExtensionSpec) *extensionsv1alpha1.Extension {
+	rawSpec, err := json.Marshal(spec)
+	Expect(err).ToNot(HaveOccurred())
+
 	return &extensionsv1alpha1.Extension{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "extension-" + strconv.Itoa(extensionCounter),
+			Name:      "acl",
 			Namespace: namespace,
 			Annotations: map[string]string{
 				"key": "value",
@@ -123,13 +125,11 @@ func getNewExtension(namespace string) *extensionsv1alpha1.Extension {
 		Spec: extensionsv1alpha1.ExtensionSpec{
 			DefaultSpec: extensionsv1alpha1.DefaultSpec{
 				Type: "acl",
+				ProviderConfig: &runtime.RawExtension{
+					Raw: rawSpec,
+				},
 			},
 		},
 		Status: extensionsv1alpha1.ExtensionStatus{},
 	}
-}
-
-func GetUniqueShootName() string {
-	filterObjectCounter++
-	return "shoot" + strconv.Itoa(filterObjectCounter)
 }

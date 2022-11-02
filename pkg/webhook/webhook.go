@@ -38,7 +38,15 @@ func (e *EnvoyFilterWebhook) Handle(ctx context.Context, req admission.Request) 
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	// filter out envoyfilter that are not managed by this webhook
+	return e.createAdmissionResponse(ctx, filter, string(req.Object.Raw))
+}
+
+func (e *EnvoyFilterWebhook) createAdmissionResponse(
+	ctx context.Context,
+	filter *istionetworkingClientGo.EnvoyFilter,
+	originalObjectJSON string,
+) admission.Response {
+	// filter out envoyfilters that are not managed by this webhook
 	if !strings.HasPrefix(filter.Name, ShootFilterPrefix) {
 		return admission.Allowed(AllowedReasonNoPatchNecessary)
 	}
@@ -76,7 +84,7 @@ func (e *EnvoyFilterWebhook) Handle(ctx context.Context, req admission.Request) 
 		}
 	}
 
-	originalFilter := gjson.Get(string(req.Object.Raw), `spec.configPatches.0.patch.value.filters.#(name="envoy.filters.network.tcp_proxy")`)
+	originalFilter := gjson.Get(originalObjectJSON, `spec.configPatches.0.patch.value.filters.#(name="envoy.filters.network.tcp_proxy")`)
 	originalFilterMap := map[string]interface{}{}
 	if err := json.Unmarshal([]byte(originalFilter.Raw), &originalFilterMap); err != nil {
 		return admission.Errored(http.StatusInternalServerError, err)
