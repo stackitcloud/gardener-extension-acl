@@ -18,7 +18,7 @@ spec:
       containers:
       - name: {{ .Chart.Name }}-webhook
         image: {{ .Values.webhook.image }}:{{ .Values.webhook.tag }}
-        imagePullPolicy: {{ .Values.webhookController.pullPolicy }}
+        imagePullPolicy: {{ .Values.webhook.pullPolicy }}
         volumeMounts:
         - name: tls
           mountPath: "/tmp/k8s-webhook-server/serving-certs"

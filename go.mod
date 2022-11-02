@@ -15,6 +15,7 @@ require (
 	github.com/tidwall/gjson v1.14.3
 	golang.org/x/tools v0.1.7
 	gomodules.xyz/jsonpatch/v2 v2.2.0
+	gopkg.in/yaml.v3 v3.0.1
 	istio.io/client-go v1.12.0
 	k8s.io/api v0.22.2
 	k8s.io/apiextensions-apiserver v0.22.2
@@ -106,7 +107,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	istio.io/api v0.0.0-20211118170605-3f0f902cdfd1 // indirect
 	istio.io/gogo-genproto v0.0.0-20210113155706-4daf5697332f // indirect
 	k8s.io/apiserver v0.22.2 // indirect
@@ -126,6 +126,7 @@ require (
 )
 
 replace (
+	github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.11.1
 	k8s.io/api => k8s.io/api v0.22.2
 	k8s.io/apimachinery => k8s.io/apimachinery v0.22.2
 	k8s.io/apiserver => k8s.io/apiserver v0.22.2

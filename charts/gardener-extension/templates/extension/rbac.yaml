@@ -43,7 +43,13 @@ rules:
   resources:
   - managedresources
   verbs:
-  - "*"
+  - get
+  - list
+  - create
+  - watch
+  - update
+  - patch
+  - delete
 - apiGroups:
   - ""
   resources:
@@ -80,7 +86,13 @@ rules:
   - "secrets"
   - "events"
   verbs:
-  - "*"
+  - get
+  - list
+  - create
+  - watch
+  - update
+  - patch
+  - delete
 - apiGroups:
   - "apps"
   resources:
