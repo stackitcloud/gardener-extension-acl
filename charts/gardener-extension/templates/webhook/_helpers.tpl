@@ -1,4 +1,4 @@
-{{- define "gardener-extension-acl.webhookname" -}}
+{{- define "gardener-extension-acl.webhookName" -}}
 {{ include "gardener-extension-acl.name" . }}-mutating-webhook
 {{- end -}}
 

@@ -2,7 +2,7 @@
 apiVersion: "autoscaling.k8s.io/v1beta2"
 kind: VerticalPodAutoscaler
 metadata:
-  name: {{ .Chart.Name }}
+  name: {{ template "gardener-extension-acl.extensionName" . }}
   namespace: {{ .Release.Namespace }}
 spec:
   {{- if .Values.vpa.resourcePolicy }}
@@ -16,7 +16,7 @@ spec:
   targetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ .Chart.Name }}
+    name: {{ template "gardener-extension-acl.extensionName" . }}
   updatePolicy:
     updateMode: {{ .Values.vpa.updatePolicy.updateMode }}
 {{- end }}

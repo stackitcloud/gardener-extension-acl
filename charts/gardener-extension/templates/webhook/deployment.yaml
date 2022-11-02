@@ -1,8 +1,7 @@
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "gardener-extension-acl.webhookname" . }}
+  name: {{ template "gardener-extension-acl.webhookName" . }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "gardener-extension-acl.webhookLabels" . | nindent 4 }}
@@ -16,7 +15,7 @@ spec:
       labels:
         {{- include "gardener-extension-acl.webhookLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ .Chart.Name }}
+      serviceAccountName: {{ template "gardener-extension-acl.extensionName" . }}
       containers:
       - name: webhook
         image: {{ .Values.webhook.image }}:{{ .Values.webhook.tag }}
@@ -41,6 +40,6 @@ spec:
       volumes:
         - name: tls
           secret:
-            secretName: {{ template "gardener-extension-acl.webhookname" . }}-tls
+            secretName: {{ template "gardener-extension-acl.webhookName" . }}-tls
             optional: false
 
