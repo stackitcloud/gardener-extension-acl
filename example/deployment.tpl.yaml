@@ -9,10 +9,11 @@ providerConfig:
   chart: $ENCODED_CHART
   values:
     image:
+      repository: TODO
       tag: $TAG
     webhook:
-      image:
-        tag: $TAG
+      image: TODO
+      tag: $TAG
 ---
 apiVersion: core.gardener.cloud/v1beta1
 kind: ControllerRegistration

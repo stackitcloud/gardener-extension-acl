@@ -1,19 +1,24 @@
----
+{{- $dnsName := printf "%s.%s.svc" (include "gardener-extension-acl.webhookname" .) .Release.Namespace -}}
+{{- $ca := genCA $dnsName 3650 -}}
+{{- $cert := genSignedCert $dnsName nil (list $dnsName) 3650 $ca -}}
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-  name: {{ .Chart.Name }}-webhook
+  name: {{ template "gardener-extension-acl.fullname" . }}
+  labels:
+    {{- include "gardener-extension-acl.webhookLabels" . | nindent 4 }}
   annotations:
-    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ .Chart.Name }}-webhook
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ template "gardener-extension-acl.fullname" . }}-webhook
 webhooks:
 - admissionReviewVersions:
   - v1
   clientConfig:
     service:
       namespace: {{ .Release.Namespace }}
-      name: {{ .Chart.Name }}-webhook
+      name: {{ template "gardener-extension-acl.webhookname" . }}
       port: 9443
       path: "/mutate"
+    caBundle: {{ b64enc $ca.Cert}}
   failurePolicy: Fail
   name: acl.stackit.cloud
   rules:
@@ -27,4 +32,17 @@ webhooks:
     resources:
     - envoyfilters
   sideEffects: None
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ template "gardener-extension-acl.webhookname" . }}-tls
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "gardener-extension-acl.webhookLabels" . | nindent 4 }}
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ b64enc $cert.Cert }}
+  tls.key: {{ b64enc $cert.Key }}
+
 
