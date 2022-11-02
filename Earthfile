@@ -164,7 +164,7 @@ test-output:
 
 coverage:
     FROM +deps
-    COPY --dir pkg/ cmd/ controllers/ .
+    COPY --dir pkg/ cmd/ .
     COPY +test-output/cover.out .
     RUN go tool cover -func=cover.out
 
@@ -176,14 +176,20 @@ coverage-html:
 snyk-scan:
     FROM +deps
     COPY +snyk/snyk $BINPATH
-    COPY --dir controllers/ pkg/ cmd/ .
+    COPY --dir pkg/ cmd/ charts/ .
+    COPY .snyk .
     RUN --secret SNYK_TOKEN snyk test
 
 snyk-helm:
     FROM +deps
     COPY +snyk/snyk $BINPATH
-    COPY +helm2kube/helm.yaml .
-    RUN --secret SNYK_TOKEN snyk iac test helm.yaml
+    COPY --dir +helm2kube/result .
+    COPY .snyk .
+    RUN --secret SNYK_TOKEN \
+        snyk iac test \
+        --policy-path=.snyk \ # I don't know why the CLI won't pick this up by default...
+        --severity-threshold=high \  # TODO remove this line if you want to fix a lot of issues in the helm charts
+        result
 
 # todo: semgrep
 # semgrep:
@@ -196,7 +202,7 @@ all:
     #BUILD +semgrep # TODO semgrep
     BUILD +lint
     BUILD +coverage
-    BUILD +docker
+    BUILD +ci
 
 ###########
 # helper
@@ -220,15 +226,12 @@ bash:
 
 helm2kube:
     COPY +helm/helm $BINPATH
-    COPY --dir ./charts .
-    RUN helm template ./chart \
-        -f ./chart/values/base.yaml \
-        -f ./chart/values/prd.yaml \
-        --set gardenerKubeconfigBase64=dummy \
-        --set openstackCredentials.username=dummy \
-        --set openstackCredentials.password=dummy \
-        > helm.yaml
-    SAVE ARTIFACT helm.yaml
+    COPY --dir ./charts/gardener-extension .
+    COPY --dir ./charts/seed .
+    RUN mkdir result
+    RUN helm template ./gardener-extension >> result/gardener-extension.yaml
+    RUN helm template ./seed >> result/seed.yaml
+    SAVE ARTIFACT result
 
 gotools:
     FROM +deps
