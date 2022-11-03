@@ -11,7 +11,10 @@ import (
 
 var _ = Describe("EnoyFilter Unit Tests", func() {
 	var (
-		e *EnvoyFilterService
+		e                  *EnvoyFilterService
+		alwaysAllowedCIDRs = []string{
+			"10.250.0.0/16",
+		}
 	)
 
 	BeforeEach(func() {
@@ -33,7 +36,7 @@ var _ = Describe("EnoyFilter Unit Tests", func() {
 				}
 				technicalShootID := "shoot--projectname--shootname"
 
-				result, err := e.BuildEnvoyFilterSpecForHelmChart(rules, hosts, technicalShootID)
+				result, err := e.BuildEnvoyFilterSpecForHelmChart(rules, hosts, technicalShootID, alwaysAllowedCIDRs)
 
 				Expect(err).ToNot(HaveOccurred())
 				checkIfMapEqualsYAML(result, "envoyFilterSpecWithOneDenyRule.yaml")
@@ -46,10 +49,23 @@ var _ = Describe("EnoyFilter Unit Tests", func() {
 			It("Should create a filter spec matching the expected one", func() {
 				rule := createRule("DENY", "remote_ip", "0.0.0.0/0")
 
-				result, err := e.CreateInternalFilterPatchFromRule(rule)
+				result, err := e.CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs)
 
 				Expect(err).ToNot(HaveOccurred())
-				checkIfMapEqualsYAML(result, "singleFiltersEntry.yaml")
+				checkIfMapEqualsYAML(result, "singleFiltersDenyEntry.yaml")
+			})
+		})
+	})
+
+	Describe("CreateInternalFilterPatchFromRule", func() {
+		When("there is an allow rule", func() {
+			It("Should create a filter spec matching the expected one, including the always allowed CIDRs", func() {
+				rule := createRule("ALLOW", "remote_ip", "0.0.0.0/0")
+
+				result, err := e.CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs)
+
+				Expect(err).ToNot(HaveOccurred())
+				checkIfMapEqualsYAML(result, "singleFiltersAllowEntry.yaml")
 			})
 		})
 	})
