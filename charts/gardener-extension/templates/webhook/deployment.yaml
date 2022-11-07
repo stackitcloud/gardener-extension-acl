@@ -18,8 +18,8 @@ spec:
       serviceAccountName: {{ template "gardener-extension-acl.extensionName" . }}
       containers:
       - name: webhook
-        image: {{ .Values.webhook.image }}:{{ .Values.webhook.tag }}
-        imagePullPolicy: {{ .Values.webhook.pullPolicy }}
+        image: {{ .Values.webhook.image.repository }}:{{ .Values.webhook.image.tag }}
+        imagePullPolicy: {{ .Values.webhook.image.pullPolicy }}
         volumeMounts:
         - name: tls
           mountPath: "/tmp/k8s-webhook-server/serving-certs"

@@ -12,8 +12,9 @@ providerConfig:
       repository: TODO
       tag: $TAG
     webhook:
-      image: TODO
-      tag: $TAG
+      image:
+        repository: TODO
+        tag: $TAG
 ---
 apiVersion: core.gardener.cloud/v1beta1
 kind: ControllerRegistration

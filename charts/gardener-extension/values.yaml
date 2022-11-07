@@ -1,7 +1,8 @@
 webhook:
-  image: <// TODO replace with correct image repo>
-  tag: latest
-  pullPolicy: IfNotPresent
+  image:
+    repository: <// TODO replace with correct image repo>
+    tag: latest
+    pullPolicy: IfNotPresent
 
 image:
   repository: <// TODO replace with correct image repo>
@@ -13,11 +14,11 @@ leaderElection:
 
 resources:
   requests:
-   cpu: "50m"
-   memory: "64Mi"
+    cpu: "50m"
+    memory: "64Mi"
   limits:
-   cpu: "50m"
-   memory: "128Mi"
+    cpu: "50m"
+    memory: "128Mi"
 
 vpa:
   enabled: true
