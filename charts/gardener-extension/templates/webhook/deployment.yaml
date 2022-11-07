@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ template "gardener-extension-acl.webhookName" . }}
+  name: {{ template "gardener-extension.webhookName" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "gardener-extension-acl.webhookLabels" . | nindent 4 }}
+    {{- include "gardener-extension.webhookLabels" . | nindent 4 }}
 spec:
   selector:
     matchLabels:
-      {{- include "gardener-extension-acl.webhookSelectorLabels" . | nindent 6 }}
+      {{- include "gardener-extension.webhookSelectorLabels" . | nindent 6 }}
   replicas: 1
   template:
     metadata:
       labels:
-        {{- include "gardener-extension-acl.webhookLabels" . | nindent 8 }}
+        {{- include "gardener-extension.webhookLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ template "gardener-extension-acl.extensionName" . }}
+      serviceAccountName: {{ template "gardener-extension.extensionName" . }}
       containers:
       - name: webhook
         image: {{ .Values.webhook.image.repository }}:{{ .Values.webhook.image.tag }}
@@ -40,6 +40,6 @@ spec:
       volumes:
         - name: tls
           secret:
-            secretName: {{ template "gardener-extension-acl.webhookName" . }}-tls
+            secretName: {{ template "gardener-extension.webhookName" . }}-tls
             optional: false
 

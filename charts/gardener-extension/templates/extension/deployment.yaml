@@ -2,16 +2,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ template "gardener-extension-acl.extensionName" . }}
+  name: {{ template "gardener-extension.extensionName" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "gardener-extension-acl.extensionLabels" . | nindent 4 }}
+    {{- include "gardener-extension.extensionLabels" . | nindent 4 }}
 spec:
   revisionHistoryLimit: 0
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "gardener-extension-acl.extensionSelectorLabels" . | nindent 6 }}
+      {{- include "gardener-extension.extensionSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
@@ -19,10 +19,10 @@ spec:
         checksum/configmap-extension-imagevector-overwrite: {{ include (print $.Template.BasePath "/configmap-imagevector-overwrite.yaml") . | sha256sum }}
         {{- end }}
       labels:
-        {{- include "gardener-extension-acl.extensionLabels" . | nindent 8 }}
+        {{- include "gardener-extension.extensionLabels" . | nindent 8 }}
     spec:
-      priorityClassName: {{ template "gardener-extension-acl.extensionName" . }}
-      serviceAccountName: {{ template "gardener-extension-acl.extensionName" . }}
+      priorityClassName: {{ template "gardener-extension.extensionName" . }}
+      serviceAccountName: {{ template "gardener-extension.extensionName" . }}
       containers:
       - name: extension
         image: {{ include "image" . }}
@@ -61,6 +61,6 @@ spec:
       volumes:
       - name: extension-imagevector-overwrite
         configMap:
-          name: {{ template "gardener-extension-acl.extensionName" . }}-imagevector-overwrite
+          name: {{ template "gardener-extension.extensionName" . }}-imagevector-overwrite
           defaultMode: 420
       {{- end }}

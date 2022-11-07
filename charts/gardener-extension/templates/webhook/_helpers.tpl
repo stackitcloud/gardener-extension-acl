@@ -1,19 +1,19 @@
-{{- define "gardener-extension-acl.webhookName" -}}
-{{ include "gardener-extension-acl.name" . }}-mutating-webhook
+{{- define "gardener-extension.webhookName" -}}
+{{ include "gardener-extension.name" . }}-mutating-webhook
 {{- end -}}
 
 {{/*
 webhook common labels
 */}}
-{{- define "gardener-extension-acl.webhookLabels" -}}
-{{ include "gardener-extension-acl.labels" . }}
+{{- define "gardener-extension.webhookLabels" -}}
+{{ include "gardener-extension.labels" . }}
 app.kubernetes.io/component: webhook
 {{- end }}
 
 {{/*
 webhook selector labels
 */}}
-{{- define "gardener-extension-acl.webhookSelectorLabels" -}}
-{{ include "gardener-extension-acl.selectorLabels" . }}
+{{- define "gardener-extension.webhookSelectorLabels" -}}
+{{ include "gardener-extension.selectorLabels" . }}
 app.kubernetes.io/component: webhook
 {{- end }}
