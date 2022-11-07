@@ -1,24 +1,25 @@
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Chart.Name }}-webhook
+  name: {{ template "gardener-extension.webhookName" . }}
   namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "gardener-extension.webhookLabels" . | nindent 4 }}
 spec:
   selector:
     matchLabels:
-      app: {{ .Chart.Name }}-webhook
+      {{- include "gardener-extension.webhookSelectorLabels" . | nindent 6 }}
   replicas: 1
   template:
     metadata:
       labels:
-        app: {{ .Chart.Name }}-webhook
+        {{- include "gardener-extension.webhookLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ .Chart.Name }}
+      serviceAccountName: {{ template "gardener-extension.extensionName" . }}
       containers:
-      - name: {{ .Chart.Name }}-webhook
-        image: {{ .Values.webhook.image }}:{{ .Values.webhook.tag }}
-        imagePullPolicy: {{ .Values.webhook.pullPolicy }}
+      - name: webhook
+        image: {{ .Values.webhook.image.repository }}:{{ .Values.webhook.image.tag }}
+        imagePullPolicy: {{ .Values.webhook.image.pullPolicy }}
         volumeMounts:
         - name: tls
           mountPath: "/tmp/k8s-webhook-server/serving-certs"
@@ -39,6 +40,6 @@ spec:
       volumes:
         - name: tls
           secret:
-            secretName: {{ .Chart.Name }}-tls
+            secretName: {{ template "gardener-extension.webhookName" . }}-tls
             optional: false
 

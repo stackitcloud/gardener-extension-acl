@@ -2,11 +2,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Chart.Name }}-imagevector-overwrite
+  name: {{ template "gardener-extension.extensionName" . }}-imagevector-overwrite
   namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: {{ .Chart.Name }}
-    app.kubernetes.io/instance: {{ .Chart.Name }}
+    {{- include "gardener-extension.extensionLabels" . | nindent 4 }}
 data:
   images_overwrite.yaml: |
 {{ .Values.imageVectorOverwrite | indent 4 }}

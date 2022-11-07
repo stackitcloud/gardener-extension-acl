@@ -46,16 +46,3 @@ Selector labels
 app.kubernetes.io/name: {{ include "gardener-extension.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
-
-
-{{-  define "image" -}}
-  {{- if hasPrefix "sha256:" .Values.image.tag }}
-  {{- printf "%s@%s" .Values.image.repository .Values.image.tag }}
-  {{- else }}
-  {{- printf "%s:%s" .Values.image.repository .Values.image.tag }}
-  {{- end }}
-{{- end }}
-
-{{- define "leaderelectionid" -}}
-extension-acl-leader-election
-{{- end -}}

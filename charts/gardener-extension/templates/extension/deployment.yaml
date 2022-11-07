@@ -2,19 +2,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Chart.Name }}
+  name: {{ template "gardener-extension.extensionName" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: {{ .Chart.Name }}
-    helm.sh/chart: {{ .Chart.Name }}
-    app.kubernetes.io/instance: {{ .Chart.Name }}
+    {{- include "gardener-extension.extensionLabels" . | nindent 4 }}
 spec:
   revisionHistoryLimit: 0
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: {{ .Chart.Name }}
-      app.kubernetes.io/instance: {{ .Chart.Name }}
+      {{- include "gardener-extension.extensionSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
@@ -22,13 +19,12 @@ spec:
         checksum/configmap-extension-imagevector-overwrite: {{ include (print $.Template.BasePath "/configmap-imagevector-overwrite.yaml") . | sha256sum }}
         {{- end }}
       labels:
-        app.kubernetes.io/name: {{ .Chart.Name }}
-        app.kubernetes.io/instance: {{ .Chart.Name }}
+        {{- include "gardener-extension.extensionLabels" . | nindent 8 }}
     spec:
-      priorityClassName: {{ .Chart.Name }}
-      serviceAccountName: {{ .Chart.Name }}
+      priorityClassName: {{ template "gardener-extension.extensionName" . }}
+      serviceAccountName: {{ template "gardener-extension.extensionName" . }}
       containers:
-      - name: {{ .Chart.Name }}
+      - name: extension
         image: {{ include "image" . }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
@@ -65,6 +61,6 @@ spec:
       volumes:
       - name: extension-imagevector-overwrite
         configMap:
-          name: {{ include "name" .}}-imagevector-overwrite
+          name: {{ template "gardener-extension.extensionName" . }}-imagevector-overwrite
           defaultMode: 420
       {{- end }}
