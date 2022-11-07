@@ -217,6 +217,7 @@ func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec,
 
 	alwaysAllowedCIDRs := []string{
 		*cluster.Shoot.Spec.Networking.Nodes,
+		cluster.Seed.Spec.Networks.Pods,
 	}
 
 	apiEnvoyFilterSpec, err := a.envoyfilterService.BuildEnvoyFilterSpecForHelmChart(

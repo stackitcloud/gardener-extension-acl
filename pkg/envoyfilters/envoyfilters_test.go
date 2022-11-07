@@ -14,6 +14,7 @@ var _ = Describe("EnoyFilter Unit Tests", func() {
 		e                  *EnvoyFilterService
 		alwaysAllowedCIDRs = []string{
 			"10.250.0.0/16",
+			"10.96.0.0/11",
 		}
 	)
 

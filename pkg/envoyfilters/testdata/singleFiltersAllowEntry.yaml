@@ -14,4 +14,7 @@ typed_config:
         - remote_ip:
             address_prefix: 10.250.0.0
             prefix_len: 16
+        - remote_ip:
+            address_prefix: 10.96.0.0
+            prefix_len: 11
   stat_prefix: envoyrbac
