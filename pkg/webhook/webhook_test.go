@@ -161,6 +161,16 @@ var _ = Describe("webhook unit test", func() {
 					}
 				}`)
 
+				cluster.Spec.Seed.Raw = []byte(`{
+					"spec": {
+						"networks": {
+							"nodes": "100.250.0.0/16",
+							"pods": "10.96.0.0/11",
+							"services": "10.64.0.0/13"
+						}
+					}
+				}`)
+
 				Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 			})
 
@@ -199,6 +209,12 @@ var _ = Describe("webhook unit test", func() {
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "10.250.0.0",
 													"prefix_len":     16,
+												},
+											},
+											{
+												"remote_ip": map[string]interface{}{
+													"address_prefix": "10.96.0.0",
+													"prefix_len":     11,
 												},
 											},
 										},
