@@ -64,7 +64,7 @@ var _ = Describe("webhook unit test", func() {
 			})
 		})
 
-		When("there is an extension resource with one rule", func() {
+		When("there is an extension resource with one DENY rule", func() {
 			extSpec := getExtensionSpec()
 
 			BeforeEach(func() {
@@ -72,6 +72,19 @@ var _ = Describe("webhook unit test", func() {
 				ext = getNewExtension(namespace, *extSpec)
 
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
+
+				cluster.Spec.Shoot.Raw = []byte(`{
+					"spec": {
+						"networking": {
+							"nodes": "10.250.0.0/16",
+							"pods": "100.96.0.0/11",
+							"services": "100.64.0.0/13",
+							"type": "calico"
+						}
+					}
+				}`)
+
+				Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 			})
 
 			AfterEach(func() {
@@ -109,6 +122,89 @@ var _ = Describe("webhook unit test", func() {
 									},
 								},
 								"action": "DENY",
+							},
+							"@type": "type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC",
+						},
+					},
+
+					{
+						"name": "envoy.filters.network.tcp_proxy",
+						"typed_config": map[string]interface{}{
+							"@type":       "type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy",
+							"cluster":     "outbound|443||kube-apiserver." + namespace + ".svc.cluster.local",
+							"stat_prefix": "outbound|443||kube-apiserver." + namespace + ".svc.cluster.local",
+						},
+					},
+				}
+
+				Expect(ar.Patches[0].Value).To(Equal(expectedFilters))
+			})
+		})
+
+		When("there is an extension resource with one ALLOW rule", func() {
+			extSpec := getExtensionSpec()
+
+			BeforeEach(func() {
+				addRuleToSpec(extSpec, "ALLOW", "source_ip", "0.0.0.0/0")
+				ext = getNewExtension(namespace, *extSpec)
+
+				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
+
+				cluster.Spec.Shoot.Raw = []byte(`{
+					"spec": {
+						"networking": {
+							"nodes": "10.250.0.0/16",
+							"pods": "100.96.0.0/11",
+							"services": "100.64.0.0/13",
+							"type": "calico"
+						}
+					}
+				}`)
+
+				Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+			})
+
+			AfterEach(func() {
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, ext))).To(Succeed())
+			})
+
+			It("patches this rule into the filters object, including the Node CIDRs", func() {
+				df, dfJSON := getEnvoyFilterFromFile("defaultEnvoyFilter.json", namespace)
+
+				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
+
+				Expect(ar.Allowed).To(BeTrue())
+
+				expectedFilters := []map[string]interface{}{
+					{
+						"name": "acl-internal-source_ip",
+						"typed_config": map[string]interface{}{
+							"stat_prefix": "envoyrbac",
+							"rules": map[string]interface{}{
+								"policies": map[string]interface{}{
+									"acl-internal": map[string]interface{}{
+										"permissions": []map[string]interface{}{
+											{
+												"any": true,
+											},
+										},
+										"principals": []map[string]interface{}{
+											{
+												"source_ip": map[string]interface{}{
+													"address_prefix": "0.0.0.0",
+													"prefix_len":     0,
+												},
+											},
+											{
+												"remote_ip": map[string]interface{}{
+													"address_prefix": "10.250.0.0",
+													"prefix_len":     16,
+												},
+											},
+										},
+									},
+								},
+								"action": "ALLOW",
 							},
 							"@type": "type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC",
 						},

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	extController "github.com/gardener/gardener/extensions/pkg/controller"
 	extensions "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
@@ -72,10 +73,19 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 
+		cluster, err := extController.GetCluster(ctx, e.Client, filter.Name)
+		if err != nil {
+			return admission.Errored(http.StatusInternalServerError, err)
+		}
+
+		alwaysAllowedCIDRs := []string{
+			*cluster.Shoot.Spec.Networking.Nodes,
+		}
+
 		for i := range extSpec.Rules {
 			rule := &extSpec.Rules[i]
 			// TODO check if rule is well defined
-			filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(rule)
+			filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs)
 			if err != nil {
 				return admission.Errored(http.StatusInternalServerError, err)
 			}

@@ -42,9 +42,11 @@ configPatches:
               principals:
               - and_ids:
                   ids:
-                  - source_ip:
-                      address_prefix: 0.0.0.0
-                      prefix_len: 0
+                  - or_ids:
+                      ids:
+                      - source_ip:
+                          address_prefix: 0.0.0.0
+                          prefix_len: 0
                   - header:
                       name: reversed-vpn
                       string_match:

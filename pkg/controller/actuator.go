@@ -215,7 +215,13 @@ func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec,
 		hosts = append(hosts, strings.Split(address.URL, "//")[1])
 	}
 
-	apiEnvoyFilterSpec, err := a.envoyfilterService.BuildEnvoyFilterSpecForHelmChart(spec.Rules, hosts, cluster.Shoot.Status.TechnicalID)
+	alwaysAllowedCIDRs := []string{
+		*cluster.Shoot.Spec.Networking.Nodes,
+	}
+
+	apiEnvoyFilterSpec, err := a.envoyfilterService.BuildEnvoyFilterSpecForHelmChart(
+		spec.Rules, hosts, cluster.Shoot.Status.TechnicalID, alwaysAllowedCIDRs,
+	)
 	if err != nil {
 		return err
 	}
