@@ -1,0 +1,52 @@
+configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        name: 0.0.0.0_8132
+    patch:
+      operation: INSERT_FIRST
+      value:
+        name: acl-vpn
+        typed_config:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
+          rules:
+            action: ALLOW
+            policies:
+              acl-vpn-inverse:
+                  permissions:
+                  - any: true
+                  principals:
+                    - or_ids:
+                        ids:
+                          - not_id:
+                              header:
+                                name: reversed-vpn
+                                string_match:
+                                  contains: shoot--projectname--shootname
+              shoot--projectname--shootname:
+                permissions:
+                - any: true
+                principals:
+                - and_ids:
+                    ids:
+                    - or_ids:
+                        ids:
+                        - remote_ip:
+                            address_prefix: 0.0.0.0
+                            prefix_len: 0
+                        - remote_ip:
+                            address_prefix: 10.250.0.0
+                            prefix_len: 16
+                        - remote_ip:
+                            address_prefix: 10.96.0.0
+                            prefix_len: 11
+                    - header:
+                        name: reversed-vpn
+                        string_match:
+                          contains: shoot--projectname--shootname
+          stat_prefix: envoyrbac
+workloadSelector:
+  labels:
+    app: istio-ingressgateway
+    istio: ingressgateway

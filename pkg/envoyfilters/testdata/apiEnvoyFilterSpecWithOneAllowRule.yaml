@@ -1,0 +1,34 @@
+configPatches:
+- applyTo: NETWORK_FILTER
+  match:
+    context: GATEWAY
+    listener:
+      filterChain:
+        sni: api.test.garden.s.testseed.dev.ske.eu01.stackit.cloud
+  patch:
+    operation: INSERT_FIRST
+    value:
+      name: acl-api
+      typed_config:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC
+        rules:
+          action: ALLOW
+          policies:
+            acl-api:
+              permissions:
+              - any: true
+              principals:
+              - source_ip:
+                  address_prefix: 0.0.0.0
+                  prefix_len: 0
+              - remote_ip:
+                  address_prefix: 10.250.0.0
+                  prefix_len: 16
+              - remote_ip:
+                  address_prefix: 10.96.0.0
+                  prefix_len: 11
+        stat_prefix: envoyrbac
+workloadSelector:
+  labels:
+    app: istio-ingressgateway
+    istio: ingressgateway

@@ -113,7 +113,7 @@ var _ = Describe("actuator unit test", func() {
 		When("there is an extension resource without rules", func() {
 			It("Should return an error", func() {
 				extSpec := getExtensionSpec()
-				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecRules))
+				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecRule))
 			})
 		})
 
@@ -150,10 +150,10 @@ var _ = Describe("actuator unit test", func() {
 			It("Should return the correct error", func() {
 				extSpec := getExtensionSpec()
 
-				extSpec.Rules = append(extSpec.Rules, envoyfilters.ACLRule{
+				extSpec.Rule = &envoyfilters.ACLRule{
 					Action: "DENY",
 					Type:   "remote_ip",
-				})
+				}
 
 				// we're not testing for a specific error, as they come from the
 				// net package here - no need for us to test these
@@ -199,17 +199,15 @@ func getNewCluster(namespace string) *extensionsv1alpha1.Cluster {
 }
 
 func getExtensionSpec() *ExtensionSpec {
-	return &ExtensionSpec{
-		Rules: []envoyfilters.ACLRule{},
-	}
+	return &ExtensionSpec{}
 }
 
 func addRuleToSpec(extSpec *ExtensionSpec, action, ruleType, cidr string) {
-	extSpec.Rules = append(extSpec.Rules, envoyfilters.ACLRule{
+	extSpec.Rule = &envoyfilters.ACLRule{
 		Cidrs: []string{
 			cidr,
 		},
 		Action: action,
 		Type:   ruleType,
-	})
+	}
 }

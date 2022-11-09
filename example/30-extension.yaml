@@ -6,16 +6,8 @@ metadata:
 spec:
   type: acl
   providerConfig:
-    rules:
-      - action: DENY
-        type: remote_ip
-        cidrs:
-          - 0.0.0.0/0
-      - action: DENY
-        type: direct_remote_ip
-        cidrs:
-          - 0.0.0.0/0
-      - action: DENY
-        type: source_ip
-        cidrs:
-          - 0.0.0.0/0
+    rule:
+      action: ALLOW
+      type: remote_ip
+      cidrs:
+        - 0.0.0.0/0

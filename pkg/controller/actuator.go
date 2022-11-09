@@ -39,11 +39,13 @@ import (
 	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -64,10 +66,11 @@ const (
 )
 
 var (
-	ErrSpecAction = errors.New("action must either be 'ALLOW' or 'DENY'")
-	ErrSpecRules  = errors.New("rules must not be an empty list")
-	ErrSpecType   = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
-	ErrSpecCIDR   = errors.New("CIDRs must not be empty")
+	ErrSpecAction        = errors.New("action must either be 'ALLOW' or 'DENY'")
+	ErrSpecRule          = errors.New("rule must be present")
+	ErrSpecType          = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
+	ErrSpecCIDR          = errors.New("CIDRs must not be empty")
+	ErrNoExtensionsFound = errors.New("Could not list any extensions")
 )
 
 // NewActuator returns an actuator responsible for Extension resources.
@@ -91,8 +94,8 @@ type actuator struct {
 }
 
 type ExtensionSpec struct {
-	// Rules contains a list of user-defined Access Control Rules
-	Rules []envoyfilters.ACLRule `json:"rules"`
+	// Rule contain the user-defined Access Control Rule
+	Rule *envoyfilters.ACLRule `json:"rule"`
 }
 
 // Reconcile the Extension resource.
@@ -111,6 +114,11 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 		}
 	}
 
+	aclMappings, err := a.getAllShootsWithACLExtension(ctx)
+	if err != nil {
+		return err
+	}
+
 	if err := ValidateExtensionSpec(extSpec); err != nil {
 		return err
 	}
@@ -119,7 +127,21 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 		return err
 	}
 
-	if err := a.createSeedResources(ctx, extSpec, cluster, namespace); err != nil {
+	hosts := make([]string, 0)
+	for _, address := range cluster.Shoot.Status.AdvertisedAddresses {
+		hosts = append(hosts, strings.Split(address.URL, "//")[1])
+	}
+
+	alwaysAllowedCIDRs := []string{
+		*cluster.Shoot.Spec.Networking.Nodes,
+		cluster.Seed.Spec.Networks.Pods,
+	}
+
+	if err := a.createSeedResources(ctx, namespace, extSpec, cluster, hosts, alwaysAllowedCIDRs); err != nil {
+		return err
+	}
+
+	if err := a.reconcileVPNEnvoyFilter(ctx, namespace, aclMappings, hosts, alwaysAllowedCIDRs); err != nil {
 		return err
 	}
 
@@ -127,40 +149,38 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 }
 
 func ValidateExtensionSpec(spec *ExtensionSpec) error {
-	if len(spec.Rules) < 1 {
-		return ErrSpecRules
+	rule := spec.Rule
+
+	if rule == nil {
+		return ErrSpecRule
 	}
 
-	for i := range spec.Rules {
-		rule := &spec.Rules[i]
+	// action
+	a := strings.ToLower(rule.Action)
+	if a != "allow" && a != "deny" {
+		return ErrSpecAction
+	}
 
-		// action
-		a := strings.ToLower(rule.Action)
-		if a != "allow" && a != "deny" {
-			return ErrSpecAction
+	// type
+	t := strings.ToLower(rule.Type)
+	if t != "direct_remote_ip" &&
+		t != "remote_ip" &&
+		t != "source_ip" {
+		return ErrSpecType
+	}
+
+	// cidrs
+	if len(rule.Cidrs) < 1 {
+		return ErrSpecCIDR
+	}
+
+	for ii := range rule.Cidrs {
+		_, mask, err := net.ParseCIDR(rule.Cidrs[ii])
+		if err != nil {
+			return err
 		}
-
-		// type
-		t := strings.ToLower(rule.Type)
-		if t != "direct_remote_ip" &&
-			t != "remote_ip" &&
-			t != "source_ip" {
-			return ErrSpecType
-		}
-
-		// cidrs
-		if len(rule.Cidrs) < 1 {
+		if mask == nil {
 			return ErrSpecCIDR
-		}
-
-		for ii := range rule.Cidrs {
-			_, mask, err := net.ParseCIDR(rule.Cidrs[ii])
-			if err != nil {
-				return err
-			}
-			if mask == nil {
-				return ErrSpecCIDR
-			}
 		}
 	}
 
@@ -207,30 +227,73 @@ func (a *actuator) InjectScheme(scheme *runtime.Scheme) error {
 	return nil
 }
 
-func (a *actuator) createSeedResources(ctx context.Context, spec *ExtensionSpec, cluster *controller.Cluster, namespace string) error {
+func (a *actuator) reconcileVPNEnvoyFilter(
+	ctx context.Context,
+	namespace string,
+	aclMappings []envoyfilters.ACLMapping,
+	hosts []string,
+	alwaysAllowedCIDRs []string,
+) error {
+	vpnEnvoyFilterSpec, err := a.envoyfilterService.BuildVPNEnvoyFilterSpecForHelmChart(
+		aclMappings, hosts, alwaysAllowedCIDRs,
+	)
+	if err != nil {
+		return err
+	}
+
+	// build EnvoyFilter object as map[string]interface{}
+	// because the actual EnvoyFilter struct is a pain to type
+	name := "acl-vpn"
+	filterMap := map[string]interface{}{
+		"apiVersion": "networking.istio.io/v1alpha3",
+		"kind":       "EnvoyFilter",
+		"metadata": map[string]interface{}{
+			"name":      name,
+			"namespace": IngressNamespace,
+		},
+		"spec": vpnEnvoyFilterSpec,
+	}
+
+	filterJSON, err := json.Marshal(filterMap)
+	if err != nil {
+		return err
+	}
+
+	filter := &istionetworkingClientGo.EnvoyFilter{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      name,
+			Namespace: IngressNamespace,
+		},
+	}
+
+	_, err = controllerutil.CreateOrUpdate(ctx, a.client, filter, func() error {
+		return json.Unmarshal(filterJSON, filter)
+	})
+
+	return err
+}
+
+func (a *actuator) createSeedResources(
+	ctx context.Context,
+	namespace string,
+	spec *ExtensionSpec,
+	cluster *controller.Cluster,
+	hosts []string,
+	alwaysAllowedCIDRs []string,
+) error {
 	var err error
 
-	hosts := make([]string, 0)
-	for _, address := range cluster.Shoot.Status.AdvertisedAddresses {
-		hosts = append(hosts, strings.Split(address.URL, "//")[1])
-	}
-
-	alwaysAllowedCIDRs := []string{
-		*cluster.Shoot.Spec.Networking.Nodes,
-		cluster.Seed.Spec.Networks.Pods,
-	}
-
-	apiEnvoyFilterSpec, err := a.envoyfilterService.BuildEnvoyFilterSpecForHelmChart(
-		spec.Rules, hosts, cluster.Shoot.Status.TechnicalID, alwaysAllowedCIDRs,
+	apiEnvoyFilterSpec, err := a.envoyfilterService.BuildAPIEnvoyFilterSpecForHelmChart(
+		spec.Rule, hosts, alwaysAllowedCIDRs,
 	)
 	if err != nil {
 		return err
 	}
 
 	cfg := map[string]interface{}{
-		"shootName":       cluster.Shoot.Name,
-		"targetNamespace": IngressNamespace,
-		"envoyFilterSpec": apiEnvoyFilterSpec,
+		"shootName":          cluster.Shoot.Name,
+		"targetNamespace":    IngressNamespace,
+		"apiEnvoyFilterSpec": apiEnvoyFilterSpec,
 	}
 
 	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})
@@ -308,7 +371,7 @@ func (a *actuator) updateEnvoyFilterHash(ctx context.Context, shootName string, 
 	}
 
 	// calculate the new hash
-	newHashString, err := HashData(extSpec.Rules)
+	newHashString, err := HashData(extSpec.Rule)
 	if err != nil {
 		return err
 	}
@@ -328,6 +391,41 @@ func (a *actuator) updateEnvoyFilterHash(ctx context.Context, shootName string, 
 
 	// hash unchanged, do nothing
 	return nil
+}
+
+// getAllShootsWithACLExtension returns a list of all shoots that have the ACL
+// extension enabled, together with their rule.
+func (a *actuator) getAllShootsWithACLExtension(ctx context.Context) ([]envoyfilters.ACLMapping, error) {
+	extensions := &extensionsv1alpha1.ExtensionList{}
+	err := a.client.List(ctx, extensions)
+	if err != client.IgnoreNotFound(err) {
+		return nil, err
+	}
+
+	if len(extensions.Items) < 1 {
+		return nil, ErrNoExtensionsFound
+	}
+
+	mappings := []envoyfilters.ACLMapping{}
+
+	for i := range extensions.Items {
+		ex := &extensions.Items[i]
+		if ex.Spec.Type != Type {
+			continue
+		}
+		extSpec := &ExtensionSpec{}
+		if ex.Spec.ProviderConfig != nil && ex.Spec.ProviderConfig.Raw != nil {
+			if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
+				return nil, err
+			}
+		}
+
+		mappings = append(mappings, envoyfilters.ACLMapping{
+			ShootName: ex.Namespace,
+			Rule:      *extSpec.Rule,
+		})
+	}
+	return mappings, nil
 }
 
 // HashData returns a 16 char hash for the given object.
