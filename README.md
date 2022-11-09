@@ -1,5 +1,78 @@
 # Gardener ACL Extension
 
+**TL;DR: The Gardener ACL extension allows you to limit the access to shoot
+clusters using an allow-list mechanism. Basically, it looks like this:**
+
+```yaml
+type: acl
+providerConfig:
+  rule:
+    action: ALLOW
+    type: remote_ip
+    cidrs:
+      - "1.2.3.4/24"
+      - "10.250.0.0/16"
+      - ...
+```
+
+Please read on for more information.
+
+## Background, Functionality & Limitations
+
+Gardener introduced *Shoot API Server SNI* with [GEP08](https://github.com/gardener/gardener/blob/master/docs/proposals/08-shoot-apiserver-via-sni.md).
+
+Using Istio, Gardener configures a single ingress gateway per seed to proxy
+traffic to all API servers on this seed based on some criteria. At it's core,
+Istio configures an envoy proxy using a set of
+[Kubernetes CRDs](https://istio.io/latest/docs/reference/config/networking/).
+We can hook into this mechanism and insert additional configuration, which
+further limits the access to a specific cluster.
+
+Broadly speaking, there are three different ways to access the API server of a
+shoot:
+
+1. Via SNI name (Kubernetes API Listener)
+2. Using the internal flow (Kubernetes Service Listener)
+3. Via VPN (VPN Listener)
+
+These ways are described in more detail in the aforementioned GEP. Essentially,
+these three ways are all represented by a specific Envoy listener with filters.
+The extension needs to hook into each of these filters (and their filter chains)
+to implement the desired behavior. Unfortunately, all three  types of access
+require a unique way of handling them, respectively.
+
+![Listener Overview](./docs/listener-overview.svg)
+
+1. **SNI Access** - The most straightforward approach. Wen can deploy one
+   additional `EnvoyFilter` per shoot with enabled ACL extension. It contains a
+   filter patch that matches on the shoot SNI name and specifies an `ALLOW` rule
+   with the provided IPs.
+2. **Internal Flow** - Gardener creates one `EnvoyFilter` per shoot that defines
+   this listener. Unfortunately, it doesn't have any criteria we could use to
+   match it with an additional `EvnoyFilter` spec on a per-shoot basis, and
+   we've tried a lot of things to make it work. On top of that, a behavior that
+   we see as [a bug in Istio](https://github.com/istio/istio/issues/41536)
+   prevents us from working with priorities here, which was the closest we got
+   to make it work. Now instead, the extension deploys a `MutatingWebhook` that
+   intercepts creations and updates of `EnvoyFilter` resources starting with
+   `shoot--` (which is their only common feature). We then insert our
+   rules. To make this work with updates to `Extension` objects, the controller
+   dealing with 1) also updates a hash annotation on these `EnvoyFilter`
+   resources every time the respective ACL extension object is updated.
+3. **VPN Access** - All VPN traffic moves through the same listener. This
+   requires us to create only a single `EnvoyFilter` for VPN that contains
+   **all** rules of all shoots that have the extension enabled. And, conversely,
+   we need to make sure that traffic of all shoots that don't have the
+   extension enabled is still able to pass through this filter unhindered. We
+   achieve this by not only creating a policy for every shoot with ACL enabled,
+   but also an "inverted" policy which matches all shoots that don't have ACL
+   enabled. All these policies are then put in a single EnvoyFilter patch.
+
+Because of the last point, we currently see no way of allowing the user to
+define multiple rules of different action types (`ALLOW` or `DENY`). Instead, we
+only support a single `ALLOW` rule per shoot, which is in our opinion the best
+trade-off to efficiently secure Kubernetes API servers.
+
 ## Healthchecks
 
 Gardener provides a [Health Check Library](https://gardener.cloud/docs/gardener/extensions/healthcheck-library/)
