@@ -409,7 +409,7 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context) ([]envoyfil
 	mappings := []envoyfilters.ACLMapping{}
 
 	for i := range extensions.Items {
-		ex := extensions.Items[i]
+		ex := &extensions.Items[i]
 		if ex.Spec.Type != Type {
 			continue
 		}

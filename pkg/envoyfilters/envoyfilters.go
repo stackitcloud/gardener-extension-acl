@@ -109,7 +109,7 @@ func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(
 	policies[rbacName+"-inverse"] = createInversedVPNPolicy(mappings)
 
 	for i := range mappings {
-		mapping := mappings[i]
+		mapping := &mappings[i]
 		policies[mapping.ShootName] = createVPNPolicyForShoot(&mapping.Rule, alwaysAllowedCIDRs, mapping.ShootName)
 	}
 
