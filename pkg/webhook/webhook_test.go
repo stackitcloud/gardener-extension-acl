@@ -264,18 +264,18 @@ func getNewCluster(namespace string) *extensionsv1alpha1.Cluster {
 
 func getExtensionSpec() *controller.ExtensionSpec {
 	return &controller.ExtensionSpec{
-		Rules: []envoyfilters.ACLRule{},
+		Rule: &envoyfilters.ACLRule{},
 	}
 }
 
 func addRuleToSpec(extSpec *controller.ExtensionSpec, action, ruleType, cidr string) {
-	extSpec.Rules = append(extSpec.Rules, envoyfilters.ACLRule{
+	extSpec.Rule = &envoyfilters.ACLRule{
 		Cidrs: []string{
 			cidr,
 		},
 		Action: action,
 		Type:   ruleType,
-	})
+	}
 }
 
 // getEnvoyFilterFromFile takes the technical shoot ID as a parameter to render

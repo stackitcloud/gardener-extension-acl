@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var _ = Describe("EnoyFilter Unit Tests", func() {
+var _ = Describe("EnvoyFilter Unit Tests", func() {
 	var (
 		e                  *EnvoyFilterService
 		alwaysAllowedCIDRs = []string{
@@ -26,34 +26,41 @@ var _ = Describe("EnoyFilter Unit Tests", func() {
 
 	})
 
-	Describe("BuildEnvoyFilterSpecForHelmChart", func() {
+	Describe("BuildAPIEnvoyFilterSpecForHelmChart", func() {
 		When("there is an extension resource with one rule", func() {
 			It("Should create a envoyFilter spec matching the expected one", func() {
-				rules := []ACLRule{}
-				rules = append(rules, *createRule("DENY", "source_ip", "0.0.0.0/0"))
+				rule := createRule("ALLOW", "source_ip", "0.0.0.0/0")
 				hosts := []string{
 					"api.test.garden.s.testseed.dev.ske.eu01.stackit.cloud",
 					"api.test.garden.internal.testseed.dev.ske.eu01.stackit.cloud",
 				}
-				technicalShootID := "shoot--projectname--shootname"
 
-				result, err := e.BuildEnvoyFilterSpecForHelmChart(rules, hosts, technicalShootID, alwaysAllowedCIDRs)
+				result, err := e.BuildAPIEnvoyFilterSpecForHelmChart(rule, hosts, alwaysAllowedCIDRs)
 
 				Expect(err).ToNot(HaveOccurred())
-				checkIfMapEqualsYAML(result, "envoyFilterSpecWithOneDenyRule.yaml")
+				checkIfMapEqualsYAML(result, "apiEnvoyFilterSpecWithOneAllowRule.yaml")
 			})
 		})
 	})
 
-	Describe("CreateInternalFilterPatchFromRule", func() {
-		When("there is a deny rule", func() {
-			It("Should create a filter spec matching the expected one", func() {
-				rule := createRule("DENY", "remote_ip", "0.0.0.0/0")
+	Describe("BuildVPNEnvoyFilterSpecForHelmChart", func() {
+		When("there is one shoot with a rule", func() {
+			It("Should create a envoyFilter spec matching the expected one", func() {
+				mappings := []ACLMapping{
+					{
+						ShootName: "shoot--projectname--shootname",
+						Rule:      *createRule("ALLOW", "remote_ip", "0.0.0.0/0"),
+					},
+				}
+				hosts := []string{
+					"api.test.garden.s.testseed.dev.ske.eu01.stackit.cloud",
+					"api.test.garden.internal.testseed.dev.ske.eu01.stackit.cloud",
+				}
 
-				result, err := e.CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs)
+				result, err := e.BuildVPNEnvoyFilterSpecForHelmChart(mappings, hosts, alwaysAllowedCIDRs)
 
 				Expect(err).ToNot(HaveOccurred())
-				checkIfMapEqualsYAML(result, "singleFiltersDenyEntry.yaml")
+				checkIfMapEqualsYAML(result, "vpnEnvoyFilterSpecWithOneAllowRule.yaml")
 			})
 		})
 	})

@@ -1,8 +1,8 @@
 apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
-  name: acl-{{ .Values.shootName }}
+  name: acl-api-{{ .Values.shootName }}
   namespace: {{ .Values.targetNamespace }}
   labels:
     {{- include "gardener-extension.labels" . | nindent 4 }}
-spec: {{- .Values.envoyFilterSpec | toYaml | nindent 2 }}
+spec: {{- .Values.apiEnvoyFilterSpec | toYaml | nindent 2 }}

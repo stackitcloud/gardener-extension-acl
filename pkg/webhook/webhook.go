@@ -83,16 +83,12 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 			cluster.Seed.Spec.Networks.Pods,
 		}
 
-		for i := range extSpec.Rules {
-			rule := &extSpec.Rules[i]
-			// TODO check if rule is well defined
-			filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs)
-			if err != nil {
-				return admission.Errored(http.StatusInternalServerError, err)
-			}
-
-			filters = append(filters, filter)
+		filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs)
+		if err != nil {
+			return admission.Errored(http.StatusInternalServerError, err)
 		}
+
+		filters = append(filters, filter)
 	}
 
 	originalFilter := gjson.Get(originalObjectJSON, `spec.configPatches.0.patch.value.filters.#(name="envoy.filters.network.tcp_proxy")`)

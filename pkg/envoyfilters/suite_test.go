@@ -10,7 +10,7 @@ import (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "EnoyFilters Test Suite")
+	RunSpecs(t, "EnvoyFilters Test Suite")
 }
 
 var _ = BeforeSuite(func() {
