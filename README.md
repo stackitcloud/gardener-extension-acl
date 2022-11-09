@@ -73,6 +73,9 @@ define multiple rules of different action types (`ALLOW` or `DENY`). Instead, we
 only support a single `ALLOW` rule per shoot, which is in our opinion the best
 trade-off to efficiently secure Kubernetes API servers.
 
+See [ADR02](./docs/adr/02_envoyfilter_patching.md) for a more in-depth
+discussion of the challenges we had.
+
 ## Healthchecks
 
 Gardener provides a [Health Check Library](https://gardener.cloud/docs/gardener/extensions/healthcheck-library/)
