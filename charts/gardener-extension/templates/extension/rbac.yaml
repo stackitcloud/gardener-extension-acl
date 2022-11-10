@@ -14,6 +14,7 @@ rules:
   - watch
   - patch
   - update
+  - create
   resources:
   - envoyfilters
 - apiGroups:
