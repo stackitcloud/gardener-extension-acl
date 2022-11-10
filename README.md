@@ -38,7 +38,7 @@ shoot:
 These ways are described in more detail in the aforementioned GEP. Essentially,
 these three ways are all represented by a specific Envoy listener with filters.
 The extension needs to hook into each of these filters (and their filter chains)
-to implement the desired behavior. Unfortunately, all three  types of access
+to implement the desired behavior. Unfortunately, all three types of access
 require a unique way of handling them, respectively.
 
 ![Listener Overview](./docs/listener-overview.svg)
@@ -75,6 +75,13 @@ trade-off to efficiently secure Kubernetes API servers.
 
 See [ADR02](./docs/adr/02_envoyfilter_patching.md) for a more in-depth
 discussion of the challenges we had.
+
+## Cloud specific settings
+
+### Openstack
+
+In order for the internal VPN traffic to work, the router IP adresses from the
+shoot openstack projects have to get allowlisted in the ACL extension.
 
 ## Healthchecks
 
