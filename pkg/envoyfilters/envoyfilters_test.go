@@ -77,6 +77,19 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 			})
 		})
 	})
+
+	Describe("CreateAPIConfigPatchFromRule", func() {
+		When("there are no hosts", func() {
+			It("should return the appropriate error", func() {
+				rule := createRule("ALLOW", "remote_ip", "0.0.0.0/0")
+
+				result, err := e.CreateAPIConfigPatchFromRule(rule, nil, alwaysAllowedCIDRs)
+
+				Expect(err).To(Equal(ErrNoHostsGiven))
+				Expect(result).To(BeNil())
+			})
+		})
+	})
 })
 
 func createRule(action, ruleType, cidr string) *ACLRule {
