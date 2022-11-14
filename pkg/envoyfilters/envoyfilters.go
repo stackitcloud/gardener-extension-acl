@@ -1,8 +1,13 @@
 package envoyfilters
 
 import (
+	"errors"
 	"net"
 	"strings"
+)
+
+var (
+	ErrNoHostsGiven = errors.New("no hosts were given, at least one host is needed")
 )
 
 type EnvoyFilterService struct{}
@@ -80,6 +85,9 @@ func (e *EnvoyFilterService) BuildVPNEnvoyFilterSpecForHelmChart(
 func (e *EnvoyFilterService) CreateAPIConfigPatchFromRule(
 	rule *ACLRule, hosts, alwaysAllowedCIDRs []string,
 ) (map[string]interface{}, error) {
+	if len(hosts) == 0 {
+		return nil, ErrNoHostsGiven
+	}
 	// TODO use all hosts?
 	host := hosts[0]
 	rbacName := "acl-api"

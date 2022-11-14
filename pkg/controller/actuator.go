@@ -66,11 +66,12 @@ const (
 )
 
 var (
-	ErrSpecAction        = errors.New("action must either be 'ALLOW' or 'DENY'")
-	ErrSpecRule          = errors.New("rule must be present")
-	ErrSpecType          = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
-	ErrSpecCIDR          = errors.New("CIDRs must not be empty")
-	ErrNoExtensionsFound = errors.New("Could not list any extensions")
+	ErrSpecAction            = errors.New("action must either be 'ALLOW' or 'DENY'")
+	ErrSpecRule              = errors.New("rule must be present")
+	ErrSpecType              = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
+	ErrSpecCIDR              = errors.New("CIDRs must not be empty")
+	ErrNoExtensionsFound     = errors.New("could not list any extensions")
+	ErrNoAdvertisedAddresses = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
 )
 
 // NewActuator returns an actuator responsible for Extension resources.
@@ -128,6 +129,11 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 	}
 
 	hosts := make([]string, 0)
+
+	if cluster.Shoot.Status.AdvertisedAddresses == nil || len(cluster.Shoot.Status.AdvertisedAddresses) < 1 {
+		return ErrNoAdvertisedAddresses
+	}
+
 	for _, address := range cluster.Shoot.Status.AdvertisedAddresses {
 		hosts = append(hosts, strings.Split(address.URL, "//")[1])
 	}
