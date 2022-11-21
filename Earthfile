@@ -1,7 +1,7 @@
 VERSION 0.6
 FROM golang:1.18-alpine
 ARG NAME=acl
-ARG DOCKER_REPO=reg.infra.ske.eu01.stackit.cloud/ske/gardener-extension-$NAME
+ARG DOCKER_REPO=ghcr.io/stackitcloud/gardener-extension-$NAME
 ARG BINPATH=/usr/local/bin/
 ARG GOCACHE=/go-cache
 
@@ -79,7 +79,7 @@ docker-extension:
     BUILD +set-version
     USER 65532:65532
     ENTRYPOINT ["/gardener-extension"]
-    SAVE IMAGE --push $DOCKER_REPO:$DOCKER_TAG
+    SAVE IMAGE --push $DOCKER_REPO-controller:$DOCKER_TAG
 
 docker-webhook:
     ARG TARGETPLATFORM
