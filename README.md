@@ -28,12 +28,11 @@ Istio configures an envoy proxy using a set of
 We can hook into this mechanism and insert additional configuration, which
 further limits the access to a specific cluster.
 
-Broadly speaking, there are three different ways to access the API server of a
-shoot:
+Broadly speaking, there are three different external traffic flows:
 
-1. Via SNI name (Kubernetes API Listener)
-2. Using the internal flow (Kubernetes Service Listener)
-3. Via VPN (VPN Listener)
+1. Kubernetes API Listener (via SNI name)
+1. Kubernetes Service Listener (internal flow)
+1. VPN Listener
 
 These ways are described in more detail in the aforementioned GEP. Essentially,
 these three ways are all represented by a specific Envoy listener with filters.
@@ -47,7 +46,7 @@ require a unique way of handling them, respectively.
    additional `EnvoyFilter` per shoot with enabled ACL extension. It contains a
    filter patch that matches on the shoot SNI name and specifies an `ALLOW` rule
    with the provided IPs.
-2. **Internal Flow** - Gardener creates one `EnvoyFilter` per shoot that defines
+1. **Internal Flow** - Gardener creates one `EnvoyFilter` per shoot that defines
    this listener. Unfortunately, it doesn't have any criteria we could use to
    match it with an additional `EvnoyFilter` spec on a per-shoot basis, and
    we've tried a lot of things to make it work. On top of that, a behavior that
@@ -59,7 +58,7 @@ require a unique way of handling them, respectively.
    rules. To make this work with updates to `Extension` objects, the controller
    dealing with 1) also updates a hash annotation on these `EnvoyFilter`
    resources every time the respective ACL extension object is updated.
-3. **VPN Access** - All VPN traffic moves through the same listener. This
+1. **VPN Access** - All VPN traffic moves through the same listener. This
    requires us to create only a single `EnvoyFilter` for VPN that contains
    **all** rules of all shoots that have the extension enabled. And, conversely,
    we need to make sure that traffic of all shoots that don't have the
