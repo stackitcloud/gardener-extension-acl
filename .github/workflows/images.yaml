@@ -32,4 +32,4 @@ jobs:
     - name: Earthly version
       run: earthly --version
     - name: Run build
-      run: earthly --ci --push +docker
+      run: earthly --ci --push +docker-ci

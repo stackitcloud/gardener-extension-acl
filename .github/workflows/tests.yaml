@@ -24,4 +24,4 @@ jobs:
     - name: Earthly version
       run: earthly --version
     - name: Run Tests
-      run: earthly --ci +ci
+      run: earthly --ci +test-ci

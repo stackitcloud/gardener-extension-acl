@@ -56,19 +56,16 @@ set-version:
     RUN git describe --tags --always > VERSION
     SAVE ARTIFACT VERSION
 
-ci:
+test-ci:
     BUILD +lint
     BUILD +test
 
-version:
-    # todo find lightweight image for cat
+docker-ci:
+    # TODO find lightweight image for cat
     FROM busybox
     COPY +set-version/VERSION .
-    BUILD +docker --DOCKER_TAG=$(cat VERSION)
-    
-docker:
-    BUILD +docker-extension
-    BUILD +docker-webhook
+    BUILD +docker-extension --DOCKER_TAG=$(cat VERSION)
+    BUILD +docker-webhook --DOCKER_TAG=$(cat VERSION)
 
 docker-extension:
     ARG TARGETPLATFORM
@@ -80,7 +77,6 @@ docker-extension:
     COPY --platform=$USERPLATFORM \
         (+build-extension-controller/gardener-extension --GOOS=$TARGETOS --GOARCH=$TARGETARCH) /gardener-extension
     COPY --dir charts/ /charts
-    BUILD +set-version
     USER 65532:65532
     ENTRYPOINT ["/gardener-extension"]
     SAVE IMAGE --push $DOCKER_REPO-controller:$DOCKER_TAG
@@ -95,7 +91,6 @@ docker-webhook:
     COPY --platform=$USERPLATFORM \
         (+build-webhook/webhook --GOOS=$TARGETOS --GOARCH=$TARGETARCH) /webhook
     COPY --dir charts/ /charts
-    BUILD +set-version
     USER 65532:65532
     ENTRYPOINT ["/webhook"]
     SAVE IMAGE --push $DOCKER_REPO-webhook:$DOCKER_TAG
@@ -206,7 +201,7 @@ all:
     #BUILD +semgrep # TODO semgrep
     BUILD +lint
     BUILD +coverage
-    BUILD +ci
+    BUILD +docker-ci
 
 ###########
 # helper
