@@ -5,15 +5,14 @@ metadata:
   name: acl
 type: helm
 providerConfig:
-  # ENCODED_CHART="$(tar -zcf - chart | base64 -w0)" envsubst < example/deployment.yaml > test.yaml
   chart: $ENCODED_CHART
   values:
     image:
-      repository: TODO
+      repository: ghcr.io/stackitcloud/gardener-extension-acl-controller
       tag: $TAG
     webhook:
       image:
-        repository: TODO
+        repository: ghcr.io/stackitcloud/gardener-extension-acl-webhook
         tag: $TAG
 ---
 apiVersion: core.gardener.cloud/v1beta1

@@ -17,6 +17,14 @@ providerConfig:
 
 Please read on for more information.
 
+## Installation
+
+Set your `KUBECONFIG` variable to the Garden cluster.
+
+```sh
+kubectl apply -f deploy/controller-registration.yaml
+```
+
 ## Background, Functionality & Limitations
 
 Gardener introduced *Shoot API Server SNI* with [GEP08](https://github.com/gardener/gardener/blob/master/docs/proposals/08-shoot-apiserver-via-sni.md).

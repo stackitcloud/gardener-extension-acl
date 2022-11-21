@@ -1,11 +1,11 @@
 webhook:
   image:
-    repository: <// TODO replace with correct image repo>
+    repository: ghcr.io/stackitcloud/gardener-extension-acl-webhook
     tag: latest
     pullPolicy: IfNotPresent
 
 image:
-  repository: <// TODO replace with correct image repo>
+  repository: ghcr.io/stackitcloud/gardener-extension-acl-controller
   tag: latest
   pullPolicy: IfNotPresent
 
