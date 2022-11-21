@@ -57,6 +57,10 @@ set-version:
     SAVE ARTIFACT VERSION
 
 ci:
+    BUILD +lint
+    BUILD +test
+
+version:
     # todo find lightweight image for cat
     FROM busybox
     COPY +set-version/VERSION .

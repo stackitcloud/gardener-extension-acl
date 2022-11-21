@@ -23,4 +23,4 @@ jobs:
     - name: Earthly version
       run: earthly --version
     - name: Run Tests
-      run: earthly --ci +lint
+      run: earthly --ci +ci
