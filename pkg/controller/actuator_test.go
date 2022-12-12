@@ -178,7 +178,6 @@ func getNewActuator() *actuator {
 	return &actuator{
 		client: k8sClient,
 		config: cfg,
-		logger: logger,
 		extensionConfig: config.Config{
 			ChartPath: "../../charts",
 		},

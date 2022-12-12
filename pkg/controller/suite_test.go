@@ -8,6 +8,7 @@ import (
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/testr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -17,8 +18,6 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -39,14 +38,13 @@ var filterObjectCounter = 1
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
+	logger = testr.New(t)
+
 	RunSpecs(t, "Extension Test Suite")
 }
 
 var _ = BeforeSuite(func() {
 	var err error
-
-	logger = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
-	logf.SetLogger(logger)
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{

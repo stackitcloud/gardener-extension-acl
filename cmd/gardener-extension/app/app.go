@@ -36,7 +36,7 @@ import (
 )
 
 // NewServiceControllerCommand creates a new command that is used to start the service controller.
-func NewServiceControllerCommand() *cobra.Command {
+func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 	options := NewOptions()
 
 	cmd := &cobra.Command{
@@ -49,7 +49,7 @@ func NewServiceControllerCommand() *cobra.Command {
 				return fmt.Errorf("error completing options: %s", err)
 			}
 			cmd.SilenceUsage = true
-			return options.run(cmd.Context())
+			return options.run(ctx)
 		},
 	}
 

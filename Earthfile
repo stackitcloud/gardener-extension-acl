@@ -76,7 +76,6 @@ docker-extension:
         gcr.io/distroless/static:nonroot
     COPY --platform=$USERPLATFORM \
         (+build-extension-controller/gardener-extension --GOOS=$TARGETOS --GOARCH=$TARGETARCH) /gardener-extension
-    COPY --dir charts/ /charts
     USER 65532:65532
     ENTRYPOINT ["/gardener-extension"]
     SAVE IMAGE --push $DOCKER_REPO-controller:$DOCKER_TAG
@@ -90,7 +89,6 @@ docker-webhook:
         gcr.io/distroless/static:nonroot
     COPY --platform=$USERPLATFORM \
         (+build-webhook/webhook --GOOS=$TARGETOS --GOARCH=$TARGETARCH) /webhook
-    COPY --dir charts/ /charts
     USER 65532:65532
     ENTRYPOINT ["/webhook"]
     SAVE IMAGE --push $DOCKER_REPO-webhook:$DOCKER_TAG
