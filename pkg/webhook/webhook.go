@@ -83,6 +83,20 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 			cluster.Seed.Spec.Networks.Pods,
 		}
 
+		infra := &extensions.Infrastructure{}
+		namespacedName := types.NamespacedName{
+			Namespace: filter.Name,
+			Name:      cluster.Shoot.Name,
+		}
+
+		if err := e.Client.Get(ctx, namespacedName, infra); err != nil {
+			return admission.Errored(http.StatusInternalServerError, err)
+		}
+
+		if err := controller.ConfigureProviderSpecificAllowedCIDRs(ctx, infra, alwaysAllowedCIDRs); err != nil {
+			return admission.Errored(http.StatusInternalServerError, err)
+		}
+
 		filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs)
 		if err != nil {
 			return admission.Errored(http.StatusInternalServerError, err)

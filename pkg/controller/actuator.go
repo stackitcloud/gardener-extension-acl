@@ -32,6 +32,7 @@ import (
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 
+	openstackhelper "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/helper"
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -137,6 +138,20 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	alwaysAllowedCIDRs := []string{
 		*cluster.Shoot.Spec.Networking.Nodes,
 		cluster.Seed.Spec.Networks.Pods,
+	}
+
+	infra := &extensionsv1alpha1.Infrastructure{}
+	namespacedName := types.NamespacedName{
+		Namespace: namespace,
+		Name:      cluster.Shoot.Name,
+	}
+
+	if err := a.client.Get(ctx, namespacedName, infra); err != nil {
+		return err
+	}
+
+	if err := ConfigureProviderSpecificAllowedCIDRs(ctx, infra, alwaysAllowedCIDRs); err != nil {
+		return err
 	}
 
 	if err := a.createSeedResources(ctx, log, namespace, extSpec, cluster, hosts, alwaysAllowedCIDRs); err != nil {
@@ -348,8 +363,7 @@ func (a *actuator) createManagedResource(
 		a.client,
 		namespace,
 		name,
-		map[string]string{}, // labels
-		false,               // secretNameWithPrefix
+		false, // secretNameWithPrefix
 		class,
 		data,
 		&keepObjects,
@@ -439,6 +453,22 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context) ([]envoyfil
 		})
 	}
 	return mappings, nil
+}
+
+func ConfigureProviderSpecificAllowedCIDRs(
+	ctx context.Context,
+	infra *extensionsv1alpha1.Infrastructure,
+	alwaysAllowedCIDRs []string,
+) error {
+	switch infra.Spec.Type {
+	case "openstack":
+		infraStatus, err := openstackhelper.InfrastructureStatusFromRaw(infra.Status.ProviderStatus)
+		if err != nil {
+			return err
+		}
+		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, infraStatus.Networks.Router.IP)
+	}
+	return nil
 }
 
 // HashData returns a 16 char hash for the given object.
