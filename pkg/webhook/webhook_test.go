@@ -24,10 +24,6 @@ import (
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
-const (
-	openstackType = "openstack"
-)
-
 var _ = Describe("webhook unit test", func() {
 	var (
 		e         *EnvoyFilterWebhook
@@ -306,7 +302,7 @@ var _ = Describe("webhook unit test", func() {
 
 				Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 
-				infra.Spec.Type = openstackType
+				infra.Spec.Type = controller.OpenstackTypeName
 				Expect(k8sClient.Update(ctx, infra)).To(Succeed())
 
 				infraStatusJSON, err := json.Marshal(&openstackv1alpha1.InfrastructureStatus{
@@ -443,7 +439,7 @@ func getNewOpenStackInfrastructure(namespace, name string) *extensionsv1alpha1.I
 	providerStatusJSON, err := json.Marshal(providerStatus)
 	Expect(err).To(BeNil())
 
-	return getNewInfrastructure(namespace, name, openstackType, providerConfigJSON, providerStatusJSON)
+	return getNewInfrastructure(namespace, name, controller.OpenstackTypeName, providerConfigJSON, providerStatusJSON)
 }
 
 func getNewInfrastructure(namespace, name, typeName string, providerConfigJSON, providerStatusJSON []byte) *extensionsv1alpha1.Infrastructure {

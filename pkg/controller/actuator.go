@@ -62,8 +62,9 @@ const (
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
 	// TODO implement
-	ImageName       = "image-name"
-	deletionTimeout = 2 * time.Minute
+	ImageName         = "image-name"
+	deletionTimeout   = 2 * time.Minute
+	OpenstackTypeName = "openstack"
 )
 
 var (
@@ -462,7 +463,7 @@ func ConfigureProviderSpecificAllowedCIDRs(
 	alwaysAllowedCIDRs *[]string,
 ) error {
 	switch infra.Spec.Type {
-	case "openstack":
+	case OpenstackTypeName:
 		// This would be our preferred solution:
 		//
 		// infraStatus, err := openstackhelper.InfrastructureStatusFromRaw(infra.Status.ProviderStatus)
