@@ -462,6 +462,7 @@ func ConfigureProviderSpecificAllowedCIDRs(
 	infra *extensionsv1alpha1.Infrastructure,
 	alwaysAllowedCIDRs *[]string,
 ) error {
+	//nolint:gocritic // Will likely be extended with other infra types in the future
 	switch infra.Spec.Type {
 	case OpenstackTypeName:
 		// This would be our preferred solution:

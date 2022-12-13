@@ -430,19 +430,10 @@ func getNewCluster(namespace, name string, shoot *core.Shoot, seed *core.Seed) *
 	}
 }
 
-func getNewOpenStackInfrastructure(namespace, name string) *extensionsv1alpha1.Infrastructure {
-	providerConfig := openstackv1alpha1.InfrastructureConfig{}
-	providerConfigJSON, err := json.Marshal(providerConfig)
-	Expect(err).To(BeNil())
-
-	providerStatus := openstackv1alpha1.InfrastructureStatus{}
-	providerStatusJSON, err := json.Marshal(providerStatus)
-	Expect(err).To(BeNil())
-
-	return getNewInfrastructure(namespace, name, controller.OpenstackTypeName, providerConfigJSON, providerStatusJSON)
-}
-
-func getNewInfrastructure(namespace, name, typeName string, providerConfigJSON, providerStatusJSON []byte) *extensionsv1alpha1.Infrastructure {
+func getNewInfrastructure(
+	namespace, name, typeName string,
+	providerConfigJSON, providerStatusJSON []byte,
+) *extensionsv1alpha1.Infrastructure {
 	return &extensionsv1alpha1.Infrastructure{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
