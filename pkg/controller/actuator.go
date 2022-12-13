@@ -32,7 +32,7 @@ import (
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 
-	openstackhelper "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/helper"
+	openstackv1alpha1 "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/v1alpha1"
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -67,12 +67,13 @@ const (
 )
 
 var (
-	ErrSpecAction            = errors.New("action must either be 'ALLOW' or 'DENY'")
-	ErrSpecRule              = errors.New("rule must be present")
-	ErrSpecType              = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
-	ErrSpecCIDR              = errors.New("CIDRs must not be empty")
-	ErrNoExtensionsFound     = errors.New("could not list any extensions")
-	ErrNoAdvertisedAddresses = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
+	ErrSpecAction             = errors.New("action must either be 'ALLOW' or 'DENY'")
+	ErrSpecRule               = errors.New("rule must be present")
+	ErrSpecType               = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
+	ErrSpecCIDR               = errors.New("CIDRs must not be empty")
+	ErrNoExtensionsFound      = errors.New("could not list any extensions")
+	ErrNoAdvertisedAddresses  = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
+	ErrProviderStatusRawIsNil = errors.New("providerStatus.Raw is nil, and can't be unmarshalled")
 )
 
 // NewActuator returns an actuator responsible for Extension resources.
@@ -150,7 +151,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	if err := ConfigureProviderSpecificAllowedCIDRs(ctx, infra, alwaysAllowedCIDRs); err != nil {
+	if err := ConfigureProviderSpecificAllowedCIDRs(ctx, infra, &alwaysAllowedCIDRs); err != nil {
 		return err
 	}
 
@@ -458,15 +459,34 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context) ([]envoyfil
 func ConfigureProviderSpecificAllowedCIDRs(
 	ctx context.Context,
 	infra *extensionsv1alpha1.Infrastructure,
-	alwaysAllowedCIDRs []string,
+	alwaysAllowedCIDRs *[]string,
 ) error {
 	switch infra.Spec.Type {
 	case "openstack":
-		infraStatus, err := openstackhelper.InfrastructureStatusFromRaw(infra.Status.ProviderStatus)
+		// This would be our preferred solution:
+		//
+		// infraStatus, err := openstackhelper.InfrastructureStatusFromRaw(infra.Status.ProviderStatus)
+		//
+		// but decoding isn't possible. We suspect it's because in the function
+		// infraStatus is assigned like this:
+		//
+		// infraStatus := &InfrasttuctureStatus{}
+		//
+		// instead of doing it without a pointer and then referencing it in the
+		// unmarshal step, like we now have to do manually here:
+		if infra.Status.ProviderStatus == nil || infra.Status.ProviderStatus.Raw == nil {
+			return ErrProviderStatusRawIsNil
+		}
+
+		infraStatus := openstackv1alpha1.InfrastructureStatus{}
+		err := json.Unmarshal(infra.Status.ProviderStatus.Raw, &infraStatus)
 		if err != nil {
 			return err
 		}
-		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, infraStatus.Networks.Router.IP)
+
+		router32CIDR := infraStatus.Networks.Router.IP + "/32"
+
+		*alwaysAllowedCIDRs = append(*alwaysAllowedCIDRs, router32CIDR)
 	}
 	return nil
 }
