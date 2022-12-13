@@ -3,6 +3,7 @@ package webhook
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -93,9 +94,11 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 			return admission.Errored(http.StatusInternalServerError, err)
 		}
 
-		if err := controller.ConfigureProviderSpecificAllowedCIDRs(ctx, infra, alwaysAllowedCIDRs); err != nil {
+		if err := controller.ConfigureProviderSpecificAllowedCIDRs(ctx, infra, &alwaysAllowedCIDRs); err != nil {
 			return admission.Errored(http.StatusInternalServerError, err)
 		}
+
+		fmt.Printf("\n\nAlways Allowed CIDRs: %+v\n\n", alwaysAllowedCIDRs)
 
 		filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs)
 		if err != nil {
