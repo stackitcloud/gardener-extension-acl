@@ -45,7 +45,12 @@ type ExtensionOptions struct {
 func (o *ExtensionOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&o.HealthCheckSyncPeriod, "healthcheck-sync-period", SyncPeriod, "Default healthcheck sync period.")
 	fs.StringVar(&o.ChartPath, "chart-path", ChartPath, "Location of the chart directories to deploy")
-	fs.StringVar(&o.AdditionalAllowedCidrs, "additional-allowed-cidrs", "", "Comma separated list of ips that will be added to the allowed cidr list i.e. (192.168.1.40/32,...)")
+	fs.StringVar(
+		&o.AdditionalAllowedCidrs,
+		"additional-allowed-cidrs",
+		"",
+		"Comma separated list of ips that will be added to the allowed cidr list i.e. (192.168.1.40/32,...)",
+	)
 }
 
 // Complete implements Completer.Complete.

@@ -20,6 +20,10 @@ spec:
       - name: webhook
         image: {{ .Values.webhook.image.repository }}:{{ .Values.webhook.image.tag }}
         imagePullPolicy: {{ .Values.webhook.image.pullPolicy }}
+        {{- if .Values.additionalAllowedCidrs }}
+        args:
+          - -additional-allowed-cidrs={{ .Values.additionalAllowedCidrs | join "," }}
+        {{- end }}
         volumeMounts:
         - name: tls
           mountPath: "/tmp/k8s-webhook-server/serving-certs"

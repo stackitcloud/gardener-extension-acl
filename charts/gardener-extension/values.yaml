@@ -37,6 +37,8 @@ controllers:
 
 disableControllers: []
 
+additionalAllowedCidrs: []
+
 # imageVectorOverwrite: |
 #   images:
 #   - name: example

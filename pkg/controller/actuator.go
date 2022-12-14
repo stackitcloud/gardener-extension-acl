@@ -142,7 +142,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		cluster.Seed.Spec.Networks.Pods,
 	}
 
-	if len(a.extensionConfig.AdditionalAllowedCidrs) > 1 {
+	if len(a.extensionConfig.AdditionalAllowedCidrs) >= 1 {
 		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCidrs...)
 	}
 

@@ -21,7 +21,7 @@ linters-settings:
       - whyNoLint
       - wrapperFunc
   gocyclo:
-    min-complexity: 15
+    min-complexity: 16
   # gci:
   #   local-prefixes: insert your package name here
   # goimports:

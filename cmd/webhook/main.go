@@ -41,7 +41,12 @@ func main() {
 	flag.StringVar(&certDir, "cert-dir", "", "Folder where key-name and cert-name are located.")
 	flag.StringVar(&keyName, "key-name", "", "Filename for .key file.")
 	flag.StringVar(&certName, "cert-name", "", "Filename for .cert file.")
-	flag.StringVar(&additionalAllowedCidrs, "additional allowed cidrs", "", "Comma separated list of ips that will be added to the allowed cidr list")
+	flag.StringVar(
+		&additionalAllowedCidrs,
+		"additional-allowed-cidrs",
+		"",
+		"Comma separated list of ips that will be added to the allowed cidr list i.e. (192.168.1.40/32,...)",
+	)
 
 	opts := zap.Options{
 		Development: true,
@@ -75,7 +80,7 @@ func main() {
 	server.Register("/mutate", &webhook.Admission{Handler: &aclwebhook.EnvoyFilterWebhook{
 		Client:             mgr.GetClient(),
 		EnvoyFilterService: envoyfilters.EnvoyFilterService{},
-		WebhookConfig:      aclwebhook.WebhookConfig{AdditionalAllowedCidrs: allowedCidrs},
+		WebhookConfig:      aclwebhook.Config{AdditionalAllowedCidrs: allowedCidrs},
 	}})
 
 	mgr.Add(server)
