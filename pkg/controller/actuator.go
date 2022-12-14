@@ -142,6 +142,10 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		cluster.Seed.Spec.Networks.Pods,
 	}
 
+	if len(a.extensionConfig.AdditionalAllowedCidrs) > 1 {
+		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCidrs...)
+	}
+
 	infra := &extensionsv1alpha1.Infrastructure{}
 	namespacedName := types.NamespacedName{
 		Namespace: namespace,

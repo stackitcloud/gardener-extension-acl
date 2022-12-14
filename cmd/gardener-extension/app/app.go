@@ -35,7 +35,7 @@ import (
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
-// NewServiceControllerCommand creates a new command that is used to start the service controller.
+// NewControllerManagerCommand creates a new command that is used to start the service controller.
 func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 	options := NewOptions()
 

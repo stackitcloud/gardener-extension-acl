@@ -19,4 +19,6 @@ package config
 type Config struct {
 	// TODO define options
 	ChartPath string
+	// AdditionalAllowedCidrs additional allowed cidrs that will be added to the list of allowed cidrs.
+	AdditionalAllowedCidrs []string
 }
