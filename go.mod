@@ -1,6 +1,6 @@
 module github.com/stackitcloud/gardener-extension-acl
 
-go 1.18
+go 1.19
 
 require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.2.0
@@ -128,13 +128,12 @@ require (
 replace (
 	// can be removed once https://github.com/gardener/gardener-extension-provider-openstack/pull/520 is merged
 	github.com/gardener/gardener-extension-provider-openstack => github.com/stackitcloud/gardener-extension-provider-openstack v1.28.0-ske-3
-	github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.11.1
-	k8s.io/api => k8s.io/api v0.24.3
-	k8s.io/apimachinery => k8s.io/apimachinery v0.24.3
-	k8s.io/apiserver => k8s.io/apiserver v0.24.3
-	k8s.io/client-go => k8s.io/client-go v0.24.3
-	k8s.io/code-generator => k8s.io/code-generator v0.24.3
-	k8s.io/component-base => k8s.io/component-base v0.24.3
+	k8s.io/api => k8s.io/api v0.24.8
+	k8s.io/apimachinery => k8s.io/apimachinery v0.24.8
+	k8s.io/apiserver => k8s.io/apiserver v0.24.8
+	k8s.io/client-go => k8s.io/client-go v0.24.8
+	k8s.io/code-generator => k8s.io/code-generator v0.24.8
+	k8s.io/component-base => k8s.io/component-base v0.24.8
 	k8s.io/helm => k8s.io/helm v2.13.1+incompatible
-	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.12.1
+	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.12.3
 )

@@ -9,11 +9,11 @@ providerConfig:
   values:
     image:
       repository: ghcr.io/stackitcloud/gardener-extension-acl-controller
-      tag: v0.1.0-8-g64a4bd91
+      tag: v0.1.0-9-g7717b2cf
     webhook:
       image:
         repository: ghcr.io/stackitcloud/gardener-extension-acl-webhook
-        tag: v0.1.0-8-g64a4bd91
+        tag: v0.1.0-9-g7717b2cf
 ---
 apiVersion: core.gardener.cloud/v1beta1
 kind: ControllerRegistration
