@@ -26,10 +26,16 @@ const (
 	AllowedReasonNoPatchNecessary = "No patch necessary"
 )
 
+type Config struct {
+	// AdditionalAllowedCidrs additional allowed cidrs that will be added to the list of allowed cidrs.
+	AdditionalAllowedCidrs []string
+}
+
 type EnvoyFilterWebhook struct {
 	Client             client.Client
 	EnvoyFilterService envoyfilters.EnvoyFilterService
 	decoder            *admission.Decoder
+	WebhookConfig      Config
 }
 
 //nolint:gocritic // the signature is forced by kubebuilder
@@ -81,6 +87,24 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 		alwaysAllowedCIDRs := []string{
 			*cluster.Shoot.Spec.Networking.Nodes,
 			cluster.Seed.Spec.Networks.Pods,
+		}
+
+		if len(e.WebhookConfig.AdditionalAllowedCidrs) >= 1 {
+			alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, e.WebhookConfig.AdditionalAllowedCidrs...)
+		}
+
+		infra := &extensions.Infrastructure{}
+		namespacedName := types.NamespacedName{
+			Namespace: filter.Name,
+			Name:      cluster.Shoot.Name,
+		}
+
+		if err := e.Client.Get(ctx, namespacedName, infra); err != nil {
+			return admission.Errored(http.StatusInternalServerError, err)
+		}
+
+		if err := controller.ConfigureProviderSpecificAllowedCIDRs(ctx, infra, &alwaysAllowedCIDRs); err != nil {
+			return admission.Errored(http.StatusInternalServerError, err)
 		}
 
 		filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs)

@@ -16,19 +16,24 @@
 package main
 
 import (
+	"os"
+
 	"github.com/stackitcloud/gardener-extension-acl/cmd/gardener-extension/app"
 
-	controllercmd "github.com/gardener/gardener/extensions/pkg/controller/cmd"
+	"github.com/gardener/gardener/cmd/utils"
 	"github.com/gardener/gardener/pkg/logger"
-	runtimelog "sigs.k8s.io/controller-runtime/pkg/log"
+
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
 func main() {
-	runtimelog.SetLogger(logger.ZapLogger(false))
+	utils.DeduplicateWarnings()
 
-	ctx := signals.SetupSignalHandler()
-	if err := app.NewServiceControllerCommand().ExecuteContext(ctx); err != nil {
-		controllercmd.LogErrAndExit(err, "error executing the main controller command")
+	logf.SetLogger(logger.MustNewZapLogger(logger.InfoLevel, logger.FormatJSON))
+
+	if err := app.NewControllerManagerCommand(signals.SetupSignalHandler()).Execute(); err != nil {
+		logf.Log.Error(err, "Error executing the main controller command")
+		os.Exit(1)
 	}
 }

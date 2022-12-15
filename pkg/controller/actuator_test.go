@@ -1,6 +1,9 @@
 package controller
 
 import (
+	"encoding/json"
+
+	openstackv1alpha1 "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/v1alpha1"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
@@ -172,13 +175,69 @@ var _ = Describe("actuator unit test", func() {
 			})
 		})
 	})
+
+	Describe("ConfigureProviderSpecificAllowedCIDRs", func() {
+		When("there is an infrastructure object for which no custom behavior is required", func() {
+			It("Should leave the alwaysAllowedCIDRs slice unaltered and should not error", func() {
+				infra := &extensionsv1alpha1.Infrastructure{
+					Spec: extensionsv1alpha1.InfrastructureSpec{
+						DefaultSpec: extensionsv1alpha1.DefaultSpec{
+							Type: "non-existent",
+						},
+					},
+				}
+
+				alwaysAllowedCIDRs := []string{"a", "b"}
+
+				Expect(ConfigureProviderSpecificAllowedCIDRs(ctx, infra, &alwaysAllowedCIDRs)).To(Succeed())
+				Expect(alwaysAllowedCIDRs).To(Equal([]string{"a", "b"}))
+			})
+		})
+		When("there is an infrastructure object of type 'openstack'", func() {
+			It("Should add the router IP to the alwaysAllowedCIDRs slice and should not error", func() {
+				infraStatusJSON, err := json.Marshal(&openstackv1alpha1.InfrastructureStatus{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "InfrastructureStatus",
+						APIVersion: "openstack.provider.extensions.gardener.cloud/v1alpha1",
+					},
+					Networks: openstackv1alpha1.NetworkStatus{
+						Router: openstackv1alpha1.RouterStatus{
+							ID:   "router-id",
+							IDv6: "router-id-v6",
+							IP:   "10.9.8.7",
+						},
+					},
+				})
+				Expect(err).To(BeNil())
+
+				infra := &extensionsv1alpha1.Infrastructure{
+					Spec: extensionsv1alpha1.InfrastructureSpec{
+						DefaultSpec: extensionsv1alpha1.DefaultSpec{
+							Type: OpenstackTypeName,
+						},
+					},
+					Status: extensionsv1alpha1.InfrastructureStatus{
+						DefaultStatus: extensionsv1alpha1.DefaultStatus{
+							ProviderStatus: &runtime.RawExtension{
+								Raw: infraStatusJSON,
+							},
+						},
+					},
+				}
+
+				alwaysAllowedCIDRs := []string{"a", "b"}
+
+				Expect(ConfigureProviderSpecificAllowedCIDRs(ctx, infra, &alwaysAllowedCIDRs)).To(Succeed())
+				Expect(alwaysAllowedCIDRs).To(Equal([]string{"a", "b", "10.9.8.7/32"}))
+			})
+		})
+	})
 })
 
 func getNewActuator() *actuator {
 	return &actuator{
 		client: k8sClient,
 		config: cfg,
-		logger: logger,
 		extensionConfig: config.Config{
 			ChartPath: "../../charts",
 		},

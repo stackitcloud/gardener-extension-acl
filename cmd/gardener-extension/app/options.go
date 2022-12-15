@@ -43,9 +43,12 @@ type Options struct {
 // NewOptions creates a new Options instance.
 func NewOptions() *Options {
 	options := &Options{
-		generalOptions:   &controllercmd.GeneralOptions{},
-		extensionOptions: &extensioncmd.ExtensionOptions{},
-		restOptions:      &controllercmd.RESTOptions{},
+		generalOptions: &controllercmd.GeneralOptions{},
+		extensionOptions: &extensioncmd.ExtensionOptions{
+			AdditionalAllowedCidrs: "",
+			ChartPath:              "charts",
+		},
+		restOptions: &controllercmd.RESTOptions{},
 		managerOptions: &controllercmd.ManagerOptions{
 			// These are default values.
 			LeaderElection:             true,

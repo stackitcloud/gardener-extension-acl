@@ -16,15 +16,16 @@
 package cmd
 
 import (
+	"strings"
 	"time"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	healthcheckcontroller "github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
 
+	healthcheckconfig "github.com/gardener/gardener/extensions/pkg/apis/config"
 	"github.com/gardener/gardener/extensions/pkg/controller/cmd"
 	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
-	healthcheckconfig "github.com/gardener/gardener/extensions/pkg/controller/healthcheck/config"
 	"github.com/spf13/pflag"
 )
 
@@ -35,14 +36,21 @@ const (
 
 // ExtensionOptions holds options related to the extension (not the extension controller)
 type ExtensionOptions struct {
-	HealthCheckSyncPeriod time.Duration
-	ChartPath             string
+	HealthCheckSyncPeriod  time.Duration
+	ChartPath              string
+	AdditionalAllowedCidrs string
 }
 
 // AddFlags implements Flagger.AddFlags.
 func (o *ExtensionOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&o.HealthCheckSyncPeriod, "healthcheck-sync-period", SyncPeriod, "Default healthcheck sync period.")
 	fs.StringVar(&o.ChartPath, "chart-path", ChartPath, "Location of the chart directories to deploy")
+	fs.StringVar(
+		&o.AdditionalAllowedCidrs,
+		"additional-allowed-cidrs",
+		"",
+		"Comma separated list of ips that will be added to the allowed cidr list i.e. (192.168.1.40/32,...)",
+	)
 }
 
 // Complete implements Completer.Complete.
@@ -59,6 +67,7 @@ func (o *ExtensionOptions) Completed() *ExtensionOptions {
 func (o *ExtensionOptions) Apply(config *controllerconfig.Config) {
 	// TODO pass controller options from extensionoptions to config param
 	config.ChartPath = o.ChartPath
+	config.AdditionalAllowedCidrs = strings.Split(o.AdditionalAllowedCidrs, ",")
 }
 
 func (o *ExtensionOptions) ApplyHealthCheckConfig(config *healthcheckconfig.HealthCheckConfig) {

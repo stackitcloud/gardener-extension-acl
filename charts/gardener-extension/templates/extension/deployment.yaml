@@ -35,6 +35,9 @@ spec:
         - --leader-election-id={{ include "leaderelectionid" . }}
         - --leader-election-resource-lock={{ .Values.leaderElection.resourceLock }}
         - --chart-path=/charts
+        {{- if .Values.additionalAllowedCidrs }}
+        - --additional-allowed-cidrs={{ .Values.additionalAllowedCidrs | join "," }}
+        {{- end }}
         {{- if .Values.gardener.version }}
         - --gardener-version={{ .Values.gardener.version }}
         {{- end }}

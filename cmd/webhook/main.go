@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -32,6 +33,7 @@ func main() {
 	var metricsAddr string
 	var probeAddr string
 	var certDir, keyName, certName string
+	var additionalAllowedCidrs string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -39,6 +41,12 @@ func main() {
 	flag.StringVar(&certDir, "cert-dir", "", "Folder where key-name and cert-name are located.")
 	flag.StringVar(&keyName, "key-name", "", "Filename for .key file.")
 	flag.StringVar(&certName, "cert-name", "", "Filename for .cert file.")
+	flag.StringVar(
+		&additionalAllowedCidrs,
+		"additional-allowed-cidrs",
+		"",
+		"Comma separated list of ips that will be added to the allowed cidr list i.e. (192.168.1.40/32,...)",
+	)
 
 	opts := zap.Options{
 		Development: true,
@@ -67,9 +75,12 @@ func main() {
 		CertName: certName,
 	}
 
+	allowedCidrs := strings.Split(additionalAllowedCidrs, ",")
+
 	server.Register("/mutate", &webhook.Admission{Handler: &aclwebhook.EnvoyFilterWebhook{
 		Client:             mgr.GetClient(),
 		EnvoyFilterService: envoyfilters.EnvoyFilterService{},
+		WebhookConfig:      aclwebhook.Config{AdditionalAllowedCidrs: allowedCidrs},
 	}})
 
 	mgr.Add(server)

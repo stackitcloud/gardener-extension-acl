@@ -18,18 +18,21 @@ package controller
 import (
 	"context"
 	"crypto/sha256"
+	"embed"
 	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"net"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
+	"github.com/stackitcloud/gardener-extension-acl/charts"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 
+	openstackv1alpha1 "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/v1alpha1"
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -37,7 +40,6 @@ import (
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/utils/chart"
 	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
-	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,7 +48,6 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
@@ -61,24 +62,24 @@ const (
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
 	// TODO implement
-	ImageName       = "image-name"
-	deletionTimeout = 2 * time.Minute
+	ImageName         = "image-name"
+	deletionTimeout   = 2 * time.Minute
+	OpenstackTypeName = "openstack"
 )
 
 var (
-	ErrSpecAction            = errors.New("action must either be 'ALLOW' or 'DENY'")
-	ErrSpecRule              = errors.New("rule must be present")
-	ErrSpecType              = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
-	ErrSpecCIDR              = errors.New("CIDRs must not be empty")
-	ErrNoExtensionsFound     = errors.New("could not list any extensions")
-	ErrNoAdvertisedAddresses = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
+	ErrSpecAction             = errors.New("action must either be 'ALLOW' or 'DENY'")
+	ErrSpecRule               = errors.New("rule must be present")
+	ErrSpecType               = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
+	ErrSpecCIDR               = errors.New("CIDRs must not be empty")
+	ErrNoExtensionsFound      = errors.New("could not list any extensions")
+	ErrNoAdvertisedAddresses  = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
+	ErrProviderStatusRawIsNil = errors.New("providerStatus.Raw is nil, and can't be unmarshalled")
 )
 
 // NewActuator returns an actuator responsible for Extension resources.
 func NewActuator(cfg config.Config) extension.Actuator {
-	logger := log.Log.WithName(ActuatorName)
 	return &actuator{
-		logger:             logger,
 		extensionConfig:    cfg,
 		envoyfilterService: envoyfilters.EnvoyFilterService{},
 	}
@@ -90,8 +91,6 @@ type actuator struct {
 	decoder            runtime.Decoder
 	extensionConfig    config.Config
 	envoyfilterService envoyfilters.EnvoyFilterService
-
-	logger logr.Logger
 }
 
 type ExtensionSpec struct {
@@ -100,7 +99,7 @@ type ExtensionSpec struct {
 }
 
 // Reconcile the Extension resource.
-func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
+func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
 	namespace := ex.GetNamespace()
 
 	cluster, err := controller.GetCluster(ctx, a.client, namespace)
@@ -143,7 +142,25 @@ func (a *actuator) Reconcile(ctx context.Context, ex *extensionsv1alpha1.Extensi
 		cluster.Seed.Spec.Networks.Pods,
 	}
 
-	if err := a.createSeedResources(ctx, namespace, extSpec, cluster, hosts, alwaysAllowedCIDRs); err != nil {
+	if len(a.extensionConfig.AdditionalAllowedCidrs) >= 1 {
+		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCidrs...)
+	}
+
+	infra := &extensionsv1alpha1.Infrastructure{}
+	namespacedName := types.NamespacedName{
+		Namespace: namespace,
+		Name:      cluster.Shoot.Name,
+	}
+
+	if err := a.client.Get(ctx, namespacedName, infra); err != nil {
+		return err
+	}
+
+	if err := ConfigureProviderSpecificAllowedCIDRs(ctx, infra, &alwaysAllowedCIDRs); err != nil {
+		return err
+	}
+
+	if err := a.createSeedResources(ctx, log, namespace, extSpec, cluster, hosts, alwaysAllowedCIDRs); err != nil {
 		return err
 	}
 
@@ -194,25 +211,25 @@ func ValidateExtensionSpec(spec *ExtensionSpec) error {
 }
 
 // Delete the Extension resource.
-func (a *actuator) Delete(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
+func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
 	namespace := ex.GetNamespace()
-	a.logger.Info("Component is being deleted", "component", "", "namespace", namespace)
+	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
 	if err := a.updateEnvoyFilterHash(ctx, namespace, nil, true); err != nil {
 		return err
 	}
 
-	return a.deleteSeedResources(ctx, namespace)
+	return a.deleteSeedResources(ctx, log, namespace)
 }
 
 // Restore the Extension resource.
-func (a *actuator) Restore(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
-	return a.Reconcile(ctx, ex)
+func (a *actuator) Restore(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
+	return a.Reconcile(ctx, log, ex)
 }
 
 // Migrate the Extension resource.
-func (a *actuator) Migrate(ctx context.Context, ex *extensionsv1alpha1.Extension) error {
-	return a.Delete(ctx, ex)
+func (a *actuator) Migrate(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
+	return a.Delete(ctx, log, ex)
 }
 
 // InjectConfig injects the rest config to this actuator.
@@ -281,6 +298,7 @@ func (a *actuator) reconcileVPNEnvoyFilter(
 
 func (a *actuator) createSeedResources(
 	ctx context.Context,
+	log logr.Logger,
 	namespace string,
 	spec *ExtensionSpec,
 	cluster *controller.Cluster,
@@ -312,13 +330,13 @@ func (a *actuator) createSeedResources(
 		return errors.Wrap(err, "could not create chart renderer")
 	}
 
-	a.logger.Info("Component is being applied", "component", "component-name", "namespace", namespace)
+	log.Info("Component is being applied", "component", "component-name", "namespace", namespace)
 
-	return a.createManagedResource(ctx, namespace, ResourceNameSeed, "seed", renderer, ChartNameSeed, namespace, cfg, nil)
+	return a.createManagedResource(ctx, namespace, ResourceNameSeed, "seed", renderer, ChartNameSeed, namespace, cfg, nil, charts.Seed)
 }
 
-func (a *actuator) deleteSeedResources(ctx context.Context, namespace string) error {
-	a.logger.Info("Deleting managed resource for seed", "namespace", namespace)
+func (a *actuator) deleteSeedResources(ctx context.Context, log logr.Logger, namespace string) error {
+	log.Info("Deleting managed resource for seed", "namespace", namespace)
 
 	if err := managedresources.Delete(ctx, a.client, namespace, ResourceNameSeed, false); err != nil {
 		return err
@@ -336,9 +354,9 @@ func (a *actuator) createManagedResource(
 	chartName, chartNamespace string,
 	chartValues map[string]interface{},
 	injectedLabels map[string]string,
+	embeddedChart embed.FS,
 ) error {
-	chartPath := filepath.Join(a.extensionConfig.ChartPath, chartName)
-	renderedChart, err := renderer.Render(chartPath, chartName, chartNamespace, chartValues)
+	renderedChart, err := renderer.RenderEmbeddedFS(embeddedChart, chartName, chartName, chartNamespace, chartValues)
 	if err != nil {
 		return err
 	}
@@ -347,7 +365,16 @@ func (a *actuator) createManagedResource(
 	keepObjects := false
 	forceOverwriteAnnotations := false
 	return managedresources.Create(
-		ctx, a.client, namespace, name, false, class, data, &keepObjects, injectedLabels, &forceOverwriteAnnotations,
+		ctx,
+		a.client,
+		namespace,
+		name,
+		false, // secretNameWithPrefix
+		class,
+		data,
+		&keepObjects,
+		injectedLabels,
+		&forceOverwriteAnnotations,
 	)
 }
 
@@ -432,6 +459,42 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context) ([]envoyfil
 		})
 	}
 	return mappings, nil
+}
+
+func ConfigureProviderSpecificAllowedCIDRs(
+	ctx context.Context,
+	infra *extensionsv1alpha1.Infrastructure,
+	alwaysAllowedCIDRs *[]string,
+) error {
+	//nolint:gocritic // Will likely be extended with other infra types in the future
+	switch infra.Spec.Type {
+	case OpenstackTypeName:
+		// This would be our preferred solution:
+		//
+		// infraStatus, err := openstackhelper.InfrastructureStatusFromRaw(infra.Status.ProviderStatus)
+		//
+		// but decoding isn't possible. We suspect it's because in the function
+		// infraStatus is assigned like this:
+		//
+		// infraStatus := &InfrasttuctureStatus{}
+		//
+		// instead of doing it without a pointer and then referencing it in the
+		// unmarshal step, like we now have to do manually here:
+		if infra.Status.ProviderStatus == nil || infra.Status.ProviderStatus.Raw == nil {
+			return ErrProviderStatusRawIsNil
+		}
+
+		infraStatus := openstackv1alpha1.InfrastructureStatus{}
+		err := json.Unmarshal(infra.Status.ProviderStatus.Raw, &infraStatus)
+		if err != nil {
+			return err
+		}
+
+		router32CIDR := infraStatus.Networks.Router.IP + "/32"
+
+		*alwaysAllowedCIDRs = append(*alwaysAllowedCIDRs, router32CIDR)
+	}
+	return nil
 }
 
 // HashData returns a 16 char hash for the given object.
