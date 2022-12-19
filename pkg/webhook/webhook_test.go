@@ -43,6 +43,39 @@ var _ = Describe("webhook unit test", func() {
 
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 		Expect(k8sClient.Create(ctx, infra)).To(Succeed())
+
+		// set up default shoot part of cluster resource
+		shootJSON, err := json.Marshal(&core.Shoot{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+			Spec: core.ShootSpec{
+				Networking: core.Networking{
+					Nodes:    pointer.String("10.250.0.0/16"),
+					Pods:     pointer.String("100.96.0.0/11"),
+					Services: pointer.String("100.64.0.0/13"),
+					Type:     "calico",
+				},
+			},
+		})
+		cluster.Spec.Shoot.Raw = shootJSON
+		Expect(err).To(BeNil())
+
+		// set up default seed part of cluster resource
+		seedJSON, err := json.Marshal(&core.Seed{
+			Spec: core.SeedSpec{
+				Networks: core.SeedNetworks{
+					Nodes:    pointer.String("100.250.0.0/16"),
+					Pods:     "10.96.0.0/11",
+					Services: "10.64.0.0/13",
+				},
+			},
+		})
+		Expect(err).To(BeNil())
+		cluster.Spec.Seed.Raw = seedJSON
+
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 	})
 
 	AfterEach(func() {
@@ -80,25 +113,6 @@ var _ = Describe("webhook unit test", func() {
 				ext = getNewExtension(namespace, *extSpec)
 
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
-
-				shootJSON, err := json.Marshal(&core.Shoot{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      name,
-						Namespace: namespace,
-					},
-					Spec: core.ShootSpec{
-						Networking: core.Networking{
-							Nodes:    pointer.String("10.250.0.0/16"),
-							Pods:     pointer.String("100.96.0.0/11"),
-							Services: pointer.String("100.64.0.0/13"),
-							Type:     "calico",
-						},
-					},
-				})
-				cluster.Spec.Shoot.Raw = shootJSON
-				Expect(err).To(BeNil())
-
-				Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 			})
 
 			AfterEach(func() {
@@ -163,37 +177,6 @@ var _ = Describe("webhook unit test", func() {
 				ext = getNewExtension(namespace, *extSpec)
 
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
-
-				shootJSON, err := json.Marshal(&core.Shoot{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      name,
-						Namespace: namespace,
-					},
-					Spec: core.ShootSpec{
-						Networking: core.Networking{
-							Nodes:    pointer.String("10.250.0.0/16"),
-							Pods:     pointer.String("100.96.0.0/11"),
-							Services: pointer.String("100.64.0.0/13"),
-							Type:     "calico",
-						},
-					},
-				})
-				Expect(err).To(BeNil())
-				cluster.Spec.Shoot.Raw = shootJSON
-
-				seedJSON, err := json.Marshal(&core.Seed{
-					Spec: core.SeedSpec{
-						Networks: core.SeedNetworks{
-							Nodes:    pointer.String("100.250.0.0/16"),
-							Pods:     "10.96.0.0/11",
-							Services: "10.64.0.0/13",
-						},
-					},
-				})
-				Expect(err).To(BeNil())
-				cluster.Spec.Seed.Raw = seedJSON
-
-				Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 			})
 
 			AfterEach(func() {
@@ -239,6 +222,12 @@ var _ = Describe("webhook unit test", func() {
 													"prefix_len":     11,
 												},
 											},
+											{
+												"remote_ip": map[string]interface{}{
+													"address_prefix": "100.250.0.0",
+													"prefix_len":     16,
+												},
+											},
 										},
 									},
 								},
@@ -270,37 +259,6 @@ var _ = Describe("webhook unit test", func() {
 				ext = getNewExtension(namespace, *extSpec)
 
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
-
-				shootJSON, err := json.Marshal(&core.Shoot{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      name,
-						Namespace: namespace,
-					},
-					Spec: core.ShootSpec{
-						Networking: core.Networking{
-							Nodes:    pointer.String("10.250.0.0/16"),
-							Pods:     pointer.String("100.96.0.0/11"),
-							Services: pointer.String("100.64.0.0/13"),
-							Type:     "calico",
-						},
-					},
-				})
-				cluster.Spec.Shoot.Raw = shootJSON
-				Expect(err).To(BeNil())
-
-				seedJSON, err := json.Marshal(&core.Seed{
-					Spec: core.SeedSpec{
-						Networks: core.SeedNetworks{
-							Nodes:    pointer.String("100.250.0.0/16"),
-							Pods:     "10.96.0.0/11",
-							Services: "10.64.0.0/13",
-						},
-					},
-				})
-				Expect(err).To(BeNil())
-				cluster.Spec.Seed.Raw = seedJSON
-
-				Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 
 				infra.Spec.Type = controller.OpenstackTypeName
 				Expect(k8sClient.Update(ctx, infra)).To(Succeed())
@@ -371,6 +329,12 @@ var _ = Describe("webhook unit test", func() {
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "10.96.0.0",
 													"prefix_len":     11,
+												},
+											},
+											{
+												"remote_ip": map[string]interface{}{
+													"address_prefix": "100.250.0.0",
+													"prefix_len":     16,
 												},
 											},
 											{
