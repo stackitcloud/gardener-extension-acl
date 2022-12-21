@@ -4,8 +4,8 @@ go 1.19
 
 require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.2.0
-	github.com/gardener/gardener v1.53.0
-	github.com/gardener/gardener-extension-provider-openstack v1.30.3
+	github.com/gardener/gardener v1.59.0
+	github.com/gardener/gardener-extension-provider-openstack v1.30.1-0.20221215131400-b390fb780945
 	github.com/go-logr/logr v1.2.3
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo v1.16.5
@@ -41,11 +41,10 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.8.0 // indirect
-	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
+	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/gardener/etcd-druid v0.12.3 // indirect
-	github.com/gardener/external-dns-management v0.7.18 // indirect
 	github.com/gardener/hvpa-controller v0.3.1 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-logr/zapr v1.2.3 // indirect
@@ -87,6 +86,7 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
+	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
@@ -115,9 +115,9 @@ require (
 	k8s.io/helm v2.16.1+incompatible // indirect
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.70.1 // indirect
-	k8s.io/kube-aggregator v0.24.3 // indirect
+	k8s.io/kube-aggregator v0.25.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1 // indirect
-	k8s.io/metrics v0.24.3 // indirect
+	k8s.io/metrics v0.25.0 // indirect
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20220706173534-cd0058ad295c // indirect
 	sigs.k8s.io/controller-tools v0.10.0 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
@@ -126,14 +126,12 @@ require (
 )
 
 replace (
-	// can be removed once https://github.com/gardener/gardener-extension-provider-openstack/pull/520 is merged
-	github.com/gardener/gardener-extension-provider-openstack => github.com/stackitcloud/gardener-extension-provider-openstack v1.28.0-ske-3
-	k8s.io/api => k8s.io/api v0.24.8
-	k8s.io/apimachinery => k8s.io/apimachinery v0.24.8
-	k8s.io/apiserver => k8s.io/apiserver v0.24.8
-	k8s.io/client-go => k8s.io/client-go v0.24.8
-	k8s.io/code-generator => k8s.io/code-generator v0.24.8
-	k8s.io/component-base => k8s.io/component-base v0.24.8
+	k8s.io/api => k8s.io/api v0.25.0
+	k8s.io/apimachinery => k8s.io/apimachinery v0.25.0
+	k8s.io/apiserver => k8s.io/apiserver v0.25.0
+	k8s.io/client-go => k8s.io/client-go v0.25.0
+	k8s.io/code-generator => k8s.io/code-generator v0.25.0
+	k8s.io/component-base => k8s.io/component-base v0.25.0
 	k8s.io/helm => k8s.io/helm v2.13.1+incompatible
-	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.12.3
+	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.13.0
 )
