@@ -370,7 +370,8 @@ func (a *actuator) createManagedResource(
 		a.client,
 		namespace,
 		name,
-		false, // secretNameWithPrefix
+		map[string]string{}, // labels
+		false,               // secretNameWithPrefix
 		class,
 		data,
 		&keepObjects,

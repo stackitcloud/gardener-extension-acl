@@ -202,9 +202,8 @@ var _ = Describe("actuator unit test", func() {
 					},
 					Networks: openstackv1alpha1.NetworkStatus{
 						Router: openstackv1alpha1.RouterStatus{
-							ID:   "router-id",
-							IDv6: "router-id-v6",
-							IP:   "10.9.8.7",
+							ID: "router-id",
+							IP: "10.9.8.7",
 						},
 					},
 				})
