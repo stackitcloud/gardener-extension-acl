@@ -139,7 +139,6 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	alwaysAllowedCIDRs := []string{
 		*cluster.Shoot.Spec.Networking.Nodes,
-		*cluster.Shoot.Spec.Networking.Pods,
 		cluster.Seed.Spec.Networks.Pods,
 		*cluster.Seed.Spec.Networks.Nodes,
 	}

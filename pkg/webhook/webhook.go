@@ -86,6 +86,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 
 		alwaysAllowedCIDRs := []string{
 			*cluster.Shoot.Spec.Networking.Nodes,
+			*cluster.Shoot.Spec.Networking.Pods,
 			cluster.Seed.Spec.Networks.Pods,
 			*cluster.Seed.Spec.Networks.Nodes,
 		}
