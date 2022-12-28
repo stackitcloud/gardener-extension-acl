@@ -183,7 +183,7 @@ var _ = Describe("webhook unit test", func() {
 				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, ext))).To(Succeed())
 			})
 
-			It("patches this rule into the filters object, including the Node CIDRs", func() {
+			It("patches this rule into the filters object, including CIDRs for Seed|Shoot nodes and pods", func() {
 				df, dfJSON := getEnvoyFilterFromFile("defaultEnvoyFilter.json", namespace)
 
 				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
@@ -214,6 +214,12 @@ var _ = Describe("webhook unit test", func() {
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "10.250.0.0",
 													"prefix_len":     16,
+												},
+											},
+											{
+												"remote_ip": map[string]interface{}{
+													"address_prefix": "100.96.0.0",
+													"prefix_len":     11,
 												},
 											},
 											{
@@ -291,7 +297,7 @@ var _ = Describe("webhook unit test", func() {
 				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, ext))).To(Succeed())
 			})
 
-			It("patches this rule into the filters object, including the Node CIDRs and the OpenStack router IP", func() {
+			It("patches this rule into the filters object, including CIDRs for Seed|Shoot nodes and pods and also the OpenStack router IP", func() {
 				df, dfJSON := getEnvoyFilterFromFile("defaultEnvoyFilter.json", namespace)
 
 				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
@@ -322,6 +328,12 @@ var _ = Describe("webhook unit test", func() {
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "10.250.0.0",
 													"prefix_len":     16,
+												},
+											},
+											{
+												"remote_ip": map[string]interface{}{
+													"address_prefix": "100.96.0.0",
+													"prefix_len":     11,
 												},
 											},
 											{
