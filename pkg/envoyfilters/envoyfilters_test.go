@@ -52,12 +52,8 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 						Rule:      *createRule("ALLOW", "remote_ip", "0.0.0.0/0"),
 					},
 				}
-				hosts := []string{
-					"api.test.garden.s.testseed.dev.ske.eu01.stackit.cloud",
-					"api.test.garden.internal.testseed.dev.ske.eu01.stackit.cloud",
-				}
 
-				result, err := e.BuildVPNEnvoyFilterSpecForHelmChart(mappings, hosts, alwaysAllowedCIDRs)
+				result, err := e.BuildVPNEnvoyFilterSpecForHelmChart(mappings, alwaysAllowedCIDRs)
 
 				Expect(err).ToNot(HaveOccurred())
 				checkIfMapEqualsYAML(result, "vpnEnvoyFilterSpecWithOneAllowRule.yaml")
@@ -92,6 +88,7 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 	})
 })
 
+//nolint:unparam // it's easier to see what kind of rule is constructed this way
 func createRule(action, ruleType, cidr string) *ACLRule {
 	return &ACLRule{
 		Cidrs: []string{

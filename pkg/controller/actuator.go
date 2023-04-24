@@ -157,7 +157,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	if err := ConfigureProviderSpecificAllowedCIDRs(ctx, infra, &alwaysAllowedCIDRs); err != nil {
+	if err := ConfigureProviderSpecificAllowedCIDRs(infra, &alwaysAllowedCIDRs); err != nil {
 		return err
 	}
 
@@ -165,7 +165,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	if err := a.reconcileVPNEnvoyFilter(ctx, namespace, aclMappings, hosts, alwaysAllowedCIDRs); err != nil {
+	if err := a.reconcileVPNEnvoyFilter(ctx, aclMappings, alwaysAllowedCIDRs); err != nil {
 		return err
 	}
 
@@ -251,15 +251,9 @@ func (a *actuator) InjectScheme(scheme *runtime.Scheme) error {
 	return nil
 }
 
-func (a *actuator) reconcileVPNEnvoyFilter(
-	ctx context.Context,
-	namespace string,
-	aclMappings []envoyfilters.ACLMapping,
-	hosts []string,
-	alwaysAllowedCIDRs []string,
-) error {
+func (a *actuator) reconcileVPNEnvoyFilter(ctx context.Context, aclMappings []envoyfilters.ACLMapping, alwaysAllowedCIDRs []string) error {
 	vpnEnvoyFilterSpec, err := a.envoyfilterService.BuildVPNEnvoyFilterSpecForHelmChart(
-		aclMappings, hosts, alwaysAllowedCIDRs,
+		aclMappings, alwaysAllowedCIDRs,
 	)
 	if err != nil {
 		return err
@@ -463,11 +457,7 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context) ([]envoyfil
 	return mappings, nil
 }
 
-func ConfigureProviderSpecificAllowedCIDRs(
-	ctx context.Context,
-	infra *extensionsv1alpha1.Infrastructure,
-	alwaysAllowedCIDRs *[]string,
-) error {
+func ConfigureProviderSpecificAllowedCIDRs(infra *extensionsv1alpha1.Infrastructure, alwaysAllowedCIDRs *[]string) error {
 	//nolint:gocritic // Will likely be extended with other infra types in the future
 	switch infra.Spec.Type {
 	case OpenstackTypeName:

@@ -60,7 +60,8 @@ func (e *EnvoyFilterService) BuildAPIEnvoyFilterSpecForHelmChart(
 // same as the seed namespace of the shoot. (Gardener uses the seedNamespace
 // value in the botanist vpnshoot task.)
 func (e *EnvoyFilterService) BuildVPNEnvoyFilterSpecForHelmChart(
-	mappings []ACLMapping, hosts, alwaysAllowedCIDRs []string,
+	mappings []ACLMapping,
+	alwaysAllowedCIDRs []string,
 ) (map[string]interface{}, error) {
 	vpnConfigPatch, err := e.CreateVPNConfigPatchFromRule(mappings, alwaysAllowedCIDRs)
 	if err != nil {
@@ -103,7 +104,7 @@ func (e *EnvoyFilterService) CreateAPIConfigPatchFromRule(
 				},
 			},
 		},
-		"patch": principalsToPatch(rbacName, rule.Action, "network", principals, alwaysAllowedCIDRs),
+		"patch": principalsToPatch(rbacName, rule.Action, "network", principals),
 	}, nil
 }
 
@@ -200,9 +201,7 @@ func getPrefixAndPrefixLength(cidr string) (prefix string, prefixLen int) {
 	return ip.String(), prefixLen
 }
 
-func principalsToPatch(
-	rbacName, ruleAction, filterType string, principals []map[string]interface{}, alwaysAllowedCIDRs []string,
-) map[string]interface{} {
+func principalsToPatch(rbacName, ruleAction, filterType string, principals []map[string]interface{}) map[string]interface{} {
 	return map[string]interface{}{
 		"operation": "INSERT_FIRST",
 		"value": map[string]interface{}{

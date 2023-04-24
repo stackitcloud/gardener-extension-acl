@@ -105,7 +105,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 			return admission.Errored(http.StatusInternalServerError, err)
 		}
 
-		if err := controller.ConfigureProviderSpecificAllowedCIDRs(ctx, infra, &alwaysAllowedCIDRs); err != nil {
+		if err := controller.ConfigureProviderSpecificAllowedCIDRs(infra, &alwaysAllowedCIDRs); err != nil {
 			return admission.Errored(http.StatusInternalServerError, err)
 		}
 

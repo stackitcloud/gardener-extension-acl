@@ -37,7 +37,7 @@ var _ = Describe("webhook unit test", func() {
 	BeforeEach(func() {
 		name = "some-shoot"
 		namespace = createNewNamespace()
-		cluster = getNewCluster(namespace, name, &core.Shoot{}, &core.Seed{})
+		cluster = getNewCluster(namespace, &core.Shoot{}, &core.Seed{})
 		infra = getNewInfrastructure(namespace, name, "non-existent", []byte("{}"), []byte("{}"))
 		e = getNewWebhook()
 
@@ -386,7 +386,7 @@ func getNewWebhook() *EnvoyFilterWebhook {
 	}
 }
 
-func getNewCluster(namespace, name string, shoot *core.Shoot, seed *core.Seed) *extensionsv1alpha1.Cluster {
+func getNewCluster(name string, shoot *core.Shoot, seed *core.Seed) *extensionsv1alpha1.Cluster {
 	shootJSON, err := json.Marshal(shoot)
 	Expect(err).To(BeNil())
 
@@ -395,7 +395,7 @@ func getNewCluster(namespace, name string, shoot *core.Shoot, seed *core.Seed) *
 
 	return &extensionsv1alpha1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
+			Name: name,
 		},
 		Spec: extensionsv1alpha1.ClusterSpec{
 			CloudProfile: runtime.RawExtension{Raw: []byte("{}")},
@@ -451,8 +451,10 @@ func addRuleToSpec(extSpec *controller.ExtensionSpec, action, ruleType, cidr str
 // getEnvoyFilterFromFile takes the technical shoot ID as a parameter to render
 // into the JSON tempate file. Returns both the JSON representation as string
 // and the struct type.
+//
+//nolint:unparam // might be extended with non-default filters in the future
 func getEnvoyFilterFromFile(fileName, technicalID string) (filter *istionetworkingClientGo.EnvoyFilter, filterAsString string) {
-	filterSpecJSON, err := os.ReadFile(path.Join("./testdata", "defaultEnvoyFilter.json"))
+	filterSpecJSON, err := os.ReadFile(path.Join("./testdata", fileName))
 	Expect(err).ShouldNot(HaveOccurred())
 
 	templatedFilterSpec := strings.ReplaceAll(string(filterSpecJSON), "{{TECHNICAL-SHOOT-ID}}", technicalID)
