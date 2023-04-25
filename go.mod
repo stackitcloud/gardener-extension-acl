@@ -124,7 +124,6 @@ require (
 )
 
 replace (
-	github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.14.0
 	k8s.io/api => k8s.io/api v0.25.7
 	k8s.io/apimachinery => k8s.io/apimachinery v0.25.7
 	k8s.io/apiserver => k8s.io/apiserver v0.25.7
