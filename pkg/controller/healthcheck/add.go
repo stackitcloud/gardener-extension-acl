@@ -16,14 +16,12 @@
 package healthcheck
 
 import (
-	"context"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	healthcheckconfig "github.com/gardener/gardener/extensions/pkg/apis/config"
-	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
 	"github.com/gardener/gardener/extensions/pkg/controller/healthcheck/general"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -41,12 +39,6 @@ var (
 // RegisterHealthChecks registers health checks for each extension resource
 // HealthChecks are grouped by extension (e.g worker), extension.type (e.g aws) and  Health Check Type (e.g SystemComponentsHealthy)
 func RegisterHealthChecks(mgr manager.Manager, opts *healthcheck.DefaultAddArgs) error {
-	preCheckFunc := func(_ context.Context, _ client.Client, _ client.Object, cluster *extensionscontroller.Cluster) bool {
-		// TODO custom precheck logic
-		// example: return cluster.Shoot.Spec.DNS != nil && cluster.Shoot.Spec.DNS.Domain != nil
-		return true
-	}
-
 	return healthcheck.DefaultRegistration(
 		controller.Type,
 		extensionsv1alpha1.SchemeGroupVersion.WithKind(extensionsv1alpha1.ExtensionResource),
@@ -59,9 +51,9 @@ func RegisterHealthChecks(mgr manager.Manager, opts *healthcheck.DefaultAddArgs)
 			{
 				ConditionType: string(gardencorev1beta1.SeedExtensionsReady),
 				HealthCheck:   general.CheckManagedResource(controller.ResourceNameSeed),
-				PreCheckFunc:  preCheckFunc,
 			},
 		},
+		sets.New[gardencorev1beta1.ConditionType](),
 	)
 }
 
