@@ -1,5 +1,5 @@
 VERSION 0.6
-FROM golang:1.18-alpine
+FROM golang:1.20-alpine
 ARG NAME=acl
 ARG DOCKER_REPO=ghcr.io/stackitcloud/gardener-extension-$NAME
 ARG BINPATH=/usr/local/bin/
@@ -144,7 +144,7 @@ lint:
 # todo only when writing custom controller
 test:
     FROM +deps
-    ARG KUBERNETES_VERSION=1.23.x
+    ARG KUBERNETES_VERSION=1.24.x
     COPY +gotools/bin/setup-envtest $BINPATH
     # install envtest in its own layer
     RUN setup-envtest use $KUBERNETES_VERSION
@@ -206,7 +206,7 @@ all:
 ###########
 
 golangci-lint:
-    FROM golangci/golangci-lint:v1.46.2
+    FROM golangci/golangci-lint:v1.52.2
     SAVE ARTIFACT /usr/bin/golangci-lint
 
 snyk:
