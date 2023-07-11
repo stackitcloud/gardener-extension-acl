@@ -51,11 +51,11 @@ var _ = Describe("webhook unit test", func() {
 				Namespace: namespace,
 			},
 			Spec: core.ShootSpec{
-				Networking: core.Networking{
+				Networking: &core.Networking{
 					Nodes:    pointer.String("10.250.0.0/16"),
 					Pods:     pointer.String("100.96.0.0/11"),
 					Services: pointer.String("100.64.0.0/13"),
-					Type:     "calico",
+					Type:     pointer.String("calico"),
 				},
 			},
 		})
