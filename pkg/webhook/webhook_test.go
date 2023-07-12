@@ -37,7 +37,7 @@ var _ = Describe("webhook unit test", func() {
 	BeforeEach(func() {
 		name = "some-shoot"
 		namespace = createNewNamespace()
-		cluster = getNewCluster(namespace, name, &core.Shoot{}, &core.Seed{})
+		cluster = getNewCluster(namespace, &core.Shoot{}, &core.Seed{})
 		infra = getNewInfrastructure(namespace, name, "non-existent", []byte("{}"), []byte("{}"))
 		e = getNewWebhook()
 
@@ -85,7 +85,7 @@ var _ = Describe("webhook unit test", func() {
 	Describe("createAdmissionResponse", func() {
 		When("the name of the EnvoyFilter doesn't start with 'shoot--'", func() {
 			It("issues no patch for the EnvoyyFilter", func() {
-				df, dfJSON := getEnvoyFilterFromFile("defaultEnvoyFilter.json", "non-shoot-envoyfilter")
+				df, dfJSON := getEnvoyFilterFromFile("non-shoot-envoyfilter")
 
 				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
 
@@ -96,7 +96,7 @@ var _ = Describe("webhook unit test", func() {
 
 		When("there is no extension", func() {
 			It("issues no patch for the EnvoyyFilter", func() {
-				df, dfJSON := getEnvoyFilterFromFile("defaultEnvoyFilter.json", namespace)
+				df, dfJSON := getEnvoyFilterFromFile(namespace)
 
 				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
 
@@ -120,7 +120,7 @@ var _ = Describe("webhook unit test", func() {
 			})
 
 			It("patches this rule into the filters object", func() {
-				df, dfJSON := getEnvoyFilterFromFile("defaultEnvoyFilter.json", namespace)
+				df, dfJSON := getEnvoyFilterFromFile(namespace)
 
 				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
 
@@ -184,7 +184,7 @@ var _ = Describe("webhook unit test", func() {
 			})
 
 			It("patches this rule into the filters object, including CIDRs for Seed|Shoot nodes and pods", func() {
-				df, dfJSON := getEnvoyFilterFromFile("defaultEnvoyFilter.json", namespace)
+				df, dfJSON := getEnvoyFilterFromFile(namespace)
 
 				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
 
@@ -298,7 +298,7 @@ var _ = Describe("webhook unit test", func() {
 			})
 
 			It("patches this rule into the filters object, including CIDRs for Seed|Shoot nodes and pods and also the OpenStack router IP", func() {
-				df, dfJSON := getEnvoyFilterFromFile("defaultEnvoyFilter.json", namespace)
+				df, dfJSON := getEnvoyFilterFromFile(namespace)
 
 				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
 
@@ -386,7 +386,7 @@ func getNewWebhook() *EnvoyFilterWebhook {
 	}
 }
 
-func getNewCluster(namespace, name string, shoot *core.Shoot, seed *core.Seed) *extensionsv1alpha1.Cluster {
+func getNewCluster(namespace string, shoot *core.Shoot, seed *core.Seed) *extensionsv1alpha1.Cluster {
 	shootJSON, err := json.Marshal(shoot)
 	Expect(err).To(BeNil())
 
@@ -451,7 +451,7 @@ func addRuleToSpec(extSpec *controller.ExtensionSpec, action, ruleType, cidr str
 // getEnvoyFilterFromFile takes the technical shoot ID as a parameter to render
 // into the JSON tempate file. Returns both the JSON representation as string
 // and the struct type.
-func getEnvoyFilterFromFile(fileName, technicalID string) (filter *istionetworkingClientGo.EnvoyFilter, filterAsString string) {
+func getEnvoyFilterFromFile(technicalID string) (filter *istionetworkingClientGo.EnvoyFilter, filterAsString string) {
 	filterSpecJSON, err := os.ReadFile(path.Join("./testdata", "defaultEnvoyFilter.json"))
 	Expect(err).ShouldNot(HaveOccurred())
 
