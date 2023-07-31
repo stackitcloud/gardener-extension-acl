@@ -189,7 +189,7 @@ var _ = Describe("actuator unit test", func() {
 
 				alwaysAllowedCIDRs := []string{"a", "b"}
 
-				Expect(ConfigureProviderSpecificAllowedCIDRs(ctx, infra, &alwaysAllowedCIDRs)).To(Succeed())
+				Expect(ConfigureProviderSpecificAllowedCIDRs(infra, &alwaysAllowedCIDRs)).To(Succeed())
 				Expect(alwaysAllowedCIDRs).To(Equal([]string{"a", "b"}))
 			})
 		})
@@ -226,7 +226,7 @@ var _ = Describe("actuator unit test", func() {
 
 				alwaysAllowedCIDRs := []string{"a", "b"}
 
-				Expect(ConfigureProviderSpecificAllowedCIDRs(ctx, infra, &alwaysAllowedCIDRs)).To(Succeed())
+				Expect(ConfigureProviderSpecificAllowedCIDRs(infra, &alwaysAllowedCIDRs)).To(Succeed())
 				Expect(alwaysAllowedCIDRs).To(Equal([]string{"a", "b", "10.9.8.7/32"}))
 			})
 		})

@@ -16,8 +16,6 @@
 package imagevector
 
 import (
-	"strings"
-
 	"github.com/gardener/gardener/pkg/utils/imagevector"
 	"github.com/stackitcloud/gardener-extension-acl/charts"
 	"k8s.io/apimachinery/pkg/util/runtime"
@@ -28,7 +26,7 @@ var imageVector imagevector.ImageVector
 func init() {
 	var err error
 
-	imageVector, err = imagevector.Read(strings.NewReader(charts.ImagesYAML))
+	imageVector, err = imagevector.Read([]byte(charts.ImagesYAML))
 	runtime.Must(err)
 
 	imageVector, err = imagevector.WithEnvOverride(imageVector)
