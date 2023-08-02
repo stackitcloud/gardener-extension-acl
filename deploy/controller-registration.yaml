@@ -9,11 +9,11 @@ providerConfig:
   values:
     image:
       repository: ghcr.io/stackitcloud/gardener-extension-acl-controller
-      tag: v0.2.2-1-g3fb65cb1
+      tag: v0.2.2-3-g7f7296e1
     webhook:
       image:
         repository: ghcr.io/stackitcloud/gardener-extension-acl-webhook
-        tag: v0.2.2-1-g3fb65cb1
+        tag: v0.2.2-3-g7f7296e1
     additionalAllowedCidrs: []
 ---
 apiVersion: core.gardener.cloud/v1beta1

@@ -26,12 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-logr/logr"
-	"github.com/stackitcloud/gardener-extension-acl/charts"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
-
 	openstackv1alpha1 "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/v1alpha1"
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
@@ -40,16 +34,20 @@ import (
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/utils/chart"
 	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/stackitcloud/gardener-extension-acl/charts"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
+	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
 const (
@@ -266,33 +264,26 @@ func (a *actuator) reconcileVPNEnvoyFilter(
 	// build EnvoyFilter object as map[string]interface{}
 	// because the actual EnvoyFilter struct is a pain to type
 	name := "acl-vpn"
-	filterMap := map[string]interface{}{
-		"apiVersion": "networking.istio.io/v1alpha3",
-		"kind":       "EnvoyFilter",
-		"metadata": map[string]interface{}{
-			"name":      name,
-			"namespace": IngressNamespace,
-		},
-		"spec": vpnEnvoyFilterSpec,
-	}
 
-	filterJSON, err := json.Marshal(filterMap)
-	if err != nil {
+	// build EnvoyFilter object as map[string]interface{}
+	// because the actual EnvoyFilter struct is a pain to type
+	envoyFilter := &unstructured.Unstructured{}
+	envoyFilter.SetGroupVersionKind(istionetworkingClientGo.SchemeGroupVersion.WithKind("EnvoyFilter"))
+	envoyFilter.SetNamespace(IngressNamespace)
+	envoyFilter.SetName(name)
+
+	err = a.client.Get(ctx, client.ObjectKeyFromObject(envoyFilter), envoyFilter)
+	if client.IgnoreNotFound(err) != nil {
 		return err
 	}
 
-	filter := &istionetworkingClientGo.EnvoyFilter{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      name,
-			Namespace: IngressNamespace,
-		},
+	envoyFilter.Object["spec"] = vpnEnvoyFilterSpec
+
+	if apierrors.IsNotFound(err) {
+		return a.client.Create(ctx, envoyFilter)
 	}
 
-	_, err = controllerutil.CreateOrUpdate(ctx, a.client, filter, func() error {
-		return json.Unmarshal(filterJSON, filter)
-	})
-
-	return err
+	return a.client.Update(ctx, envoyFilter)
 }
 
 func (a *actuator) createSeedResources(

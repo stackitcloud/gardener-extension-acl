@@ -18,10 +18,9 @@ package main
 import (
 	"os"
 
-	"github.com/stackitcloud/gardener-extension-acl/cmd/gardener-extension/app"
-
 	"github.com/gardener/gardener/cmd/utils"
 	"github.com/gardener/gardener/pkg/logger"
+	"github.com/stackitcloud/gardener-extension-acl/cmd/gardener-extension/app"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
