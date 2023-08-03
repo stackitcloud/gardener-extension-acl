@@ -19,6 +19,8 @@ spec:
         checksum/configmap-extension-imagevector-overwrite: {{ include (print $.Template.BasePath "/configmap-imagevector-overwrite.yaml") . | sha256sum }}
         {{- end }}
       labels:
+        networking.gardener.cloud/to-dns: allowed
+        networking.gardener.cloud/to-runtime-apiserver: allowed
         {{- include "gardener-extension.extensionLabels" . | nindent 8 }}
     spec:
       priorityClassName: {{ template "gardener-extension.extensionName" . }}
