@@ -1,5 +1,5 @@
 VERSION 0.6
-FROM golang:1.20-alpine
+FROM golang:1.21-alpine
 ARG NAME=acl
 ARG DOCKER_REPO=ghcr.io/stackitcloud/gardener-extension-$NAME
 ARG BINPATH=/usr/local/bin/
@@ -216,10 +216,6 @@ snyk:
 helm:
     FROM alpine/helm:3.8.1
     SAVE ARTIFACT /usr/bin/helm
-
-bash:
-    FROM bash
-    SAVE ARTIFACT /usr/local/bin
 
 helm2kube:
     COPY +helm/helm $BINPATH
