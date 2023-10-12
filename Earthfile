@@ -217,10 +217,6 @@ helm:
     FROM alpine/helm:3.8.1
     SAVE ARTIFACT /usr/bin/helm
 
-bash:
-    FROM bash
-    SAVE ARTIFACT /usr/local/bin
-
 helm2kube:
     COPY +helm/helm $BINPATH
     COPY --dir ./charts/gardener-extension .
