@@ -1,6 +1,6 @@
 module github.com/stackitcloud/gardener-extension-acl
 
-go 1.20
+go 1.21
 
 replace (
 	github.com/gardener/gardener => github.com/gardener/gardener v1.73.1
