@@ -1,0 +1,21 @@
+---
+apiVersion: core.gardener.cloud/v1beta1
+kind: ControllerDeployment
+metadata:
+  name: acl
+type: helm
+providerConfig:
+  chart: H4sIAAAAAAAAA+2WTY+bMBCGc+ZXjPYeAjQQidtqK3UPqz1UVe9TM01QbYNsE21U5b93IB8iUVerPZBW2nk4GH/gd+yxZ4gXs8lJmFWeDyVzXQ7v6adlmuVZUQztRcoF5NObNpt1PqADuIXU/0i8eNigC/EOjZ5Ko3dwsVy+6v8sWV36n72fLWeQTGXQmA/uf2zr7+R83dgStmmEbXuu3qVxchdV5JWr2zA03cMjaQOqPzLws3EQNgRf0FVkycH9wxPQSyDbfx9HFg2VsD72zs89c1Q62p5Ukphlon+9DR+WeBHItBoD+ckywbvjP9//VSHx/xaM/V91xuwmyARvxf8iv/Z/lqaFxP9bMI7/HPz9gpPAr9pWJXymVjc7QzZEhgJWGLCMAJQj7JPBt9oQb51pS7Cd1tyj8Qdp34+BfqoShvPE1UMiGNd8i4qbfvMTfyVN6Cl+PrXDHvaRb0n1Uzm2olboS0i55nmsCo07iBgMavM0Ur3S9cHxuV7vWGjP1dNBP348WlPP6+vq0RcqVzqsdLR2mKixAWvOeOfhc6gNrnm9dl3bl/Mch225bHPkm84p8oPNbEfoDq9T+T9ebFF35Kf8AXzr/v8l/md5KvdfEARBEARBEARBEARBEARBEARBEN7LH7tBDWIAKAAA
+---
+apiVersion: core.gardener.cloud/v1beta1
+kind: ControllerRegistration
+metadata:
+  name: acl
+spec:
+  deployment:
+    deploymentRefs:
+      - name: acl
+  resources:
+    - kind: Extension
+      type: acl
+
