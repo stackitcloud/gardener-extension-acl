@@ -32,10 +32,12 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/utils/chart"
-	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
+	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -80,6 +82,10 @@ var (
 	ErrNoAdvertisedAddresses = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
 )
 
+type ExtensionState struct {
+	IstioNamespace *string `json:"istioNamespace"`
+}
+
 // NewActuator returns an actuator responsible for Extension resources.
 func NewActuator(mgr manager.Manager, cfg config.Config) extension.Actuator {
 	return &actuator{
@@ -116,12 +122,24 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 			return err
 		}
 	}
-
+	// validate the ExtensionSpec
 	if err := ValidateExtensionSpec(extSpec); err != nil {
 		return err
 	}
 
-	if err := a.updateEnvoyFilterHash(ctx, ex.GetNamespace(), extSpec, false); err != nil {
+	istioNamespace, istioLabel, err := a.findIstioNamespaceForExtension(ctx, ex)
+	if err != nil {
+		return err
+	}
+
+	extState := &ExtensionState{}
+	if ex.Status.State != nil && ex.Status.State.Raw != nil {
+		if err := json.Unmarshal(ex.Status.State.Raw, &extState); err != nil {
+			return err
+		}
+	}
+
+	if err := a.updateEnvoyFilterHash(ctx, ex.GetNamespace(), extSpec, istioNamespace, false); err != nil {
 		return err
 	}
 
@@ -165,15 +183,23 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		hosts,
 		shootSpecificCIDRs,
 		alwaysAllowedCIDRs,
+		istioNamespace,
+		istioLabel,
 	); err != nil {
 		return err
 	}
 
-	if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs); err != nil {
+	if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, istioNamespace, istioLabel); err != nil {
 		return err
 	}
 
-	return a.updateStatus(ctx, ex, extSpec)
+	if extState.IstioNamespace != nil && *extState.IstioNamespace != istioNamespace {
+		// we need to cleanup the old vpn object if the istioNamespace changed
+		if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, *extState.IstioNamespace, ""); err != nil {
+			return err
+		}
+	}
+	return a.updateStatus(ctx, ex, extSpec, extState)
 }
 
 // ValidateExtensionSpec checks if the ExtensionSpec exists, and if its action,
@@ -222,7 +248,12 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	namespace := ex.GetNamespace()
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
-	if err := a.updateEnvoyFilterHash(ctx, namespace, nil, true); err != nil {
+	istioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, ex)
+	if err != nil {
+		return err
+	}
+
+	if err := a.updateEnvoyFilterHash(ctx, namespace, nil, istioNamespace, true); err != nil {
 		return err
 	}
 
@@ -242,15 +273,10 @@ func (a *actuator) Migrate(ctx context.Context, log logr.Logger, ex *extensionsv
 func (a *actuator) reconcileVPNEnvoyFilter(
 	ctx context.Context,
 	alwaysAllowedCIDRs []string,
+	istioNamespace string,
+	istioLabel string,
 ) error {
-	aclMappings, err := a.getAllShootsWithACLExtension(ctx)
-	if err != nil {
-		return err
-	}
-
-	vpnEnvoyFilterSpec, err := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
-		aclMappings, alwaysAllowedCIDRs,
-	)
+	aclMappings, err := a.getAllShootsWithACLExtension(ctx, istioNamespace)
 	if err != nil {
 		return err
 	}
@@ -262,9 +288,22 @@ func (a *actuator) reconcileVPNEnvoyFilter(
 	// build EnvoyFilter object as map[string]interface{}
 	// because the actual EnvoyFilter struct is a pain to type
 	envoyFilter := &unstructured.Unstructured{}
-	envoyFilter.SetGroupVersionKind(istionetworkingClientGo.SchemeGroupVersion.WithKind("EnvoyFilter"))
-	envoyFilter.SetNamespace(IngressNamespace)
+	envoyFilter.SetGroupVersionKind(istionetworkv1alpha3.SchemeGroupVersion.WithKind("EnvoyFilter"))
+	envoyFilter.SetNamespace(istioNamespace)
 	envoyFilter.SetName(name)
+
+	if len(aclMappings) == 0 {
+		// no shoot in this namespace with the acl extension so we can delete the config
+		err = a.client.Delete(ctx, envoyFilter)
+		return client.IgnoreNotFound(err)
+	}
+
+	vpnEnvoyFilterSpec, err := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
+		aclMappings, alwaysAllowedCIDRs, istioLabel,
+	)
+	if err != nil {
+		return err
+	}
 
 	err = a.client.Get(ctx, client.ObjectKeyFromObject(envoyFilter), envoyFilter)
 	if client.IgnoreNotFound(err) != nil {
@@ -289,11 +328,13 @@ func (a *actuator) createSeedResources(
 	hosts []string,
 	shootSpecificCIRDs []string,
 	alwaysAllowedCIDRs []string,
+	istioNamespace string,
+	istioLabel string,
 ) error {
 	var err error
 
 	apiEnvoyFilterSpec, err := envoyfilters.BuildAPIEnvoyFilterSpecForHelmChart(
-		spec.Rule, hosts, append(alwaysAllowedCIDRs, shootSpecificCIRDs...),
+		spec.Rule, hosts, append(alwaysAllowedCIDRs, shootSpecificCIRDs...), istioLabel,
 	)
 	if err != nil {
 		return err
@@ -301,7 +342,7 @@ func (a *actuator) createSeedResources(
 
 	cfg := map[string]interface{}{
 		"shootName":          cluster.Shoot.Status.TechnicalID,
-		"targetNamespace":    IngressNamespace,
+		"targetNamespace":    istioNamespace,
 		"apiEnvoyFilterSpec": apiEnvoyFilterSpec,
 	}
 
@@ -364,19 +405,37 @@ func (a *actuator) createManagedResource(
 	)
 }
 
-func (a *actuator) updateStatus(ctx context.Context, ex *extensionsv1alpha1.Extension, _ *ExtensionSpec) error {
+func (a *actuator) updateStatus(
+	ctx context.Context,
+	ex *extensionsv1alpha1.Extension,
+	_ *ExtensionSpec,
+	state *ExtensionState,
+) error {
 	var resources []gardencorev1beta1.NamedResourceReference
+
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
 
 	patch := client.MergeFrom(ex.DeepCopy())
 	ex.Status.Resources = resources
+
+	ex.Status.State = &runtime.RawExtension{Raw: stateJSON}
 	return a.client.Status().Patch(ctx, ex, patch)
 }
 
-func (a *actuator) updateEnvoyFilterHash(ctx context.Context, shootName string, extSpec *ExtensionSpec, inDeletion bool) error {
+func (a *actuator) updateEnvoyFilterHash(
+	ctx context.Context,
+	shootName string,
+	extSpec *ExtensionSpec,
+	istioNamespace string,
+	inDeletion bool,
+) error {
 	// get envoyfilter with the shoot's name
-	envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
+	envoyFilter := &istionetworkv1alpha3.EnvoyFilter{}
 	namespacedName := types.NamespacedName{
-		Namespace: IngressNamespace,
+		Namespace: istioNamespace,
 		Name:      shootName,
 	}
 
@@ -414,7 +473,7 @@ func (a *actuator) updateEnvoyFilterHash(ctx context.Context, shootName string, 
 
 // getAllShootsWithACLExtension returns a list of all shoots that have the ACL
 // extension enabled, together with their rule.
-func (a *actuator) getAllShootsWithACLExtension(ctx context.Context) ([]envoyfilters.ACLMapping, error) {
+func (a *actuator) getAllShootsWithACLExtension(ctx context.Context, istioNamespace string) ([]envoyfilters.ACLMapping, error) {
 	extensions := &extensionsv1alpha1.ExtensionList{}
 	err := a.client.List(ctx, extensions)
 	if err != client.IgnoreNotFound(err) {
@@ -432,6 +491,15 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context) ([]envoyfil
 		if ex.Spec.Type != Type {
 			continue
 		}
+
+		shootIstioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
+		if err != nil {
+			return nil, err
+		}
+		if istioNamespace != shootIstioNamespace {
+			continue
+		}
+
 		extSpec := &ExtensionSpec{}
 		if ex.Spec.ProviderConfig != nil && ex.Spec.ProviderConfig.Raw != nil {
 			if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
@@ -482,4 +550,32 @@ func HashData(data interface{}) (string, error) {
 
 	bytes := sha256.Sum256(jsonSpec)
 	return strings.ToLower(base32.StdEncoding.EncodeToString(bytes[:]))[:16], nil
+}
+
+// TODO: refactor
+func (a *actuator) findIstioNamespaceForExtension(ctx context.Context, ex *extensionsv1alpha1.Extension) (string, string, error) {
+	gw := istionetworkv1beta1.Gateway{}
+
+	err := a.client.Get(ctx, client.ObjectKey{
+		Namespace: ex.Namespace,
+		Name:      "kube-apiserver",
+	}, &gw)
+	if err != nil {
+		return "", "", err
+	}
+	labelsSelector := client.MatchingLabels{
+		"istio": gw.Spec.Selector["istio"],
+	}
+
+	nsList := v1.NamespaceList{}
+	err = a.client.List(ctx, &nsList, labelsSelector)
+	if err != nil {
+		return "", "", err
+	}
+
+	if len(nsList.Items) != 1 {
+		return "", "", errors.New("no istio namespace could be selected")
+	}
+
+	return nsList.Items[0].Name, gw.Spec.Selector["istio"], nil
 }

@@ -22,7 +22,6 @@ import (
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/util"
 	"github.com/spf13/cobra"
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	corev1 "k8s.io/api/core/v1"
 	componentbaseconfig "k8s.io/component-base/config"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,6 +30,9 @@ import (
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
+
+	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 )
 
 // NewControllerManagerCommand creates a new command that is used to start the service controller.
@@ -80,7 +82,10 @@ func (o *Options) run(ctx context.Context) error {
 		return fmt.Errorf("could not update manager scheme: %s", err)
 	}
 
-	if err := istionetworkingClientGo.AddToScheme(mgr.GetScheme()); err != nil {
+	if err := istionetworkv1alpha3.AddToScheme(mgr.GetScheme()); err != nil {
+		return fmt.Errorf("could not update manager scheme: %s", err)
+	}
+	if err := istionetworkv1beta1.AddToScheme(mgr.GetScheme()); err != nil {
 		return fmt.Errorf("could not update manager scheme: %s", err)
 	}
 
