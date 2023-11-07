@@ -16,6 +16,8 @@
 package controller
 
 import (
+	"context"
+
 	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
@@ -45,20 +47,20 @@ type AddOptions struct {
 }
 
 // AddToManager adds a controller with the default Options to the given Controller Manager.
-func AddToManager(mgr manager.Manager) error {
-	return AddToManagerWithOptions(mgr, &DefaultAddOptions)
+func AddToManager(ctx context.Context, mgr manager.Manager) error {
+	return AddToManagerWithOptions(ctx, mgr, &DefaultAddOptions)
 }
 
 // AddToManagerWithOptions adds a controller with the given Options to the given manager.
 // The opts.Reconciler is being set with a newly instantiated actuator.
-func AddToManagerWithOptions(mgr manager.Manager, opts *AddOptions) error {
-	return extension.Add(mgr, extension.AddArgs{
+func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts *AddOptions) error {
+	return extension.Add(ctx, mgr, extension.AddArgs{
 		Actuator:          NewActuator(opts.ExtensionConfig),
 		ControllerOptions: opts.ControllerOptions,
 		Name:              Type + Suffix,
 		FinalizerSuffix:   Type + Suffix,
 		Resync:            0,
-		Predicates:        extension.DefaultPredicates(DefaultAddOptions.IgnoreOperationAnnotation),
+		Predicates:        extension.DefaultPredicates(ctx, mgr, DefaultAddOptions.IgnoreOperationAnnotation),
 		Type:              Type,
 	})
 }

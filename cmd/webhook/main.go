@@ -11,6 +11,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -57,11 +58,14 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+
 		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         false,
+		Metrics: metricsserver.Options{
+			SecureServing: false,
+			BindAddress:   metricsAddr,
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -69,11 +73,12 @@ func main() {
 	}
 
 	// Server uses default values if provided paths are empty
-	server := &webhook.Server{
+	server := webhook.NewServer(webhook.Options{
+		Port:     9443,
 		CertDir:  certDir,
-		KeyName:  keyName,
 		CertName: certName,
-	}
+		KeyName:  keyName,
+	})
 
 	allowedCidrs := strings.Split(additionalAllowedCidrs, ",")
 

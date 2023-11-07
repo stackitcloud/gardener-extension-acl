@@ -33,13 +33,9 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/utils/chart"
-	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
+	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	"github.com/stackitcloud/gardener-extension-acl/charts"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -48,6 +44,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/stackitcloud/gardener-extension-acl/charts"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 )
 
 const (
@@ -213,6 +214,18 @@ func ValidateExtensionSpec(spec *ExtensionSpec) error {
 func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
 	namespace := ex.GetNamespace()
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
+
+	if err := a.updateEnvoyFilterHash(ctx, namespace, nil, true); err != nil {
+		return err
+	}
+
+	return a.deleteSeedResources(ctx, log, namespace)
+}
+
+// Delete the Extension resource.
+func (a *actuator) ForceDelete(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
+	namespace := ex.GetNamespace()
+	log.Info("Component is being force deleted", "component", "", "namespace", namespace)
 
 	if err := a.updateEnvoyFilterHash(ctx, namespace, nil, true); err != nil {
 		return err
