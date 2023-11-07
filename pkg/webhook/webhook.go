@@ -6,18 +6,17 @@ import (
 	"net/http"
 	"strings"
 
-	extController "github.com/gardener/gardener/extensions/pkg/controller"
-	extensions "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 	"github.com/tidwall/gjson"
 	"gomodules.xyz/jsonpatch/v2"
+	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
 
 const (
@@ -58,7 +57,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 		return admission.Allowed(AllowedReasonNoPatchNecessary)
 	}
 
-	aclExtension := &extensions.Extension{}
+	aclExtension := &extensionsv1alpha1.Extension{}
 	err := e.Client.Get(ctx, types.NamespacedName{Name: ExtensionName, Namespace: filter.Name}, aclExtension)
 
 	if client.IgnoreNotFound(err) != nil {
@@ -79,37 +78,35 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 			return admission.Errored(http.StatusBadRequest, err)
 		}
 
-		cluster, err := extController.GetCluster(ctx, e.Client, filter.Name)
+		cluster, err := helper.GetClusterForExtension(ctx, e.Client, aclExtension)
 		if err != nil {
 			return admission.Errored(http.StatusInternalServerError, err)
 		}
 
-		alwaysAllowedCIDRs := []string{
-			*cluster.Shoot.Spec.Networking.Nodes,
-			*cluster.Shoot.Spec.Networking.Pods,
-			cluster.Seed.Spec.Networks.Pods,
-			*cluster.Seed.Spec.Networks.Nodes,
-		}
+		var shootSpecificCIRDs []string
+		var alwaysAllowedCIDRs []string
+
+		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, helper.GetSeedSpecificAllowedCIDRs(cluster.Seed)...)
 
 		if len(e.WebhookConfig.AdditionalAllowedCidrs) >= 1 {
 			alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, e.WebhookConfig.AdditionalAllowedCidrs...)
 		}
 
-		infra := &extensions.Infrastructure{}
-		namespacedName := types.NamespacedName{
-			Namespace: filter.Name,
-			Name:      cluster.Shoot.Name,
+		shootSpecificCIRDs = append(shootSpecificCIRDs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
+		shootSpecificCIRDs = append(shootSpecificCIRDs, helper.GetShootPodSpecificAllowedCIDRs(cluster.Shoot)...)
+
+		infra, err := helper.GetInfrastructureForExtension(ctx, e.Client, aclExtension, cluster.Shoot.Name)
+		if err != nil {
+			return admission.Response{}
 		}
 
-		if err := e.Client.Get(ctx, namespacedName, infra); err != nil {
+		providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
+		if err != nil {
 			return admission.Errored(http.StatusInternalServerError, err)
 		}
+		shootSpecificCIRDs = append(shootSpecificCIRDs, providerSpecificCIRDs...)
 
-		if err := controller.ConfigureProviderSpecificAllowedCIDRs(infra, &alwaysAllowedCIDRs); err != nil {
-			return admission.Errored(http.StatusInternalServerError, err)
-		}
-
-		filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs)
+		filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
 		if err != nil {
 			return admission.Errored(http.StatusInternalServerError, err)
 		}

@@ -13,8 +13,9 @@ var (
 type EnvoyFilterService struct{}
 
 type ACLMapping struct {
-	ShootName string  `json:"shootName"`
-	Rule      ACLRule `json:"rule"`
+	ShootName          string   `json:"shootName"`
+	Rule               ACLRule  `json:"rule"`
+	ShootSpecificCIDRs []string `json:"ShootSpecificCIDRs"`
 }
 
 type ACLRule struct {
@@ -118,7 +119,11 @@ func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(
 
 	for i := range mappings {
 		mapping := &mappings[i]
-		policies[mapping.ShootName] = createVPNPolicyForShoot(&mapping.Rule, alwaysAllowedCIDRs, mapping.ShootName)
+		policies[mapping.ShootName] = createVPNPolicyForShoot(
+			&mapping.Rule,
+			append(alwaysAllowedCIDRs, mapping.ShootSpecificCIDRs...),
+			mapping.ShootName,
+		)
 	}
 
 	return map[string]interface{}{
@@ -146,9 +151,13 @@ func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(
 	}, nil
 }
 
-func (e *EnvoyFilterService) CreateInternalFilterPatchFromRule(rule *ACLRule, alwaysAllowedCIDRs []string) (map[string]interface{}, error) {
+func (e *EnvoyFilterService) CreateInternalFilterPatchFromRule(
+	rule *ACLRule,
+	alwaysAllowedCIDRs []string,
+	shootSpecificCIDRs []string,
+) (map[string]interface{}, error) {
 	rbacName := "acl-internal"
-	principals := ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs)
+	principals := ruleCIDRsToPrincipal(rule, append(alwaysAllowedCIDRs, shootSpecificCIDRs...))
 
 	return map[string]interface{}{
 		"name":         rbacName + "-" + strings.ToLower(rule.Type),
@@ -164,7 +173,10 @@ func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []map[stri
 	principals := []map[string]interface{}{}
 
 	for _, cidr := range rule.Cidrs {
-		prefix, length := getPrefixAndPrefixLength(cidr)
+		prefix, length, err := getPrefixAndPrefixLength(cidr)
+		if err != nil {
+			continue
+		}
 		principals = append(principals, map[string]interface{}{
 			strings.ToLower(rule.Type): map[string]interface{}{
 				"address_prefix": prefix,
@@ -178,7 +190,10 @@ func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []map[stri
 	// cluster-internal communication)
 	if rule.Action == "ALLOW" {
 		for _, cidr := range alwaysAllowedCIDRs {
-			prefix, length := getPrefixAndPrefixLength(cidr)
+			prefix, length, err := getPrefixAndPrefixLength(cidr)
+			if err != nil {
+				continue
+			}
 			principals = append(principals, map[string]interface{}{
 				"remote_ip": map[string]interface{}{
 					"address_prefix": prefix,
@@ -191,13 +206,16 @@ func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []map[stri
 	return principals
 }
 
-func getPrefixAndPrefixLength(cidr string) (prefix string, prefixLen int) {
+func getPrefixAndPrefixLength(cidr string) (prefix string, prefixLen int, err error) {
 	// rule gets validated early in the code
-	ip, mask, _ := net.ParseCIDR(cidr)
+	ip, mask, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return "", 0, err
+	}
 	prefixLen, _ = mask.Mask.Size()
 
 	// TODO use ip here or the one from the mask?
-	return ip.String(), prefixLen
+	return ip.String(), prefixLen, nil
 }
 
 func principalsToPatch(
