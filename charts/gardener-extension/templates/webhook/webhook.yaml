@@ -1,5 +1,5 @@
 {{- $dnsName := printf "%s.%s.svc" (include "gardener-extension.webhookName" .) .Release.Namespace -}}
-{{- $ca := genCA $dnsName 3650 -}}
+{{- $ca := genCA (printf "%s-ca" $dnsName) 3650 -}}
 {{- $cert := genSignedCert $dnsName nil (list $dnsName) 3650 $ca -}}
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
