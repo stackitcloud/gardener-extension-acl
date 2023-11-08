@@ -55,7 +55,7 @@ func AddToManager(ctx context.Context, mgr manager.Manager) error {
 // The opts.Reconciler is being set with a newly instantiated actuator.
 func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts *AddOptions) error {
 	return extension.Add(ctx, mgr, extension.AddArgs{
-		Actuator:          NewActuator(opts.ExtensionConfig),
+		Actuator:          NewActuator(mgr, opts.ExtensionConfig),
 		ControllerOptions: opts.ControllerOptions,
 		Name:              Type + Suffix,
 		FinalizerSuffix:   Type + Suffix,
