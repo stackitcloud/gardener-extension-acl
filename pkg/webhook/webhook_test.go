@@ -212,14 +212,8 @@ var _ = Describe("webhook unit test", func() {
 											},
 											{
 												"remote_ip": map[string]interface{}{
-													"address_prefix": "10.250.0.0",
+													"address_prefix": "100.250.0.0",
 													"prefix_len":     16,
-												},
-											},
-											{
-												"remote_ip": map[string]interface{}{
-													"address_prefix": "100.96.0.0",
-													"prefix_len":     11,
 												},
 											},
 											{
@@ -230,8 +224,14 @@ var _ = Describe("webhook unit test", func() {
 											},
 											{
 												"remote_ip": map[string]interface{}{
-													"address_prefix": "100.250.0.0",
+													"address_prefix": "10.250.0.0",
 													"prefix_len":     16,
+												},
+											},
+											{
+												"remote_ip": map[string]interface{}{
+													"address_prefix": "100.96.0.0",
+													"prefix_len":     11,
 												},
 											},
 										},
@@ -326,14 +326,8 @@ var _ = Describe("webhook unit test", func() {
 											},
 											{
 												"remote_ip": map[string]interface{}{
-													"address_prefix": "10.250.0.0",
+													"address_prefix": "100.250.0.0",
 													"prefix_len":     16,
-												},
-											},
-											{
-												"remote_ip": map[string]interface{}{
-													"address_prefix": "100.96.0.0",
-													"prefix_len":     11,
 												},
 											},
 											{
@@ -344,8 +338,14 @@ var _ = Describe("webhook unit test", func() {
 											},
 											{
 												"remote_ip": map[string]interface{}{
-													"address_prefix": "100.250.0.0",
+													"address_prefix": "10.250.0.0",
 													"prefix_len":     16,
+												},
+											},
+											{
+												"remote_ip": map[string]interface{}{
+													"address_prefix": "100.96.0.0",
+													"prefix_len":     11,
 												},
 											},
 											{

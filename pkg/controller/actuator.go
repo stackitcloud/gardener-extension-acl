@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	openstackv1alpha1 "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/v1alpha1"
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -39,6 +38,7 @@ import (
 	"github.com/stackitcloud/gardener-extension-acl/charts"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -66,13 +66,12 @@ const (
 )
 
 var (
-	ErrSpecAction             = errors.New("action must either be 'ALLOW' or 'DENY'")
-	ErrSpecRule               = errors.New("rule must be present")
-	ErrSpecType               = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
-	ErrSpecCIDR               = errors.New("CIDRs must not be empty")
-	ErrNoExtensionsFound      = errors.New("could not list any extensions")
-	ErrNoAdvertisedAddresses  = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
-	ErrProviderStatusRawIsNil = errors.New("providerStatus.Raw is nil, and can't be unmarshalled")
+	ErrSpecAction            = errors.New("action must either be 'ALLOW' or 'DENY'")
+	ErrSpecRule              = errors.New("rule must be present")
+	ErrSpecType              = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
+	ErrSpecCIDR              = errors.New("CIDRs must not be empty")
+	ErrNoExtensionsFound     = errors.New("could not list any extensions")
+	ErrNoAdvertisedAddresses = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
 )
 
 // NewActuator returns an actuator responsible for Extension resources.
@@ -98,9 +97,7 @@ type ExtensionSpec struct {
 
 // Reconcile the Extension resource.
 func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
-	namespace := ex.GetNamespace()
-
-	cluster, err := controller.GetCluster(ctx, a.client, namespace)
+	cluster, err := helper.GetClusterForExtension(ctx, a.client, ex)
 	if err != nil {
 		return err
 	}
@@ -112,16 +109,11 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		}
 	}
 
-	aclMappings, err := a.getAllShootsWithACLExtension(ctx)
-	if err != nil {
-		return err
-	}
-
 	if err := ValidateExtensionSpec(extSpec); err != nil {
 		return err
 	}
 
-	if err := a.updateEnvoyFilterHash(ctx, namespace, extSpec, false); err != nil {
+	if err := a.updateEnvoyFilterHash(ctx, ex.GetNamespace(), extSpec, false); err != nil {
 		return err
 	}
 
@@ -134,36 +126,42 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	for _, address := range cluster.Shoot.Status.AdvertisedAddresses {
 		hosts = append(hosts, strings.Split(address.URL, "//")[1])
 	}
+	var shootSpecificCIDRs []string
+	var alwaysAllowedCIDRs []string
 
-	alwaysAllowedCIDRs := []string{
-		*cluster.Shoot.Spec.Networking.Nodes,
-		cluster.Seed.Spec.Networks.Pods,
-		*cluster.Seed.Spec.Networks.Nodes,
-	}
+	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, helper.GetSeedSpecificAllowedCIDRs(cluster.Seed)...)
 
 	if len(a.extensionConfig.AdditionalAllowedCidrs) >= 1 {
 		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCidrs...)
 	}
 
-	infra := &extensionsv1alpha1.Infrastructure{}
-	namespacedName := types.NamespacedName{
-		Namespace: namespace,
-		Name:      cluster.Shoot.Name,
-	}
+	shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
 
-	if err := a.client.Get(ctx, namespacedName, infra); err != nil {
+	infra, err := helper.GetInfrastructureForExtension(ctx, a.client, ex, cluster.Shoot.Name)
+	if err != nil {
 		return err
 	}
 
-	if err := ConfigureProviderSpecificAllowedCIDRs(infra, &alwaysAllowedCIDRs); err != nil {
+	providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
+	if err != nil {
+		return err
+	}
+	shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
+
+	if err := a.createSeedResources(
+		ctx,
+		log,
+		ex.GetNamespace(),
+		extSpec,
+		cluster,
+		hosts,
+		shootSpecificCIDRs,
+		alwaysAllowedCIDRs,
+	); err != nil {
 		return err
 	}
 
-	if err := a.createSeedResources(ctx, log, namespace, extSpec, cluster, hosts, alwaysAllowedCIDRs); err != nil {
-		return err
-	}
-
-	if err := a.reconcileVPNEnvoyFilter(ctx, aclMappings, alwaysAllowedCIDRs); err != nil {
+	if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs); err != nil {
 		return err
 	}
 
@@ -251,9 +249,13 @@ func (a *actuator) InjectScheme(scheme *runtime.Scheme) error {
 
 func (a *actuator) reconcileVPNEnvoyFilter(
 	ctx context.Context,
-	aclMappings []envoyfilters.ACLMapping,
 	alwaysAllowedCIDRs []string,
 ) error {
+	aclMappings, err := a.getAllShootsWithACLExtension(ctx)
+	if err != nil {
+		return err
+	}
+
 	vpnEnvoyFilterSpec, err := a.envoyfilterService.BuildVPNEnvoyFilterSpecForHelmChart(
 		aclMappings, alwaysAllowedCIDRs,
 	)
@@ -293,12 +295,13 @@ func (a *actuator) createSeedResources(
 	spec *ExtensionSpec,
 	cluster *controller.Cluster,
 	hosts []string,
+	shootSpecificCIRDs []string,
 	alwaysAllowedCIDRs []string,
 ) error {
 	var err error
 
 	apiEnvoyFilterSpec, err := a.envoyfilterService.BuildAPIEnvoyFilterSpecForHelmChart(
-		spec.Rule, hosts, alwaysAllowedCIDRs,
+		spec.Rule, hosts, append(alwaysAllowedCIDRs, shootSpecificCIRDs...),
 	)
 	if err != nil {
 		return err
@@ -444,47 +447,37 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context) ([]envoyfil
 			}
 		}
 
+		cluster, err := controller.GetCluster(ctx, a.client, ex.GetNamespace())
+		if err != nil {
+			return nil, err
+		}
+
+		infra := &extensionsv1alpha1.Infrastructure{}
+		namespacedName := types.NamespacedName{
+			Namespace: ex.GetNamespace(),
+			Name:      cluster.Shoot.Name,
+		}
+
+		if err := a.client.Get(ctx, namespacedName, infra); err != nil {
+			return nil, err
+		}
+
+		var shootSpecificCIDRs []string
+
+		shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
+		providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
+		if err != nil {
+			return nil, err
+		}
+		shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
+
 		mappings = append(mappings, envoyfilters.ACLMapping{
-			ShootName: ex.Namespace,
-			Rule:      *extSpec.Rule,
+			ShootName:          ex.Namespace,
+			Rule:               *extSpec.Rule,
+			ShootSpecificCIDRs: shootSpecificCIDRs,
 		})
 	}
 	return mappings, nil
-}
-
-func ConfigureProviderSpecificAllowedCIDRs(
-	infra *extensionsv1alpha1.Infrastructure,
-	alwaysAllowedCIDRs *[]string,
-) error {
-	//nolint:gocritic // Will likely be extended with other infra types in the future
-	switch infra.Spec.Type {
-	case OpenstackTypeName:
-		// This would be our preferred solution:
-		//
-		// infraStatus, err := openstackhelper.InfrastructureStatusFromRaw(infra.Status.ProviderStatus)
-		//
-		// but decoding isn't possible. We suspect it's because in the function
-		// infraStatus is assigned like this:
-		//
-		// infraStatus := &InfrasttuctureStatus{}
-		//
-		// instead of doing it without a pointer and then referencing it in the
-		// unmarshal step, like we now have to do manually here:
-		if infra.Status.ProviderStatus == nil || infra.Status.ProviderStatus.Raw == nil {
-			return ErrProviderStatusRawIsNil
-		}
-
-		infraStatus := openstackv1alpha1.InfrastructureStatus{}
-		err := json.Unmarshal(infra.Status.ProviderStatus.Raw, &infraStatus)
-		if err != nil {
-			return err
-		}
-
-		router32CIDR := infraStatus.Networks.Router.IP + "/32"
-
-		*alwaysAllowedCIDRs = append(*alwaysAllowedCIDRs, router32CIDR)
-	}
-	return nil
 }
 
 // HashData returns a 16 char hash for the given object.

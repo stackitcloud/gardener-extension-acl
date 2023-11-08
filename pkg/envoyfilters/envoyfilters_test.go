@@ -66,7 +66,7 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 			It("Should create a filter spec matching the expected one, including the always allowed CIDRs", func() {
 				rule := createRule("ALLOW", "remote_ip", "0.0.0.0/0")
 
-				result, err := e.CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs)
+				result, err := e.CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				checkIfMapEqualsYAML(result, "singleFiltersAllowEntry.yaml")

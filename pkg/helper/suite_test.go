@@ -1,4 +1,4 @@
-package envoyfilters
+package helper
 
 import (
 	"testing"
@@ -10,5 +10,5 @@ import (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "EnvoyFilters Test Suite")
+	RunSpecs(t, "helper Test Suite")
 }
