@@ -305,7 +305,7 @@ func (a *actuator) createSeedResources(
 	}
 
 	cfg := map[string]interface{}{
-		"shootName":          cluster.Shoot.Name,
+		"shootName":          cluster.Shoot.Status.TechnicalID,
 		"targetNamespace":    IngressNamespace,
 		"apiEnvoyFilterSpec": apiEnvoyFilterSpec,
 	}
