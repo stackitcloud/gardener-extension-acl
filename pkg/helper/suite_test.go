@@ -10,13 +10,5 @@ import (
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "EnvoyFilters Test Suite")
+	RunSpecs(t, "helper Test Suite")
 }
-
-var _ = BeforeSuite(func() {
-
-})
-
-var _ = AfterSuite(func() {
-
-})

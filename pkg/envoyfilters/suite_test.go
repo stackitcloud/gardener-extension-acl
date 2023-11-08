@@ -12,11 +12,3 @@ func TestAPIs(t *testing.T) {
 
 	RunSpecs(t, "EnvoyFilters Test Suite")
 }
-
-var _ = BeforeSuite(func() {
-
-})
-
-var _ = AfterSuite(func() {
-
-})
