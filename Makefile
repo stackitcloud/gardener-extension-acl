@@ -52,7 +52,7 @@ images: export LD_FLAGS := $(LD_FLAGS)
 
 .PHONY: images
 images: $(KO)
-	KO_DOCKER_REPO=$(REPO) $(KO) build --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-acl
+	KO_DOCKER_REPO=$(REPO) $(KO) build --image-label org.opencontainers.image.source="https://github.com/stackitcloud/gardener-extension-acl" --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-acl
 
 #####################################################################
 # Rules for verification, formatting, linting, testing and cleaning #
