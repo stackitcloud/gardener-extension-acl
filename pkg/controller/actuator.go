@@ -22,6 +22,7 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
 	"strings"
 	"time"
@@ -127,7 +128,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	istioNamespace, istioLabel, err := a.findIstioNamespaceForExtension(ctx, ex)
+	istioNamespace, istioLabels, err := a.findIstioNamespaceForExtension(ctx, ex)
 	if err != nil {
 		return err
 	}
@@ -184,18 +185,18 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		shootSpecificCIDRs,
 		alwaysAllowedCIDRs,
 		istioNamespace,
-		istioLabel,
+		istioLabels,
 	); err != nil {
 		return err
 	}
 
-	if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, istioNamespace, istioLabel); err != nil {
+	if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, istioNamespace, istioLabels); err != nil {
 		return err
 	}
 
 	if extState.IstioNamespace != nil && *extState.IstioNamespace != istioNamespace {
 		// we need to cleanup the old vpn object if the istioNamespace changed
-		if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, *extState.IstioNamespace, ""); err != nil {
+		if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, *extState.IstioNamespace, nil); err != nil {
 			return err
 		}
 	}
@@ -274,9 +275,9 @@ func (a *actuator) reconcileVPNEnvoyFilter(
 	ctx context.Context,
 	alwaysAllowedCIDRs []string,
 	istioNamespace string,
-	istioLabel string,
+	istioLabels map[string]string,
 ) error {
-	aclMappings, err := a.getAllShootsWithACLExtension(ctx, istioNamespace)
+	aclMappings, istioLabelsFromExt, err := a.getAllShootsWithACLExtension(ctx, istioNamespace)
 	if err != nil {
 		return err
 	}
@@ -297,9 +298,12 @@ func (a *actuator) reconcileVPNEnvoyFilter(
 		err = a.client.Delete(ctx, envoyFilter)
 		return client.IgnoreNotFound(err)
 	}
+	if istioLabels == nil {
+		istioLabels = istioLabelsFromExt
+	}
 
 	vpnEnvoyFilterSpec, err := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
-		aclMappings, alwaysAllowedCIDRs, istioLabel,
+		aclMappings, alwaysAllowedCIDRs, istioLabels,
 	)
 	if err != nil {
 		return err
@@ -329,12 +333,12 @@ func (a *actuator) createSeedResources(
 	shootSpecificCIRDs []string,
 	alwaysAllowedCIDRs []string,
 	istioNamespace string,
-	istioLabel string,
+	istioLabels map[string]string,
 ) error {
 	var err error
 
 	apiEnvoyFilterSpec, err := envoyfilters.BuildAPIEnvoyFilterSpecForHelmChart(
-		spec.Rule, hosts, append(alwaysAllowedCIDRs, shootSpecificCIRDs...), istioLabel,
+		spec.Rule, hosts, append(alwaysAllowedCIDRs, shootSpecificCIRDs...), istioLabels,
 	)
 	if err != nil {
 		return err
@@ -473,18 +477,20 @@ func (a *actuator) updateEnvoyFilterHash(
 
 // getAllShootsWithACLExtension returns a list of all shoots that have the ACL
 // extension enabled, together with their rule.
-func (a *actuator) getAllShootsWithACLExtension(ctx context.Context, istioNamespace string) ([]envoyfilters.ACLMapping, error) {
+func (a *actuator) getAllShootsWithACLExtension(ctx context.Context, istioNamespace string) ([]envoyfilters.ACLMapping, map[string]string, error) {
 	extensions := &extensionsv1alpha1.ExtensionList{}
 	err := a.client.List(ctx, extensions)
 	if err != client.IgnoreNotFound(err) {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if len(extensions.Items) < 1 {
-		return nil, ErrNoExtensionsFound
+		return nil, nil, ErrNoExtensionsFound
 	}
 
 	mappings := []envoyfilters.ACLMapping{}
+
+	var istioLables map[string]string
 
 	for i := range extensions.Items {
 		ex := &extensions.Items[i]
@@ -492,9 +498,11 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context, istioNamesp
 			continue
 		}
 
-		shootIstioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
+		var shootIstioNamespace string
+
+		shootIstioNamespace, istioLables, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if istioNamespace != shootIstioNamespace {
 			continue
@@ -503,13 +511,13 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context, istioNamesp
 		extSpec := &ExtensionSpec{}
 		if ex.Spec.ProviderConfig != nil && ex.Spec.ProviderConfig.Raw != nil {
 			if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 
 		cluster, err := controller.GetCluster(ctx, a.client, ex.GetNamespace())
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		infra := &extensionsv1alpha1.Infrastructure{}
@@ -519,7 +527,7 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context, istioNamesp
 		}
 
 		if err := a.client.Get(ctx, namespacedName, infra); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		var shootSpecificCIDRs []string
@@ -527,7 +535,7 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context, istioNamesp
 		shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
 		providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
 
@@ -537,7 +545,7 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context, istioNamesp
 			ShootSpecificCIDRs: shootSpecificCIDRs,
 		})
 	}
-	return mappings, nil
+	return mappings, istioLables, nil
 }
 
 // HashData returns a 16 char hash for the given object.
@@ -553,7 +561,7 @@ func HashData(data interface{}) (string, error) {
 }
 
 // TODO: refactor
-func (a *actuator) findIstioNamespaceForExtension(ctx context.Context, ex *extensionsv1alpha1.Extension) (string, string, error) {
+func (a *actuator) findIstioNamespaceForExtension(ctx context.Context, ex *extensionsv1alpha1.Extension) (string, map[string]string, error) {
 	gw := istionetworkv1beta1.Gateway{}
 
 	err := a.client.Get(ctx, client.ObjectKey{
@@ -561,21 +569,24 @@ func (a *actuator) findIstioNamespaceForExtension(ctx context.Context, ex *exten
 		Name:      "kube-apiserver",
 	}, &gw)
 	if err != nil {
-		return "", "", err
+		return "", nil, err
 	}
-	labelsSelector := client.MatchingLabels{
-		"istio": gw.Spec.Selector["istio"],
-	}
+
+	namespaceSelector := maps.Clone(gw.Spec.Selector)
+
+	delete(namespaceSelector, "app")
+
+	labelsSelector := client.MatchingLabels(namespaceSelector)
 
 	nsList := v1.NamespaceList{}
 	err = a.client.List(ctx, &nsList, labelsSelector)
 	if err != nil {
-		return "", "", err
+		return "", nil, err
 	}
 
 	if len(nsList.Items) != 1 {
-		return "", "", errors.New("no istio namespace could be selected")
+		return "", nil, errors.New("no istio namespace could be selected")
 	}
 
-	return nsList.Items[0].Name, gw.Spec.Selector["istio"], nil
+	return nsList.Items[0].Name, gw.Spec.Selector, nil
 }
