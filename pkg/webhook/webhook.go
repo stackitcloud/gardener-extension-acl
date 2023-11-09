@@ -33,14 +33,14 @@ type Config struct {
 type EnvoyFilterWebhook struct {
 	Client             client.Client
 	EnvoyFilterService envoyfilters.EnvoyFilterService
-	decoder            *admission.Decoder
+	Decoder            *admission.Decoder
 	WebhookConfig      Config
 }
 
 //nolint:gocritic // the signature is forced by kubebuilder
 func (e *EnvoyFilterWebhook) Handle(ctx context.Context, req admission.Request) admission.Response {
 	filter := &istionetworkingClientGo.EnvoyFilter{}
-	if err := e.decoder.Decode(req, filter); err != nil {
+	if err := e.Decoder.Decode(req, filter); err != nil {
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
@@ -137,9 +137,4 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 			PatchType: &pt,
 		},
 	}
-}
-
-func (e *EnvoyFilterWebhook) InjectDecoder(d *admission.Decoder) error {
-	e.decoder = d
-	return nil
 }

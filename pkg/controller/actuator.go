@@ -48,6 +48,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 const (
@@ -75,10 +76,13 @@ var (
 )
 
 // NewActuator returns an actuator responsible for Extension resources.
-func NewActuator(cfg config.Config) extension.Actuator {
+func NewActuator(mgr manager.Manager, cfg config.Config) extension.Actuator {
 	return &actuator{
 		extensionConfig:    cfg,
 		envoyfilterService: envoyfilters.EnvoyFilterService{},
+		client:             mgr.GetClient(),
+		config:             mgr.GetConfig(),
+		decoder:            serializer.NewCodecFactory(mgr.GetScheme(), serializer.EnableStrict).UniversalDecoder(),
 	}
 }
 
@@ -227,24 +231,6 @@ func (a *actuator) Restore(ctx context.Context, log logr.Logger, ex *extensionsv
 // Migrate the Extension resource.
 func (a *actuator) Migrate(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
 	return a.Delete(ctx, log, ex)
-}
-
-// InjectConfig injects the rest config to this actuator.
-func (a *actuator) InjectConfig(cfg *rest.Config) error {
-	a.config = cfg
-	return nil
-}
-
-// InjectClient injects the controller runtime client into the reconciler.
-func (a *actuator) InjectClient(c client.Client) error {
-	a.client = c
-	return nil
-}
-
-// InjectScheme injects the given scheme into the reconciler.
-func (a *actuator) InjectScheme(scheme *runtime.Scheme) error {
-	a.decoder = serializer.NewCodecFactory(scheme, serializer.EnableStrict).UniversalDecoder()
-	return nil
 }
 
 func (a *actuator) reconcileVPNEnvoyFilter(

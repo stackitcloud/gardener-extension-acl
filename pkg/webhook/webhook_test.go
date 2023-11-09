@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 )
@@ -380,8 +381,11 @@ var _ = Describe("webhook unit test", func() {
 })
 
 func getNewWebhook() *EnvoyFilterWebhook {
+	decoder, err := admission.NewDecoder(clientScheme)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	return &EnvoyFilterWebhook{
 		Client:             k8sClient,
+		Decoder:            decoder,
 		EnvoyFilterService: envoyfilters.EnvoyFilterService{},
 	}
 }
