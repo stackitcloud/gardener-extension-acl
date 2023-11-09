@@ -3,9 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
+
 	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
 	"github.com/gardener/gardener/extensions/pkg/webhook/certificates"
-	webhookcmd "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
+	extensionscmdwebhook "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	"github.com/spf13/pflag"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -20,13 +22,13 @@ import (
 type AddToManagerOptions struct {
 	extensionName string
 
-	Server webhookcmd.ServerOptions
-	Switch webhookcmd.SwitchOptions
+	Server extensionscmdwebhook.ServerOptions
+	Switch extensionscmdwebhook.SwitchOptions
 }
 
 // NewAddToManagerOptions creates new AddToManagerOptions with the given server name, server, and switch options.
 // It is supposed to be used for webhooks which should be automatically registered in the cluster via a MutatingWebhookConfiguration.
-func NewAddToManagerOptions(extensionName string, serverOpts *webhookcmd.ServerOptions, switchOpts *webhookcmd.SwitchOptions) *AddToManagerOptions {
+func NewAddToManagerOptions(extensionName string, serverOpts *extensionscmdwebhook.ServerOptions, switchOpts *extensionscmdwebhook.SwitchOptions) *AddToManagerOptions {
 	return &AddToManagerOptions{
 		extensionName: extensionName,
 		Server:        *serverOpts,
@@ -63,8 +65,8 @@ func (c *AddToManagerOptions) Completed() *AddToManagerConfig {
 type AddToManagerConfig struct {
 	extensionName string
 
-	Server webhookcmd.ServerConfig
-	Switch webhookcmd.SwitchConfig
+	Server extensionscmdwebhook.ServerConfig
+	Switch extensionscmdwebhook.SwitchConfig
 	Clock  clock.Clock
 }
 
@@ -89,9 +91,9 @@ func (c *AddToManagerConfig) AddToManager(ctx context.Context, mgr manager.Manag
 
 	webhookConfig := BuildWebhookConfig(
 		extensionswebhook.BuildClientConfigFor(
-			"/mutate", //TODO
+			webhook.WebhookPath,
 			c.Server.Namespace,
-			"acl",
+			webhook.ExtensionName,
 			servicePort,
 			c.Server.Mode,
 			c.Server.URL,
@@ -175,10 +177,11 @@ func (r runOnceWithLeaderElection) Start(ctx context.Context) error {
 	return r(ctx)
 }
 
+// BuildWebhookConfig returns MutatingWebhookConfiguration for WebhookClientConfig
 func BuildWebhookConfig(clientConfig admissionregistrationv1.WebhookClientConfig) *admissionregistrationv1.MutatingWebhookConfiguration {
 	return &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "acl", //TODO
+			Name: webhook.ExtensionName,
 		},
 		Webhooks: []admissionregistrationv1.MutatingWebhook{
 			{
@@ -191,7 +194,7 @@ func BuildWebhookConfig(clientConfig admissionregistrationv1.WebhookClientConfig
 							admissionregistrationv1.Update,
 						},
 						Rule: admissionregistrationv1.Rule{
-							APIGroups:   []string{"networking.istio.io"}, //TODO
+							APIGroups:   []string{"networking.istio.io"},
 							APIVersions: []string{"v1alpha3"},
 							Resources:   []string{"envoyfilters"},
 						},
@@ -204,5 +207,4 @@ func BuildWebhookConfig(clientConfig admissionregistrationv1.WebhookClientConfig
 			},
 		},
 	}
-
 }

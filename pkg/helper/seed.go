@@ -4,6 +4,7 @@ import (
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 )
 
+// GetSeedSpecificAllowedCIDRs returns the node and pod CIDRs from the seed
 func GetSeedSpecificAllowedCIDRs(seed *v1beta1.Seed) []string {
 	cidrs := make([]string, 0)
 	if seed.Spec.Networks.Nodes != nil {

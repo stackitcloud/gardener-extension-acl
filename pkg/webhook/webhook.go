@@ -7,23 +7,27 @@ import (
 	"strings"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 	"github.com/tidwall/gjson"
 	"gomodules.xyz/jsonpatch/v2"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
-	v1 "k8s.io/api/admission/v1"
+	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 )
 
 const (
-	ShootFilterPrefix             = "shoot--"
-	ExtensionName                 = "acl"
-	AllowedReasonNoPatchNecessary = "No patch necessary"
+	// ShootFilterPrefix is prefix from shoot technicalID
+	ShootFilterPrefix = "shoot--"
+	// ExtensionName contains the ACl extension name.
+	ExtensionName = "acl"
 )
+
+const allowedReasonNoPatchNecessary = "No patch necessary"
 
 type EnvoyFilterWebhook struct {
 	Client                 client.Client
@@ -49,7 +53,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 ) admission.Response {
 	// filter out envoyfilters that are not managed by this webhook
 	if !strings.HasPrefix(filter.Name, ShootFilterPrefix) {
-		return admission.Allowed(AllowedReasonNoPatchNecessary)
+		return admission.Allowed(allowedReasonNoPatchNecessary)
 	}
 
 	aclExtension := &extensionsv1alpha1.Extension{}
@@ -118,7 +122,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 	// make sure the original filter is the last
 	filters = append(filters, originalFilterMap)
 
-	pt := v1.PatchTypeJSONPatch
+	pt := admissionv1.PatchTypeJSONPatch
 	return admission.Response{
 		Patches: []jsonpatch.Operation{
 			{
@@ -127,7 +131,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 				Value:     filters,
 			},
 		},
-		AdmissionResponse: v1.AdmissionResponse{
+		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed:   true,
 			PatchType: &pt,
 		},

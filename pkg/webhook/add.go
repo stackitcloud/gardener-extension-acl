@@ -2,15 +2,18 @@ package webhook
 
 import (
 	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 )
 
 const (
 	// WebhookName is the name of the webhook acl ACL extension.
 	WebhookName = "acl-webhook"
+	// WebhookPath is the path where the webhook listen to.
+	WebhookPath = "/mutate"
 )
 
 var (
@@ -32,7 +35,7 @@ func AddToManagerWithOptions(
 ) error {
 	logger.Info("Adding webhook to manager")
 
-	mgr.GetWebhookServer().Register("/mutate", &webhook.Admission{Handler: &EnvoyFilterWebhook{
+	mgr.GetWebhookServer().Register(WebhookPath, &webhook.Admission{Handler: &EnvoyFilterWebhook{
 		Client:                 mgr.GetClient(),
 		EnvoyFilterService:     envoyfilters.EnvoyFilterService{},
 		AdditionalAllowedCIDRs: options.AllowedCIDRs,

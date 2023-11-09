@@ -16,74 +16,74 @@
 package app
 
 import (
-	webhookcmd "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
 	"os"
 
-	extensioncmd "github.com/stackitcloud/gardener-extension-acl/pkg/cmd"
-
-	controllercmd "github.com/gardener/gardener/extensions/pkg/controller/cmd"
+	extensionscmdcontroller "github.com/gardener/gardener/extensions/pkg/controller/cmd"
+	extensionscmdwebhook "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
+
+	extensioncmd "github.com/stackitcloud/gardener-extension-acl/pkg/cmd"
 )
 
 // ExtensionName is the name of the extension.
-const ExtensionName = "acl-extension"
+const ExtensionName = "acl"
 
 // Options holds configuration passed to the service controller.
 type Options struct {
-	generalOptions     *controllercmd.GeneralOptions
+	generalOptions     *extensionscmdcontroller.GeneralOptions
 	extensionOptions   *extensioncmd.ExtensionOptions
-	restOptions        *controllercmd.RESTOptions
-	managerOptions     *controllercmd.ManagerOptions
-	controllerOptions  *controllercmd.ControllerOptions
-	healthOptions      *controllercmd.ControllerOptions
-	controllerSwitches *controllercmd.SwitchOptions
+	restOptions        *extensionscmdcontroller.RESTOptions
+	managerOptions     *extensionscmdcontroller.ManagerOptions
+	controllerOptions  *extensionscmdcontroller.ControllerOptions
+	healthOptions      *extensionscmdcontroller.ControllerOptions
+	controllerSwitches *extensionscmdcontroller.SwitchOptions
 	webhookOptions     *extensioncmd.AddToManagerOptions
-	reconcileOptions   *controllercmd.ReconcilerOptions
-	optionAggregator   controllercmd.OptionAggregator
+	reconcileOptions   *extensionscmdcontroller.ReconcilerOptions
+	optionAggregator   extensionscmdcontroller.OptionAggregator
 }
 
 // NewOptions creates a new Options instance.
 func NewOptions() *Options {
 	options := &Options{
-		generalOptions: &controllercmd.GeneralOptions{},
+		generalOptions: &extensionscmdcontroller.GeneralOptions{},
 		extensionOptions: &extensioncmd.ExtensionOptions{
 			AdditionalAllowedCIDRs: nil,
 			ChartPath:              "charts",
 		},
-		restOptions: &controllercmd.RESTOptions{},
-		managerOptions: &controllercmd.ManagerOptions{
+		restOptions: &extensionscmdcontroller.RESTOptions{},
+		managerOptions: &extensionscmdcontroller.ManagerOptions{
 			// These are default values.
 			LeaderElection:             true,
-			LeaderElectionID:           controllercmd.LeaderElectionNameID(ExtensionName),
+			LeaderElectionID:           extensionscmdcontroller.LeaderElectionNameID(ExtensionName),
 			LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
 			LeaderElectionNamespace:    os.Getenv("LEADER_ELECTION_NAMESPACE"),
 		},
-		controllerOptions: &controllercmd.ControllerOptions{
+		controllerOptions: &extensionscmdcontroller.ControllerOptions{
 			// This is a default value.
 			MaxConcurrentReconciles: 5,
 		},
-		healthOptions: &controllercmd.ControllerOptions{
+		healthOptions: &extensionscmdcontroller.ControllerOptions{
 			// This is a default value.
 			MaxConcurrentReconciles: 5,
 		},
 		controllerSwitches: extensioncmd.ControllerSwitches(),
 		webhookOptions: extensioncmd.NewAddToManagerOptions(
-			"acl", //TODO
-			&webhookcmd.ServerOptions{
+			ExtensionName,
+			&extensionscmdwebhook.ServerOptions{
 				Namespace: os.Getenv("WEBHOOK_CONFIG_NAMESPACE"),
 			},
 			extensioncmd.WebhookSwitchOptions(),
 		),
-		reconcileOptions: &controllercmd.ReconcilerOptions{},
+		reconcileOptions: &extensionscmdcontroller.ReconcilerOptions{},
 	}
 
-	options.optionAggregator = controllercmd.NewOptionAggregator(
+	options.optionAggregator = extensionscmdcontroller.NewOptionAggregator(
 		options.generalOptions,
 		options.restOptions,
 		options.managerOptions,
 		options.controllerOptions,
 		options.extensionOptions,
-		controllercmd.PrefixOption("healthcheck-", options.healthOptions),
+		extensionscmdcontroller.PrefixOption("healthcheck-", options.healthOptions),
 		options.controllerSwitches,
 		options.webhookOptions,
 		options.reconcileOptions,

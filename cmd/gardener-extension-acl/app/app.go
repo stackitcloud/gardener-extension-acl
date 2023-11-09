@@ -18,22 +18,19 @@ package app
 import (
 	"context"
 	"fmt"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 
+	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
+	"github.com/gardener/gardener/extensions/pkg/util"
 	"github.com/spf13/cobra"
-
+	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	corev1 "k8s.io/api/core/v1"
 	componentbaseconfig "k8s.io/component-base/config"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
-	"github.com/gardener/gardener/extensions/pkg/util"
-
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
-
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 )
 
 // NewControllerManagerCommand creates a new command that is used to start the service controller.

@@ -2,18 +2,16 @@ package controller
 
 import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
+	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 )
 
 var _ = Describe("actuator unit test", func() {

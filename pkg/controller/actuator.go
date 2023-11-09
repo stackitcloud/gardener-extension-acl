@@ -35,11 +35,6 @@ import (
 	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	"github.com/stackitcloud/gardener-extension-acl/charts"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -49,23 +44,33 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"github.com/stackitcloud/gardener-extension-acl/charts"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 )
 
 const (
 	// ActuatorName is only used for the logger instance
-	ActuatorName       = "acl-actuator"
-	ResourceNameSeed   = "acl-seed"
-	ChartNameSeed      = "seed"
-	IngressNamespace   = "istio-ingress"
+	ActuatorName = "acl-actuator"
+	// ResourceNameSeed is name of the managedResource object
+	ResourceNameSeed = "acl-seed"
+	// ChartNameSeed name of the helm chart
+	ChartNameSeed = "seed"
+	// IngressNamespace is the namespace of the istio
+	IngressNamespace = "istio-ingress"
+	// HashAnnotationName name of annotation for triggering the envoyfilter webhook
 	HashAnnotationName = "acl-ext-rule-hash"
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
 	// TODO implement
-	ImageName         = "image-name"
-	deletionTimeout   = 2 * time.Minute
-	OpenstackTypeName = "openstack"
+	ImageName       = "image-name"
+	deletionTimeout = 2 * time.Minute
 )
 
+// Error variables for controller pkg
 var (
 	ErrSpecAction            = errors.New("action must either be 'ALLOW' or 'DENY'")
 	ErrSpecRule              = errors.New("rule must be present")
@@ -94,6 +99,7 @@ type actuator struct {
 	envoyfilterService envoyfilters.EnvoyFilterService
 }
 
+// ExtensionSpec is the content of the ProviderConfig of the acl extension object
 type ExtensionSpec struct {
 	// Rule contain the user-defined Access Control Rule
 	Rule *envoyfilters.ACLRule `json:"rule"`

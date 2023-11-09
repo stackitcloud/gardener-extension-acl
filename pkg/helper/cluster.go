@@ -9,10 +9,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// Error variables for helper pkg
 var (
 	ErrClusterObjectNotComplete = errors.New("cluster.Seed or cluster.Shoot is nil")
 )
 
+// GetClusterForExtension returns Cluster object for an extension object
 func GetClusterForExtension(
 	ctx context.Context,
 	c client.Reader,

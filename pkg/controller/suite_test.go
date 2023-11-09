@@ -7,22 +7,20 @@ import (
 	"testing"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/testr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-
-	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	//+kubebuilder:scaffold:imports
 )
 
 var cfg *rest.Config

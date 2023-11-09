@@ -18,23 +18,22 @@ package healthcheck
 import (
 	"context"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/sets"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-
-	healthcheckconfig "github.com/gardener/gardener/extensions/pkg/apis/config"
+	extensionsconfig "github.com/gardener/gardener/extensions/pkg/apis/config"
 	"github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
 	"github.com/gardener/gardener/extensions/pkg/controller/healthcheck/general"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	controller "github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 )
 
 var (
 	DefaultAddOptions = healthcheck.DefaultAddArgs{
-		HealthCheckConfig: healthcheckconfig.HealthCheckConfig{SyncPeriod: metav1.Duration{}},
+		HealthCheckConfig: extensionsconfig.HealthCheckConfig{SyncPeriod: metav1.Duration{}},
 	}
 )
 

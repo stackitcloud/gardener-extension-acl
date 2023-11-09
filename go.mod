@@ -28,6 +28,7 @@ require (
 	k8s.io/component-base v0.26.10
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	sigs.k8s.io/controller-runtime v0.14.6
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221212190805-d4f1e822ca11
 )
 
 require (
@@ -123,7 +124,6 @@ require (
 	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
 	k8s.io/kubelet v0.26.3 // indirect
 	k8s.io/metrics v0.26.3 // indirect
-	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20221212190805-d4f1e822ca11 // indirect
 	sigs.k8s.io/controller-tools v0.11.3 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect

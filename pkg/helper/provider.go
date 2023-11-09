@@ -9,11 +9,13 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 )
 
+// Error variables for helper pkg
 var (
 	ErrProviderStatusRawIsNil  = errors.New("providerStatus.Raw is nil, and can't be unmarshalled")
 	ErrWrongInfrastructureType = errors.New("infrastructure type is not correct")
 )
 
+// GetProviderSpecificAllowedCIDRs returns the allowed CIDRs for the Infrastructure object.
 func GetProviderSpecificAllowedCIDRs(
 	infra *extensionsv1alpha1.Infrastructure,
 ) ([]string, error) {

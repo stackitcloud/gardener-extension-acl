@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// Error variables for envoyfilters pkg
 var (
 	ErrNoHostsGiven = errors.New("no hosts were given, at least one host is needed")
 )

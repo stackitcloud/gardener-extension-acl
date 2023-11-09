@@ -23,7 +23,7 @@ SHELL=/usr/bin/env bash -o pipefail
 
 TOOLS_DIR := hack/tools
 -include $(HACK_DIRECTORY)/tools.mk
-#include hack/tools.mk
+include hack/tools.mk
 
 .PHONY: start
 start:
@@ -52,7 +52,7 @@ images: export LD_FLAGS := $(LD_FLAGS)
 
 .PHONY: images
 images: $(KO)
-	KO_DOCKER_REPO=$(REPO) $(KO) build --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-shoot-flux
+	KO_DOCKER_REPO=$(REPO) $(KO) build --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-acl
 
 #####################################################################
 # Rules for verification, formatting, linting, testing and cleaning #
@@ -90,7 +90,7 @@ format: $(GOIMPORTS) $(GOIMPORTSREVISER)
 	@bash $(HACK_DIRECTORY)/format.sh ./cmd ./pkg
 
 .PHONY: test
-test: $(REPORT_COLLECTOR)
+test: $(REPORT_COLLECTOR) $(SETUP_ENVTEST)
 	@./hack/test.sh ./cmd/... ./pkg/...
 
 .PHONY: test-cov
@@ -116,7 +116,7 @@ extension-%: export SKAFFOLD_BUILD_CONCURRENCY = 0
 extension-%: export SKAFFOLD_DEFAULT_REPO = localhost:5001
 extension-%: export SKAFFOLD_PUSH = true
 # use static label for skaffold to prevent rolling all gardener components on every `skaffold` invocation
-extension-%: export SKAFFOLD_LABEL = skaffold.dev/run-id=shoot-flux
+extension-%: export SKAFFOLD_LABEL = skaffold.dev/run-id=acl
 
 extension-up: $(SKAFFOLD)
 	$(SKAFFOLD) run
