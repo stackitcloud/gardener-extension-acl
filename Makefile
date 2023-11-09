@@ -82,7 +82,7 @@ check: $(GO_ADD_LICENSE) $(GOIMPORTS) $(GOLANGCI_LINT) $(HELM) $(YQ)
 
 .PHONY: generate
 generate:
-	@bash $(HACK_DIRECTORY)/generate-controller-registration.sh acl charts/gardener-extension latest deploy/extension/base/controller-registration.yaml Extension:acl
+	@bash $(HACK_DIRECTORY)/generate-controller-registration.sh acl charts/gardener-extension-acl latest deploy/extension/base/controller-registration.yaml Extension:acl
 	@bash $(HACK_DIRECTORY)/generate.sh ./cmd/... ./pkg/...
 
 .PHONY: format

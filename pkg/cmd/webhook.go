@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 
 	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
 	"github.com/gardener/gardener/extensions/pkg/webhook/certificates"
@@ -16,6 +15,8 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 )
 
 // AddToManagerOptions are options to create an `AddToManager` function from ServerOptions and SwitchOptions.

@@ -1,6 +1,8 @@
 image: ghcr.io/stackitcloud/gardener-extension-acl:latest
 imagePullPolicy: IfNotPresent
 
+replicaCount: 2
+
 leaderElection:
   resourceLock: leases
 
@@ -9,15 +11,15 @@ resources:
     cpu: "50m"
     memory: "64Mi"
   limits:
-    cpu: "50m"
+    cpu: "100m"
     memory: "128Mi"
 
 vpa:
   enabled: true
   resourcePolicy:
     minAllowed:
-      cpu: 100m
-      memory: 128Mi
+      cpu: 50m
+      memory: 64Mi
   updatePolicy:
     updateMode: "Auto"
 

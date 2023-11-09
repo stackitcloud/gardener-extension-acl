@@ -1,11 +1,12 @@
 {{- if .Values.imageVectorOverwrite }}
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ template "gardener-extension.extensionName" . }}-imagevector-overwrite
+  name: {{ include "name" . }}-imagevector-overwrite
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "gardener-extension.extensionLabels" . | nindent 4 }}
+{{ include "labels" . | indent 4 }}}
 data:
   images_overwrite.yaml: |
 {{ .Values.imageVectorOverwrite | indent 4 }}
