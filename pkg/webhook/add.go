@@ -5,6 +5,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 )
@@ -35,10 +36,15 @@ func AddToManagerWithOptions(
 ) error {
 	logger.Info("Adding webhook to manager")
 
+	decoder, err := admission.NewDecoder(mgr.GetScheme())
+	if err != nil {
+		return err
+	}
 	mgr.GetWebhookServer().Register(WebhookPath, &webhook.Admission{Handler: &EnvoyFilterWebhook{
 		Client:                 mgr.GetClient(),
 		EnvoyFilterService:     envoyfilters.EnvoyFilterService{},
 		AdditionalAllowedCIDRs: options.AllowedCIDRs,
+		Decoder:                decoder,
 	}})
 
 	return nil
