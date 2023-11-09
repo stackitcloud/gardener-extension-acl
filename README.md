@@ -110,27 +110,19 @@ in the extension resource itself (one per health check).
 Extensions are installed on a Gardener cluster by deploying a
 `ControllerRegistration` and a `ControllerDeployment` object to the garden
 cluster. In this repository, you find an example for both of these resources in
-the `example/controller-registration.yaml` file. 
+the `deploy/extension/base/controller-registration.yaml` file. 
 
 The `ProviderConfig.chart` field contains the entire Helm chart for your
 extension as a gzipped and then base64-encoded string. After you altered this
-Helm chart in the `charts/gardener-extension` directory, run `earthly +generate-deploy` to
-re-create this value. The `providerConfig.values.image.tag` field is populated
-with the contents of the `VERSION` file in the repository root.
-
-**NOTE**: The contents of the `VERSION` file need to be a valid SemVer. So,
-during development, you need to first run `earthly +generate-deploy` and then manually
-replace the `providerConfig.values.image.tag` field with the current ID of the
-feature branch concourse build.
+Helm chart in the `charts/gardener-extension-acl` directory, run `make generate` to
+re-create this value. 
 
 ## Tests
-
-//TODO change earthly to makefile
 
 To run the test suite, execute:
 
 ```bash
-earthly +test
+make test
 ```
 
 Place all needed Gardener CRDs in the `upstream-crds` directory, they get
@@ -139,37 +131,39 @@ installed automatically in the envtest cluster.
 See the [actuator_test.go](pkg/controller/actuator_test.go) for a minimal test
 case example.
 
-## Webhook Development
+## Local deployment
 
-//TODO change to new dev setup with makefile
+Set up a garden [local-setup](https://github.com/gardener/gardener/blob/master/docs/deployment/getting_started_locally.md).
+
+To install the extension with 2 ways:
+
+`make extension-up` this will install the acl-extension into the local gardener environment.
+
+`make extension-dev` this will also install the acl-extension into the local gardener environment but it will rebuild and redeploy if you press any key in the terminal.
 
 
-The `controller-runtime` package always creates a Webhook Server that relies on
-TLS, and therefore requires a certificate. As this complicates local
-development, you can use the following approach to tunnel the server running
-locally with a self-signed certificate through `localtunnel`, exposing it via
-public TLS which the Kubernetes API server accepts.
+### Local debugging
 
-Generate selfsigned *certificates*:
+This can only be done with the gardener [local-setup](https://github.com/gardener/gardener/blob/master/docs/deployment/getting_started_locally.md).
 
+After your local gardener is ready you can start the controller
+
+Install extension
 ```bash
-bash hack/gen-certs.sh
+make extension-up
 ```
 
-Start the local webhook server with the certs configured:
-
+Disable reconcile of managed resource
 ```bash
-go run cmd/webhook/main.go --cert-dir certs --key-name server.key --cert-name server.crt
+kubectl annotate managedresource acl-XXXXXX resources.gardener.cloud/ignore="true"
 ```
 
-Create a tunnel that exposes your local server:
-
+Scale down acl-extension:
 ```bash
-npx localtunnel --port 9443 --local-https --local-ca certs/ca.crt --local-cert certs/server.crt --local-key certs/server.key --subdomain webhook-dev
+kubectl scale deployment -n extension-acl-XXXXXXX --replicas=0 gardener-extension-acl
 ```
 
-Finally, apply the `MutatingWebhookConfiguration`:
-
+Now you can run the acl-extension locally to debug it.
 ```bash
-kubectl apply -f example/40-webhook.yaml
+go run cmd/gardener-extension-acl/main.go --webhook-config-mode=url --webhook-config-url="host.docker.internal:9443" --webhook-config-cert-dir=example/certs --leader-election=false --webhook-config-server-port=9443
 ```
