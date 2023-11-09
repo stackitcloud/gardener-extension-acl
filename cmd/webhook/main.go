@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 
@@ -77,8 +78,13 @@ func main() {
 
 	allowedCidrs := strings.Split(additionalAllowedCidrs, ",")
 
+	decoder, err := admission.NewDecoder(mgr.GetScheme())
+	if err != nil {
+		setupLog.Error(err, "unable to create decoder")
+	}
 	server.Register("/mutate", &webhook.Admission{Handler: &aclwebhook.EnvoyFilterWebhook{
 		Client:             mgr.GetClient(),
+		Decoder:            decoder,
 		EnvoyFilterService: envoyfilters.EnvoyFilterService{},
 		WebhookConfig:      aclwebhook.Config{AdditionalAllowedCidrs: allowedCidrs},
 	}})
