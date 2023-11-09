@@ -135,8 +135,8 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, helper.GetSeedSpecificAllowedCIDRs(cluster.Seed)...)
 
-	if len(a.extensionConfig.AdditionalAllowedCidrs) >= 1 {
-		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCidrs...)
+	if len(a.extensionConfig.AdditionalAllowedCIDRs) >= 1 {
+		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCIDRs...)
 	}
 
 	shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)

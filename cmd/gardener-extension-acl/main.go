@@ -20,7 +20,7 @@ import (
 
 	"github.com/gardener/gardener/cmd/utils"
 	"github.com/gardener/gardener/pkg/logger"
-	"github.com/stackitcloud/gardener-extension-acl/cmd/gardener-extension/app"
+	"github.com/stackitcloud/gardener-extension-acl/cmd/gardener-extension-acl/app"
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"

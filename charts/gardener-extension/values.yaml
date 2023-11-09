@@ -1,13 +1,5 @@
-webhook:
-  image:
-    repository: ghcr.io/stackitcloud/gardener-extension-acl-webhook
-    tag: latest
-    pullPolicy: IfNotPresent
-
-image:
-  repository: ghcr.io/stackitcloud/gardener-extension-acl-controller
-  tag: latest
-  pullPolicy: IfNotPresent
+image: ghcr.io/stackitcloud/gardener-extension-acl:latest
+imagePullPolicy: IfNotPresent
 
 leaderElection:
   resourceLock: leases
@@ -22,10 +14,10 @@ resources:
 
 vpa:
   enabled: true
-  # resourcePolicy:
-  #   minAllowed:
-  #     cpu: 100m
-  #     memory: 128Mi
+  resourcePolicy:
+    minAllowed:
+      cpu: 100m
+      memory: 128Mi
   updatePolicy:
     updateMode: "Auto"
 
@@ -36,6 +28,12 @@ controllers:
     concurrentSyncs: 5
 
 disableControllers: []
+
+webhookConfig:
+  servicePort: 443
+  serverPort: 10250
+
+disableWebhooks: []
 
 additionalAllowedCidrs: []
 

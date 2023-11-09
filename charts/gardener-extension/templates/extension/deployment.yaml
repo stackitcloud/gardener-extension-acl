@@ -5,6 +5,7 @@ metadata:
   name: {{ template "gardener-extension.extensionName" . }}
   namespace: {{ .Release.Namespace }}
   labels:
+    high-availability-config.resources.gardener.cloud/type: webhook
     {{- include "gardener-extension.extensionLabels" . | nindent 4 }}
 spec:
   revisionHistoryLimit: 0
@@ -27,8 +28,8 @@ spec:
       serviceAccountName: {{ template "gardener-extension.extensionName" . }}
       containers:
       - name: extension
-        image: {{ include "image" . }}
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        image: {{ .Values.image }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
         args:
         - --max-concurrent-reconciles={{ .Values.controllers.concurrentSyncs }}
         - --healthcheck-max-concurrent-reconciles={{ .Values.controllers.healthcheck.concurrentSyncs }}
@@ -43,6 +44,10 @@ spec:
         {{- if .Values.gardener.version }}
         - --gardener-version={{ .Values.gardener.version }}
         {{- end }}
+        - --webhook-config-namespace={{ .Release.Namespace }}
+        - --webhook-config-service-port={{ .Values.webhookConfig.servicePort }}
+        - --webhook-config-server-port={{ .Values.webhookConfig.serverPort }}
+        - --disable-webhooks={{ .Values.disableWebhooks | join "," }}
         env:
         - name: LEADER_ELECTION_NAMESPACE
           valueFrom:

@@ -3,16 +3,19 @@
 **TL;DR: The Gardener ACL extension allows you to limit the access to shoot
 clusters using an allow-list mechanism. Basically, it looks like this:**
 
+`shoot object`
 ```yaml
-type: acl
-providerConfig:
-  rule:
-    action: ALLOW
-    type: remote_ip
-    cidrs:
-      - "1.2.3.4/24"
-      - "10.250.0.0/16"
-      - ...
+spec:
+  extensions:
+  - type: acl
+    providerConfig:
+      rule:
+        action: ALLOW
+        type: remote_ip
+        cidrs:
+          - "1.2.3.4/24"
+          - "10.250.0.0/16"
+          - ...
 ```
 
 Please read on for more information.
@@ -22,7 +25,7 @@ Please read on for more information.
 Set your `KUBECONFIG` variable to the Garden cluster.
 
 ```sh
-kubectl apply -f deploy/controller-registration.yaml
+kubectl apply -f deploy/extension/base/controller-registration.yaml
 ```
 
 ## Background, Functionality & Limitations
@@ -102,6 +105,8 @@ in the extension resource itself (one per health check).
 
 ## Generating ControllerRegistration and ControllerDeployment
 
+//TODO change earthly to makefile
+
 Extensions are installed on a Gardener cluster by deploying a
 `ControllerRegistration` and a `ControllerDeployment` object to the garden
 cluster. In this repository, you find an example for both of these resources in
@@ -120,6 +125,8 @@ feature branch concourse build.
 
 ## Tests
 
+//TODO change earthly to makefile
+
 To run the test suite, execute:
 
 ```bash
@@ -133,6 +140,9 @@ See the [actuator_test.go](pkg/controller/actuator_test.go) for a minimal test
 case example.
 
 ## Webhook Development
+
+//TODO change to new dev setup with makefile
+
 
 The `controller-runtime` package always creates a Webhook Server that relies on
 TLS, and therefore requires a certificate. As this complicates local

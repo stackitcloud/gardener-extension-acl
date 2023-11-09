@@ -1,5 +1,5 @@
 {{- define "gardener-extension.extensionName" -}}
-{{ include "gardener-extension.name" . }}-extension
+{{ include "gardener-extension.name" . }}
 {{- end -}}
 
 {{/*

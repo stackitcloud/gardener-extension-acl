@@ -16,17 +16,17 @@
 package cmd
 
 import (
-	"strings"
 	"time"
 
+	healthcheckconfig "github.com/gardener/gardener/extensions/pkg/apis/config"
+	controllercmd "github.com/gardener/gardener/extensions/pkg/controller/cmd"
+	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
+	webhookcmd "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
+	"github.com/spf13/pflag"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	healthcheckcontroller "github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
-
-	healthcheckconfig "github.com/gardener/gardener/extensions/pkg/apis/config"
-	"github.com/gardener/gardener/extensions/pkg/controller/cmd"
-	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
-	"github.com/spf13/pflag"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 )
 
 const (
@@ -38,18 +38,18 @@ const (
 type ExtensionOptions struct {
 	HealthCheckSyncPeriod  time.Duration
 	ChartPath              string
-	AdditionalAllowedCidrs string
+	AdditionalAllowedCIDRs []string
 }
 
 // AddFlags implements Flagger.AddFlags.
 func (o *ExtensionOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&o.HealthCheckSyncPeriod, "healthcheck-sync-period", SyncPeriod, "Default healthcheck sync period.")
 	fs.StringVar(&o.ChartPath, "chart-path", ChartPath, "Location of the chart directories to deploy")
-	fs.StringVar(
-		&o.AdditionalAllowedCidrs,
+	fs.StringSliceVar(
+		&o.AdditionalAllowedCIDRs,
 		"additional-allowed-cidrs",
-		"",
-		"Comma separated list of ips that will be added to the allowed cidr list i.e. (192.168.1.40/32,...)",
+		nil,
+		"List of ips that will be added to the allowed cidr list i.e. (192.168.1.40/32,...)",
 	)
 }
 
@@ -67,7 +67,7 @@ func (o *ExtensionOptions) Completed() *ExtensionOptions {
 func (o *ExtensionOptions) Apply(config *controllerconfig.Config) {
 	// TODO pass controller options from extensionoptions to config param
 	config.ChartPath = o.ChartPath
-	config.AdditionalAllowedCidrs = strings.Split(o.AdditionalAllowedCidrs, ",")
+	config.AdditionalAllowedCIDRs = o.AdditionalAllowedCIDRs
 }
 
 func (o *ExtensionOptions) ApplyHealthCheckConfig(config *healthcheckconfig.HealthCheckConfig) {
@@ -75,9 +75,16 @@ func (o *ExtensionOptions) ApplyHealthCheckConfig(config *healthcheckconfig.Heal
 }
 
 // ControllerSwitches are the cmd.SwitchOptions for the provider controllers.
-func ControllerSwitches() *cmd.SwitchOptions {
-	return cmd.NewSwitchOptions(
-		cmd.Switch(controller.Type, controller.AddToManager),
-		cmd.Switch(extensionshealthcheckcontroller.ControllerName, healthcheckcontroller.AddToManager),
+func ControllerSwitches() *controllercmd.SwitchOptions {
+	return controllercmd.NewSwitchOptions(
+		controllercmd.Switch(controller.Type, controller.AddToManager),
+		controllercmd.Switch(extensionshealthcheckcontroller.ControllerName, healthcheckcontroller.AddToManager),
+	)
+}
+
+// WebhookSwitchOptions are the extensionscmdwebhook.SwitchOptions for the provider webhooks.
+func WebhookSwitchOptions() *webhookcmd.SwitchOptions {
+	return webhookcmd.NewSwitchOptions(
+		webhookcmd.Switch(webhook.WebhookName, webhook.AddToManager),
 	)
 }

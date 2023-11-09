@@ -18,6 +18,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 
 	"github.com/spf13/cobra"
 
@@ -89,6 +90,8 @@ func (o *Options) run(ctx context.Context) error {
 	ctrlConfig := o.extensionOptions.Completed()
 	ctrlConfig.ApplyHealthCheckConfig(&healthcheck.DefaultAddOptions.HealthCheckConfig)
 	ctrlConfig.Apply(&controller.DefaultAddOptions.ExtensionConfig)
+	webhook.DefaultAddOptions.AllowedCIDRs = ctrlConfig.AdditionalAllowedCIDRs
+	ctrlConfig.Apply(&controller.DefaultAddOptions.ExtensionConfig)
 
 	o.controllerOptions.Completed().Apply(&controller.DefaultAddOptions.ControllerOptions)
 	o.healthOptions.Completed().Apply(&healthcheck.DefaultAddOptions.Controller)
@@ -98,6 +101,9 @@ func (o *Options) run(ctx context.Context) error {
 		return fmt.Errorf("could not add controllers to manager: %s", err)
 	}
 
+	if err := o.webhookOptions.Completed().AddToManager(ctx, mgr); err != nil {
+		return fmt.Errorf("could not add controllers to manager: %s", err)
+	}
 	if err := mgr.Start(ctx); err != nil {
 		return fmt.Errorf("error running manager: %s", err)
 	}

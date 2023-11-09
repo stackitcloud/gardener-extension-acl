@@ -25,16 +25,11 @@ const (
 	AllowedReasonNoPatchNecessary = "No patch necessary"
 )
 
-type Config struct {
-	// AdditionalAllowedCidrs additional allowed cidrs that will be added to the list of allowed cidrs.
-	AdditionalAllowedCidrs []string
-}
-
 type EnvoyFilterWebhook struct {
-	Client             client.Client
-	EnvoyFilterService envoyfilters.EnvoyFilterService
-	Decoder            *admission.Decoder
-	WebhookConfig      Config
+	Client                 client.Client
+	EnvoyFilterService     envoyfilters.EnvoyFilterService
+	Decoder                *admission.Decoder
+	AdditionalAllowedCIDRs []string
 }
 
 //nolint:gocritic // the signature is forced by kubebuilder
@@ -88,8 +83,8 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 
 		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, helper.GetSeedSpecificAllowedCIDRs(cluster.Seed)...)
 
-		if len(e.WebhookConfig.AdditionalAllowedCidrs) >= 1 {
-			alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, e.WebhookConfig.AdditionalAllowedCidrs...)
+		if len(e.AdditionalAllowedCIDRs) >= 1 {
+			alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, e.AdditionalAllowedCIDRs...)
 		}
 
 		shootSpecificCIRDs = append(shootSpecificCIRDs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
