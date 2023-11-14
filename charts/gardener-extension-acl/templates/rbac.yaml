@@ -15,6 +15,7 @@ rules:
   - patch
   - update
   - create
+  - delete
   resources:
   - envoyfilters
 - apiGroups:
@@ -130,6 +131,14 @@ rules:
   - create
   - update
   - patch
+- apiGroups:
+  - networking.istio.io
+  resources:
+  - gateways
+  verbs:
+  - get
+  - list
+  - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
