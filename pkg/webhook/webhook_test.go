@@ -16,7 +16,7 @@ import (
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -52,10 +52,10 @@ var _ = Describe("webhook unit test", func() {
 			},
 			Spec: gardencorev1beta1.ShootSpec{
 				Networking: &gardencorev1beta1.Networking{
-					Nodes:    pointer.String("10.250.0.0/16"),
-					Pods:     pointer.String("100.96.0.0/11"),
-					Services: pointer.String("100.64.0.0/13"),
-					Type:     pointer.String("calico"),
+					Nodes:    ptr.To("10.250.0.0/16"),
+					Pods:     ptr.To("100.96.0.0/11"),
+					Services: ptr.To("100.64.0.0/13"),
+					Type:     ptr.To("calico"),
 				},
 			},
 		})
@@ -66,7 +66,7 @@ var _ = Describe("webhook unit test", func() {
 		seedJSON, err := json.Marshal(&gardencorev1beta1.Seed{
 			Spec: gardencorev1beta1.SeedSpec{
 				Networks: gardencorev1beta1.SeedNetworks{
-					Nodes:    pointer.String("100.250.0.0/16"),
+					Nodes:    ptr.To("100.250.0.0/16"),
 					Pods:     "10.96.0.0/11",
 					Services: "10.64.0.0/13",
 				},

@@ -111,6 +111,8 @@ type ExtensionSpec struct {
 }
 
 // Reconcile the Extension resource.
+//
+//nolint:gocyclo // this is the main reconcile loop
 func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
 	cluster, err := helper.GetClusterForExtension(ctx, a.client, ex)
 	if err != nil {
@@ -145,7 +147,6 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	}
 
 	hosts := make([]string, 0)
-
 	if cluster.Shoot.Status.AdvertisedAddresses == nil || len(cluster.Shoot.Status.AdvertisedAddresses) < 1 {
 		return ErrNoAdvertisedAddresses
 	}
@@ -477,7 +478,9 @@ func (a *actuator) updateEnvoyFilterHash(
 
 // getAllShootsWithACLExtension returns a list of all shoots that have the ACL
 // extension enabled, together with their rule.
-func (a *actuator) getAllShootsWithACLExtension(ctx context.Context, istioNamespace string) ([]envoyfilters.ACLMapping, map[string]string, error) {
+func (a *actuator) getAllShootsWithACLExtension(
+	ctx context.Context, istioNamespace string,
+) ([]envoyfilters.ACLMapping, map[string]string, error) {
 	extensions := &extensionsv1alpha1.ExtensionList{}
 	err := a.client.List(ctx, extensions)
 	if err != client.IgnoreNotFound(err) {
@@ -499,13 +502,18 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context, istioNamesp
 		}
 
 		var shootIstioNamespace string
+		var shootIstioLables map[string]string
 
-		shootIstioNamespace, istioLables, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
+		shootIstioNamespace, shootIstioLables, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
 		if err != nil {
 			return nil, nil, err
 		}
 		if istioNamespace != shootIstioNamespace {
 			continue
+		}
+
+		if istioLables == nil {
+			istioLables = shootIstioLables
 		}
 
 		extSpec := &ExtensionSpec{}
@@ -560,11 +568,16 @@ func HashData(data interface{}) (string, error) {
 	return strings.ToLower(base32.StdEncoding.EncodeToString(bytes[:]))[:16], nil
 }
 
-// TODO: refactor
-func (a *actuator) findIstioNamespaceForExtension(ctx context.Context, ex *extensionsv1alpha1.Extension) (string, map[string]string, error) {
+func (a *actuator) findIstioNamespaceForExtension(
+	ctx context.Context, ex *extensionsv1alpha1.Extension,
+) (
+	istioNamespace string,
+	istioLabels map[string]string,
+	err error,
+) {
 	gw := istionetworkv1beta1.Gateway{}
 
-	err := a.client.Get(ctx, client.ObjectKey{
+	err = a.client.Get(ctx, client.ObjectKey{
 		Namespace: ex.Namespace,
 		Name:      "kube-apiserver",
 	}, &gw)

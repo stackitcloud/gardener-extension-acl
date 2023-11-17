@@ -32,6 +32,7 @@ var testEnv *envtest.Environment
 var clientScheme *runtime.Scheme
 var ctx = context.TODO()
 var namespaceCounter = 1
+var istioNamespace = "istio-ingress"
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -68,7 +69,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-	createIngressNamespace()
+	createIngressNamespace(istioNamespace)
 })
 
 var _ = AfterSuite(func() {
@@ -89,10 +90,10 @@ func createNewNamespace() string {
 	return generatedName
 }
 
-func createIngressNamespace() {
+func createIngressNamespace(name string) {
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: controller.IngressNamespace,
+			Name: name,
 		},
 	}
 	Expect(k8sClient.Create(ctx, namespace)).ShouldNot(HaveOccurred())

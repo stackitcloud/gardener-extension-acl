@@ -25,8 +25,11 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 					"api.test.garden.s.testseed.dev.ske.eu01.stackit.cloud",
 					"api.test.garden.internal.testseed.dev.ske.eu01.stackit.cloud",
 				}
-
-				result, err := BuildAPIEnvoyFilterSpecForHelmChart(rule, hosts, alwaysAllowedCIDRs)
+				labels := map[string]string{
+					"app":   "istio-ingressgateway",
+					"istio": "ingressgateway",
+				}
+				result, err := BuildAPIEnvoyFilterSpecForHelmChart(rule, hosts, alwaysAllowedCIDRs, labels)
 
 				Expect(err).ToNot(HaveOccurred())
 				checkIfMapEqualsYAML(result, "apiEnvoyFilterSpecWithOneAllowRule.yaml")
@@ -43,8 +46,11 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 						Rule:      *createRule("ALLOW", "remote_ip", "0.0.0.0/0"),
 					},
 				}
-
-				result, err := BuildVPNEnvoyFilterSpecForHelmChart(mappings, alwaysAllowedCIDRs)
+				labels := map[string]string{
+					"app":   "istio-ingressgateway",
+					"istio": "ingressgateway",
+				}
+				result, err := BuildVPNEnvoyFilterSpecForHelmChart(mappings, alwaysAllowedCIDRs, labels)
 
 				Expect(err).ToNot(HaveOccurred())
 				checkIfMapEqualsYAML(result, "vpnEnvoyFilterSpecWithOneAllowRule.yaml")

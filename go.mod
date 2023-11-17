@@ -19,6 +19,7 @@ require (
 	golang.org/x/tools v0.7.0
 	gomodules.xyz/jsonpatch/v2 v2.2.0
 	gopkg.in/yaml.v3 v3.0.1
+	istio.io/api v0.0.0-20230217221049-9d422bf48675
 	istio.io/client-go v1.17.1
 	k8s.io/api v0.26.10
 	k8s.io/apiextensions-apiserver v0.26.10
@@ -114,7 +115,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	istio.io/api v0.0.0-20230217221049-9d422bf48675 // indirect
 	k8s.io/autoscaler v0.0.0-20190805135949-100e91ba756e // indirect
 	k8s.io/gengo v0.0.0-20220902162205-c0856e24416d // indirect
 	k8s.io/helm v2.16.1+incompatible // indirect
