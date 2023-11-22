@@ -3,8 +3,8 @@
 **TL;DR: The Gardener ACL extension allows you to limit the access to shoot
 clusters using an allow-list mechanism. Basically, it looks like this:**
 
-`shoot object`
 ```yaml
+# in the shoot object
 spec:
   extensions:
   - type: acl
@@ -104,8 +104,6 @@ of the resources it is responsible for. This is expressed by status conditions
 in the extension resource itself (one per health check).
 
 ## Generating ControllerRegistration and ControllerDeployment
-
-//TODO change earthly to makefile
 
 Extensions are installed on a Gardener cluster by deploying a
 `ControllerRegistration` and a `ControllerDeployment` object to the garden

@@ -6,8 +6,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 )
 
 const (
@@ -42,7 +40,6 @@ func AddToManagerWithOptions(
 	}
 	mgr.GetWebhookServer().Register(WebhookPath, &webhook.Admission{Handler: &EnvoyFilterWebhook{
 		Client:                 mgr.GetClient(),
-		EnvoyFilterService:     envoyfilters.EnvoyFilterService{},
 		AdditionalAllowedCIDRs: options.AllowedCIDRs,
 		Decoder:                decoder,
 	}})

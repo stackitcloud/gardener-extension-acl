@@ -32,6 +32,7 @@ import (
 )
 
 var (
+	// DefaultAddOptions contains the default options for the healthchecks.
 	DefaultAddOptions = healthcheck.DefaultAddArgs{
 		HealthCheckConfig: extensionsconfig.HealthCheckConfig{SyncPeriod: metav1.Duration{}},
 	}

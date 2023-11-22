@@ -383,9 +383,8 @@ func getNewWebhook() *EnvoyFilterWebhook {
 	decoder, err := admission.NewDecoder(clientScheme)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	return &EnvoyFilterWebhook{
-		Client:             k8sClient,
-		Decoder:            decoder,
-		EnvoyFilterService: envoyfilters.EnvoyFilterService{},
+		Client:  k8sClient,
+		Decoder: decoder,
 	}
 }
 

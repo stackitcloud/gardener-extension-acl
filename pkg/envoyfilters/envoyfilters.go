@@ -11,14 +11,16 @@ var (
 	ErrNoHostsGiven = errors.New("no hosts were given, at least one host is needed")
 )
 
-type EnvoyFilterService struct{}
-
+// ACLMapping maps a an ACL rule to a specific shoot and also contains the
+// shoot-specific CIDRs.
 type ACLMapping struct {
 	ShootName          string   `json:"shootName"`
 	Rule               ACLRule  `json:"rule"`
 	ShootSpecificCIDRs []string `json:"ShootSpecificCIDRs"`
 }
 
+// ACLRule contains a single ACL rule, consisting of a list of CIDRs, an action
+// and a rule type.
 type ACLRule struct {
 	// Cidrs contains a list of CIDR blocks to which the ACL rule applies
 	Cidrs []string `json:"cidrs"`
@@ -30,10 +32,10 @@ type ACLRule struct {
 
 // BuildAPIEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for API server
 // networking for every rule in the extension spec.
-func (e *EnvoyFilterService) BuildAPIEnvoyFilterSpecForHelmChart(
+func BuildAPIEnvoyFilterSpecForHelmChart(
 	rule *ACLRule, hosts, alwaysAllowedCIDRs []string,
 ) (map[string]interface{}, error) {
-	apiConfigPatch, err := e.CreateAPIConfigPatchFromRule(rule, hosts, alwaysAllowedCIDRs)
+	apiConfigPatch, err := CreateAPIConfigPatchFromRule(rule, hosts, alwaysAllowedCIDRs)
 	if err != nil {
 		return nil, err
 	}
@@ -61,10 +63,10 @@ func (e *EnvoyFilterService) BuildAPIEnvoyFilterSpecForHelmChart(
 // We use the technical ID of the shoot for the VPN rule, which is de facto the
 // same as the seed namespace of the shoot. (Gardener uses the seedNamespace
 // value in the botanist vpnshoot task.)
-func (e *EnvoyFilterService) BuildVPNEnvoyFilterSpecForHelmChart(
+func BuildVPNEnvoyFilterSpecForHelmChart(
 	mappings []ACLMapping, alwaysAllowedCIDRs []string,
 ) (map[string]interface{}, error) {
-	vpnConfigPatch, err := e.CreateVPNConfigPatchFromRule(mappings, alwaysAllowedCIDRs)
+	vpnConfigPatch, err := CreateVPNConfigPatchFromRule(mappings, alwaysAllowedCIDRs)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +86,10 @@ func (e *EnvoyFilterService) BuildVPNEnvoyFilterSpecForHelmChart(
 	}, nil
 }
 
-func (e *EnvoyFilterService) CreateAPIConfigPatchFromRule(
+// CreateAPIConfigPatchFromRule combines an ACLRule, the first entry  of the
+// hosts list and the alwaysAllowedCIDRs into a network filter patch that can be
+// applied to the `GATEWAY` network filter chain matching the host.
+func CreateAPIConfigPatchFromRule(
 	rule *ACLRule, hosts, alwaysAllowedCIDRs []string,
 ) (map[string]interface{}, error) {
 	if len(hosts) == 0 {
@@ -109,7 +114,10 @@ func (e *EnvoyFilterService) CreateAPIConfigPatchFromRule(
 	}, nil
 }
 
-func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(
+// CreateVPNConfigPatchFromRule combines a list of ACLMappings and the
+// alwaysAllowedCIDRs into a HTTP filter patch that can be applied to the
+// `GATEWAY` HTTP filter chain for the VPN.
+func CreateVPNConfigPatchFromRule(
 	mappings []ACLMapping, alwaysAllowedCIDRs []string,
 ) (map[string]interface{}, error) {
 	rbacName := "acl-vpn"
@@ -152,7 +160,9 @@ func (e *EnvoyFilterService) CreateVPNConfigPatchFromRule(
 	}, nil
 }
 
-func (e *EnvoyFilterService) CreateInternalFilterPatchFromRule(
+// CreateInternalFilterPatchFromRule combines an ACLRule, the
+// alwaysAllowedCIDRs, and the shootSpecificCIDRs into a filter patch.
+func CreateInternalFilterPatchFromRule(
 	rule *ACLRule,
 	alwaysAllowedCIDRs []string,
 	shootSpecificCIDRs []string,

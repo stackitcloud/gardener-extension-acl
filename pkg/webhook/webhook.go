@@ -29,13 +29,18 @@ const (
 
 const allowedReasonNoPatchNecessary = "No patch necessary"
 
+// EnvoyFilterWebhook is a service struct that defines functions to handle
+// admission requests for EnvoyFilters.
 type EnvoyFilterWebhook struct {
 	Client                 client.Client
-	EnvoyFilterService     envoyfilters.EnvoyFilterService
 	Decoder                *admission.Decoder
 	AdditionalAllowedCIDRs []string
 }
 
+// Handle receives incoming admission requests for EnvoyFilters and returns a
+// response. The response contains patches for specific EnvoyFilters, which need
+// to be patched for the ACL extension to be able to control all filter chains.
+//
 //nolint:gocritic // the signature is forced by kubebuilder
 func (e *EnvoyFilterWebhook) Handle(ctx context.Context, req admission.Request) admission.Response {
 	filter := &istionetworkingClientGo.EnvoyFilter{}
@@ -105,7 +110,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 		}
 		shootSpecificCIRDs = append(shootSpecificCIRDs, providerSpecificCIRDs...)
 
-		filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
+		filter, err := envoyfilters.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
 		if err != nil {
 			return admission.Errored(http.StatusInternalServerError, err)
 		}

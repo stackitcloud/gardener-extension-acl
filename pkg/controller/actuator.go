@@ -83,20 +83,18 @@ var (
 // NewActuator returns an actuator responsible for Extension resources.
 func NewActuator(mgr manager.Manager, cfg config.Config) extension.Actuator {
 	return &actuator{
-		extensionConfig:    cfg,
-		envoyfilterService: envoyfilters.EnvoyFilterService{},
-		client:             mgr.GetClient(),
-		config:             mgr.GetConfig(),
-		decoder:            serializer.NewCodecFactory(mgr.GetScheme(), serializer.EnableStrict).UniversalDecoder(),
+		extensionConfig: cfg,
+		client:          mgr.GetClient(),
+		config:          mgr.GetConfig(),
+		decoder:         serializer.NewCodecFactory(mgr.GetScheme(), serializer.EnableStrict).UniversalDecoder(),
 	}
 }
 
 type actuator struct {
-	client             client.Client
-	config             *rest.Config
-	decoder            runtime.Decoder
-	extensionConfig    config.Config
-	envoyfilterService envoyfilters.EnvoyFilterService
+	client          client.Client
+	config          *rest.Config
+	decoder         runtime.Decoder
+	extensionConfig config.Config
 }
 
 // ExtensionSpec is the content of the ProviderConfig of the acl extension object
@@ -178,6 +176,8 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	return a.updateStatus(ctx, ex, extSpec)
 }
 
+// ValidateExtensionSpec checks if the ExtensionSpec exists, and if its action,
+// type and CIDRs are valid.
 func ValidateExtensionSpec(spec *ExtensionSpec) error {
 	rule := spec.Rule
 
@@ -248,7 +248,7 @@ func (a *actuator) reconcileVPNEnvoyFilter(
 		return err
 	}
 
-	vpnEnvoyFilterSpec, err := a.envoyfilterService.BuildVPNEnvoyFilterSpecForHelmChart(
+	vpnEnvoyFilterSpec, err := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
 		aclMappings, alwaysAllowedCIDRs,
 	)
 	if err != nil {
@@ -292,7 +292,7 @@ func (a *actuator) createSeedResources(
 ) error {
 	var err error
 
-	apiEnvoyFilterSpec, err := a.envoyfilterService.BuildAPIEnvoyFilterSpecForHelmChart(
+	apiEnvoyFilterSpec, err := envoyfilters.BuildAPIEnvoyFilterSpecForHelmChart(
 		spec.Rule, hosts, append(alwaysAllowedCIDRs, shootSpecificCIRDs...),
 	)
 	if err != nil {

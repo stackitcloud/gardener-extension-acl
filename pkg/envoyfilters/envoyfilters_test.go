@@ -11,20 +11,11 @@ import (
 
 var _ = Describe("EnvoyFilter Unit Tests", func() {
 	var (
-		e                  *EnvoyFilterService
 		alwaysAllowedCIDRs = []string{
 			"10.250.0.0/16",
 			"10.96.0.0/11",
 		}
 	)
-
-	BeforeEach(func() {
-		e = &EnvoyFilterService{}
-	})
-
-	AfterEach(func() {
-
-	})
 
 	Describe("BuildAPIEnvoyFilterSpecForHelmChart", func() {
 		When("there is an extension resource with one rule", func() {
@@ -35,7 +26,7 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 					"api.test.garden.internal.testseed.dev.ske.eu01.stackit.cloud",
 				}
 
-				result, err := e.BuildAPIEnvoyFilterSpecForHelmChart(rule, hosts, alwaysAllowedCIDRs)
+				result, err := BuildAPIEnvoyFilterSpecForHelmChart(rule, hosts, alwaysAllowedCIDRs)
 
 				Expect(err).ToNot(HaveOccurred())
 				checkIfMapEqualsYAML(result, "apiEnvoyFilterSpecWithOneAllowRule.yaml")
@@ -53,7 +44,7 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 					},
 				}
 
-				result, err := e.BuildVPNEnvoyFilterSpecForHelmChart(mappings, alwaysAllowedCIDRs)
+				result, err := BuildVPNEnvoyFilterSpecForHelmChart(mappings, alwaysAllowedCIDRs)
 
 				Expect(err).ToNot(HaveOccurred())
 				checkIfMapEqualsYAML(result, "vpnEnvoyFilterSpecWithOneAllowRule.yaml")
@@ -66,7 +57,7 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 			It("Should create a filter spec matching the expected one, including the always allowed CIDRs", func() {
 				rule := createRule("ALLOW", "remote_ip", "0.0.0.0/0")
 
-				result, err := e.CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs, []string{})
+				result, err := CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs, []string{})
 
 				Expect(err).ToNot(HaveOccurred())
 				checkIfMapEqualsYAML(result, "singleFiltersAllowEntry.yaml")
@@ -79,7 +70,7 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 			It("should return the appropriate error", func() {
 				rule := createRule("ALLOW", "remote_ip", "0.0.0.0/0")
 
-				result, err := e.CreateAPIConfigPatchFromRule(rule, nil, alwaysAllowedCIDRs)
+				result, err := CreateAPIConfigPatchFromRule(rule, nil, alwaysAllowedCIDRs)
 
 				Expect(err).To(Equal(ErrNoHostsGiven))
 				Expect(result).To(BeNil())
