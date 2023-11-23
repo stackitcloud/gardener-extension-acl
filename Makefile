@@ -76,12 +76,12 @@ check-generate:
 	@bash $(HACK_DIRECTORY)/check-generate.sh $(REPO_ROOT)
 
 .PHONY: check
-check: $(GO_ADD_LICENSE) $(GOIMPORTS) $(GOLANGCI_LINT) $(HELM) $(YQ)
+check: $(GOIMPORTS) $(GOLANGCI_LINT) $(HELM)
 	@bash $(HACK_DIRECTORY)/check.sh --golangci-lint-config=./.golangci.yaml ./cmd/... ./pkg/...
 	@bash $(HACK_DIRECTORY)/check-charts.sh ./charts
 
 .PHONY: generate
-generate:
+generate: $(HELM) $(YQ)
 	@bash $(HACK_DIRECTORY)/generate-controller-registration.sh acl charts/gardener-extension-acl latest deploy/extension/base/controller-registration.yaml Extension:acl
 	@bash $(HACK_DIRECTORY)/generate.sh ./cmd/... ./pkg/...
 
