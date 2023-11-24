@@ -4,7 +4,7 @@ import (
 	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 )
 
-// GetShootNodeSpecificAllowedCIDRs returns the node CIDRs of the shoot of the
+// GetShootNodeSpecificAllowedCIDRs returns the node CIDRs of the shoot
 func GetShootNodeSpecificAllowedCIDRs(shoot *v1beta1.Shoot) []string {
 	cidrs := make([]string, 0)
 
@@ -17,7 +17,7 @@ func GetShootNodeSpecificAllowedCIDRs(shoot *v1beta1.Shoot) []string {
 	return cidrs
 }
 
-// GetShootPodSpecificAllowedCIDRs returns the pod CIDRs of the shoot of the
+// GetShootPodSpecificAllowedCIDRs returns the pod CIDRs of the shoot
 func GetShootPodSpecificAllowedCIDRs(shoot *v1beta1.Shoot) []string {
 	cidrs := make([]string, 0)
 

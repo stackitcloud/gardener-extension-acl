@@ -52,7 +52,7 @@ func (o *ExtensionOptions) AddFlags(fs *pflag.FlagSet) {
 		&o.AdditionalAllowedCIDRs,
 		"additional-allowed-cidrs",
 		nil,
-		"List of ips that will be added to the allowed cidr list i.e. (192.168.1.40/32,...)",
+		"List of IPs that will be added to the list of allowed CIDRs, e.g. '192.168.1.40/32,10.250.0.0/16'",
 	)
 }
 
