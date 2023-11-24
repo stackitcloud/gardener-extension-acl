@@ -6,11 +6,12 @@ import (
 	"github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 )
 
 var _ = Describe("actuator test", func() {

@@ -7,27 +7,25 @@ import (
 	"strconv"
 	"testing"
 
-	gardnercorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/testr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"istio.io/api/networking/v1beta1"
+	istionetworkingv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-
-	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
-	istionetworkingv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
-	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	//+kubebuilder:scaffold:imports
 )
 
 var cfg *rest.Config
@@ -174,9 +172,9 @@ func createNewCluster(shootNamespace string) {
 		Spec: extensionsv1alpha1.ClusterSpec{
 			CloudProfile: runtime.RawExtension{Raw: []byte("{}")},
 			Seed: runtime.RawExtension{
-				Object: &gardnercorev1beta1.Seed{
-					Spec: gardnercorev1beta1.SeedSpec{
-						Networks: gardnercorev1beta1.SeedNetworks{
+				Object: &gardencorev1beta1.Seed{
+					Spec: gardencorev1beta1.SeedSpec{
+						Networks: gardencorev1beta1.SeedNetworks{
 							Nodes: ptr.To("10.250.0.0/24"),
 							Pods:  "10.10.0.0/24",
 						},
@@ -184,18 +182,18 @@ func createNewCluster(shootNamespace string) {
 				},
 			},
 			Shoot: runtime.RawExtension{
-				Object: &gardnercorev1beta1.Shoot{
+				Object: &gardencorev1beta1.Shoot{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: shootNamespace,
 					},
-					Spec: gardnercorev1beta1.ShootSpec{
-						Networking: &gardnercorev1beta1.Networking{
+					Spec: gardencorev1beta1.ShootSpec{
+						Networking: &gardencorev1beta1.Networking{
 							Nodes: nil,
 							Pods:  nil,
 						},
 					},
-					Status: gardnercorev1beta1.ShootStatus{ // needed to wait until k8s server is up and running
-						AdvertisedAddresses: []gardnercorev1beta1.ShootAdvertisedAddress{{
+					Status: gardencorev1beta1.ShootStatus{ // needed to wait until k8s server is up and running
+						AdvertisedAddresses: []gardencorev1beta1.ShootAdvertisedAddress{{
 							Name: "test",
 							URL:  "https://test",
 						}},

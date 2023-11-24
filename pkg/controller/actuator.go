@@ -38,7 +38,7 @@ import (
 	"github.com/pkg/errors"
 	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -83,6 +83,7 @@ var (
 	ErrNoAdvertisedAddresses = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
 )
 
+// ExtensionState contains the State of the Extension
 type ExtensionState struct {
 	IstioNamespace *string `json:"istioNamespace"`
 }
@@ -591,7 +592,7 @@ func (a *actuator) findIstioNamespaceForExtension(
 
 	labelsSelector := client.MatchingLabels(namespaceSelector)
 
-	nsList := v1.NamespaceList{}
+	nsList := corev1.NamespaceList{}
 	err = a.client.List(ctx, &nsList, labelsSelector)
 	if err != nil {
 		return "", nil, err

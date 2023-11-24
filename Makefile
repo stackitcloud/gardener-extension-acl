@@ -25,6 +25,8 @@ TOOLS_DIR := hack/tools
 -include $(HACK_DIRECTORY)/tools.mk
 include hack/tools.mk
 
+GOIMPORTSREVISER_VERSION := v3.5.6
+
 .PHONY: start
 start:
 	@LEADER_ELECTION_NAMESPACE=garden GO111MODULE=on go run \
