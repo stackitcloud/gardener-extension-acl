@@ -8,31 +8,28 @@ import (
 	"testing"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/go-logr/logr"
+	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
+	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	//+kubebuilder:scaffold:imports
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 )
 
 var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
 var clientScheme *runtime.Scheme
-var logger logr.Logger
 var ctx = context.TODO()
 var namespaceCounter = 1
 

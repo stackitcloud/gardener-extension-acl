@@ -1,0 +1,7 @@
+apiVersion: core.gardener.cloud/v1beta1
+kind: ControllerRegistration
+metadata:
+  name: acl
+spec:
+  deployment:
+    policy: Always

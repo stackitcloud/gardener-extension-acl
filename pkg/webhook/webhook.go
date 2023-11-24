@@ -7,36 +7,40 @@ import (
 	"strings"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 	"github.com/tidwall/gjson"
 	"gomodules.xyz/jsonpatch/v2"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
-	v1 "k8s.io/api/admission/v1"
+	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 )
 
 const (
-	ShootFilterPrefix             = "shoot--"
-	ExtensionName                 = "acl"
-	AllowedReasonNoPatchNecessary = "No patch necessary"
+	// ShootFilterPrefix is prefix from shoot technicalID
+	ShootFilterPrefix = "shoot--"
+	// ExtensionName contains the ACl extension name.
+	ExtensionName = "acl"
 )
 
-type Config struct {
-	// AdditionalAllowedCidrs additional allowed cidrs that will be added to the list of allowed cidrs.
-	AdditionalAllowedCidrs []string
-}
+const allowedReasonNoPatchNecessary = "No patch necessary"
 
+// EnvoyFilterWebhook is a service struct that defines functions to handle
+// admission requests for EnvoyFilters.
 type EnvoyFilterWebhook struct {
-	Client             client.Client
-	EnvoyFilterService envoyfilters.EnvoyFilterService
-	Decoder            *admission.Decoder
-	WebhookConfig      Config
+	Client                 client.Client
+	Decoder                *admission.Decoder
+	AdditionalAllowedCIDRs []string
 }
 
+// Handle receives incoming admission requests for EnvoyFilters and returns a
+// response. The response contains patches for specific EnvoyFilters, which need
+// to be patched for the ACL extension to be able to control all filter chains.
+//
 //nolint:gocritic // the signature is forced by kubebuilder
 func (e *EnvoyFilterWebhook) Handle(ctx context.Context, req admission.Request) admission.Response {
 	filter := &istionetworkingClientGo.EnvoyFilter{}
@@ -54,7 +58,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 ) admission.Response {
 	// filter out envoyfilters that are not managed by this webhook
 	if !strings.HasPrefix(filter.Name, ShootFilterPrefix) {
-		return admission.Allowed(AllowedReasonNoPatchNecessary)
+		return admission.Allowed(allowedReasonNoPatchNecessary)
 	}
 
 	aclExtension := &extensionsv1alpha1.Extension{}
@@ -88,8 +92,8 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 
 		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, helper.GetSeedSpecificAllowedCIDRs(cluster.Seed)...)
 
-		if len(e.WebhookConfig.AdditionalAllowedCidrs) >= 1 {
-			alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, e.WebhookConfig.AdditionalAllowedCidrs...)
+		if len(e.AdditionalAllowedCIDRs) >= 1 {
+			alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, e.AdditionalAllowedCIDRs...)
 		}
 
 		shootSpecificCIRDs = append(shootSpecificCIRDs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
@@ -106,7 +110,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 		}
 		shootSpecificCIRDs = append(shootSpecificCIRDs, providerSpecificCIRDs...)
 
-		filter, err := e.EnvoyFilterService.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
+		filter, err := envoyfilters.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
 		if err != nil {
 			return admission.Errored(http.StatusInternalServerError, err)
 		}
@@ -123,7 +127,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 	// make sure the original filter is the last
 	filters = append(filters, originalFilterMap)
 
-	pt := v1.PatchTypeJSONPatch
+	pt := admissionv1.PatchTypeJSONPatch
 	return admission.Response{
 		Patches: []jsonpatch.Operation{
 			{
@@ -132,7 +136,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 				Value:     filters,
 			},
 		},
-		AdmissionResponse: v1.AdmissionResponse{
+		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed:   true,
 			PatchType: &pt,
 		},

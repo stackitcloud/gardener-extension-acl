@@ -8,6 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// GetInfrastructureForExtension returns Infrastructure object for an extension object
 func GetInfrastructureForExtension(
 	ctx context.Context,
 	c client.Reader,

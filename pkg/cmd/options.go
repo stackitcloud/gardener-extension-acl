@@ -16,40 +16,43 @@
 package cmd
 
 import (
-	"strings"
 	"time"
+
+	extensionsconfig "github.com/gardener/gardener/extensions/pkg/apis/config"
+	extensionscmdcontroller "github.com/gardener/gardener/extensions/pkg/controller/cmd"
+	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
+	extensionscmdwebhook "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
+	"github.com/spf13/pflag"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	healthcheckcontroller "github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
-
-	healthcheckconfig "github.com/gardener/gardener/extensions/pkg/apis/config"
-	"github.com/gardener/gardener/extensions/pkg/controller/cmd"
-	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
-	"github.com/spf13/pflag"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 )
 
 const (
-	SyncPeriod = 30 * time.Second
-	ChartPath  = "charts"
+	// DefaultSyncPeriod is the default healthcheck-sync-period
+	DefaultSyncPeriod = 30 * time.Second
+	// ChartPath is the path to the chart folder
+	ChartPath = "charts"
 )
 
 // ExtensionOptions holds options related to the extension (not the extension controller)
 type ExtensionOptions struct {
 	HealthCheckSyncPeriod  time.Duration
 	ChartPath              string
-	AdditionalAllowedCidrs string
+	AdditionalAllowedCIDRs []string
 }
 
 // AddFlags implements Flagger.AddFlags.
 func (o *ExtensionOptions) AddFlags(fs *pflag.FlagSet) {
-	fs.DurationVar(&o.HealthCheckSyncPeriod, "healthcheck-sync-period", SyncPeriod, "Default healthcheck sync period.")
+	fs.DurationVar(&o.HealthCheckSyncPeriod, "healthcheck-sync-period", DefaultSyncPeriod, "Default healthcheck sync period.")
 	fs.StringVar(&o.ChartPath, "chart-path", ChartPath, "Location of the chart directories to deploy")
-	fs.StringVar(
-		&o.AdditionalAllowedCidrs,
+	fs.StringSliceVar(
+		&o.AdditionalAllowedCIDRs,
 		"additional-allowed-cidrs",
-		"",
-		"Comma separated list of ips that will be added to the allowed cidr list i.e. (192.168.1.40/32,...)",
+		nil,
+		"List of IPs that will be added to the list of allowed CIDRs, e.g. '192.168.1.40/32,10.250.0.0/16'",
 	)
 }
 
@@ -59,6 +62,7 @@ func (o *ExtensionOptions) Complete() error {
 	return nil
 }
 
+// Completed returns ExtensionOptions.
 func (o *ExtensionOptions) Completed() *ExtensionOptions {
 	return o
 }
@@ -67,17 +71,25 @@ func (o *ExtensionOptions) Completed() *ExtensionOptions {
 func (o *ExtensionOptions) Apply(config *controllerconfig.Config) {
 	// TODO pass controller options from extensionoptions to config param
 	config.ChartPath = o.ChartPath
-	config.AdditionalAllowedCidrs = strings.Split(o.AdditionalAllowedCidrs, ",")
+	config.AdditionalAllowedCIDRs = o.AdditionalAllowedCIDRs
 }
 
-func (o *ExtensionOptions) ApplyHealthCheckConfig(config *healthcheckconfig.HealthCheckConfig) {
+// ApplyHealthCheckConfig applies the ExtensionOptions to the passed HealthCheckConfig.
+func (o *ExtensionOptions) ApplyHealthCheckConfig(config *extensionsconfig.HealthCheckConfig) {
 	config.SyncPeriod.Duration = o.HealthCheckSyncPeriod
 }
 
 // ControllerSwitches are the cmd.SwitchOptions for the provider controllers.
-func ControllerSwitches() *cmd.SwitchOptions {
-	return cmd.NewSwitchOptions(
-		cmd.Switch(controller.Type, controller.AddToManager),
-		cmd.Switch(extensionshealthcheckcontroller.ControllerName, healthcheckcontroller.AddToManager),
+func ControllerSwitches() *extensionscmdcontroller.SwitchOptions {
+	return extensionscmdcontroller.NewSwitchOptions(
+		extensionscmdcontroller.Switch(controller.Type, controller.AddToManager),
+		extensionscmdcontroller.Switch(extensionshealthcheckcontroller.ControllerName, healthcheckcontroller.AddToManager),
+	)
+}
+
+// WebhookSwitchOptions are the extensionscmdwebhook.SwitchOptions for the provider webhooks.
+func WebhookSwitchOptions() *extensionscmdwebhook.SwitchOptions {
+	return extensionscmdwebhook.NewSwitchOptions(
+		extensionscmdwebhook.Switch(webhook.WebhookName, webhook.AddToManager),
 	)
 }

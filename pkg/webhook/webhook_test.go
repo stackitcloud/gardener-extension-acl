@@ -8,21 +8,20 @@ import (
 	"strings"
 
 	openstackv1alpha1 "github.com/gardener/gardener-extension-provider-openstack/pkg/apis/openstack/v1alpha1"
-	core "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	"github.com/gardener/gardener-extension-provider-openstack/pkg/openstack"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
+	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 )
 
 var _ = Describe("webhook unit test", func() {
@@ -38,7 +37,7 @@ var _ = Describe("webhook unit test", func() {
 	BeforeEach(func() {
 		name = "some-shoot"
 		namespace = createNewNamespace()
-		cluster = getNewCluster(namespace, &core.Shoot{}, &core.Seed{})
+		cluster = getNewCluster(namespace, &gardencorev1beta1.Shoot{}, &gardencorev1beta1.Seed{})
 		infra = getNewInfrastructure(namespace, name, "non-existent", []byte("{}"), []byte("{}"))
 		e = getNewWebhook()
 
@@ -46,13 +45,13 @@ var _ = Describe("webhook unit test", func() {
 		Expect(k8sClient.Create(ctx, infra)).To(Succeed())
 
 		// set up default shoot part of cluster resource
-		shootJSON, err := json.Marshal(&core.Shoot{
+		shootJSON, err := json.Marshal(&gardencorev1beta1.Shoot{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: namespace,
 			},
-			Spec: core.ShootSpec{
-				Networking: &core.Networking{
+			Spec: gardencorev1beta1.ShootSpec{
+				Networking: &gardencorev1beta1.Networking{
 					Nodes:    pointer.String("10.250.0.0/16"),
 					Pods:     pointer.String("100.96.0.0/11"),
 					Services: pointer.String("100.64.0.0/13"),
@@ -64,9 +63,9 @@ var _ = Describe("webhook unit test", func() {
 		Expect(err).To(BeNil())
 
 		// set up default seed part of cluster resource
-		seedJSON, err := json.Marshal(&core.Seed{
-			Spec: core.SeedSpec{
-				Networks: core.SeedNetworks{
+		seedJSON, err := json.Marshal(&gardencorev1beta1.Seed{
+			Spec: gardencorev1beta1.SeedSpec{
+				Networks: gardencorev1beta1.SeedNetworks{
 					Nodes:    pointer.String("100.250.0.0/16"),
 					Pods:     "10.96.0.0/11",
 					Services: "10.64.0.0/13",
@@ -267,7 +266,7 @@ var _ = Describe("webhook unit test", func() {
 
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
 
-				infra.Spec.Type = controller.OpenstackTypeName
+				infra.Spec.Type = openstack.Type
 				Expect(k8sClient.Update(ctx, infra)).To(Succeed())
 
 				infraStatusJSON, err := json.Marshal(&openstackv1alpha1.InfrastructureStatus{
@@ -384,13 +383,12 @@ func getNewWebhook() *EnvoyFilterWebhook {
 	decoder, err := admission.NewDecoder(clientScheme)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	return &EnvoyFilterWebhook{
-		Client:             k8sClient,
-		Decoder:            decoder,
-		EnvoyFilterService: envoyfilters.EnvoyFilterService{},
+		Client:  k8sClient,
+		Decoder: decoder,
 	}
 }
 
-func getNewCluster(namespace string, shoot *core.Shoot, seed *core.Seed) *extensionsv1alpha1.Cluster {
+func getNewCluster(namespace string, shoot *gardencorev1beta1.Shoot, seed *gardencorev1beta1.Seed) *extensionsv1alpha1.Cluster {
 	shootJSON, err := json.Marshal(shoot)
 	Expect(err).To(BeNil())
 

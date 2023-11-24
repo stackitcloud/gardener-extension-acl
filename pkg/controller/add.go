@@ -18,17 +18,17 @@ package controller
 import (
 	"context"
 
-	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
-
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 )
 
 const (
 	// Type is the type of Extension resource.
 	Type   = "acl"
-	Suffix = "-extension-service"
+	suffix = "-extension-service"
 )
 
 var (
@@ -57,8 +57,8 @@ func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts *Add
 	return extension.Add(ctx, mgr, extension.AddArgs{
 		Actuator:          NewActuator(mgr, opts.ExtensionConfig),
 		ControllerOptions: opts.ControllerOptions,
-		Name:              Type + Suffix,
-		FinalizerSuffix:   Type + Suffix,
+		Name:              Type + suffix,
+		FinalizerSuffix:   Type + suffix,
 		Resync:            0,
 		Predicates:        extension.DefaultPredicates(ctx, mgr, DefaultAddOptions.IgnoreOperationAnnotation),
 		Type:              Type,

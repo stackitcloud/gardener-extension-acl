@@ -1,0 +1,50 @@
+image: ghcr.io/stackitcloud/gardener-extension-acl:latest
+imagePullPolicy: IfNotPresent
+
+replicaCount: 2
+
+leaderElection:
+  resourceLock: leases
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+  limits:
+    cpu: "100m"
+    memory: "128Mi"
+
+vpa:
+  enabled: true
+  resourcePolicy:
+    minAllowed:
+      cpu: 50m
+      memory: 64Mi
+  updatePolicy:
+    updateMode: "Auto"
+
+controllers:
+  concurrentSyncs: 5
+  ignoreOperationAnnotation: false
+  healthcheck:
+    concurrentSyncs: 5
+
+disableControllers: []
+
+webhookConfig:
+  servicePort: 443
+  serverPort: 10250
+
+disableWebhooks: []
+
+additionalAllowedCidrs: []
+
+# imageVectorOverwrite: |
+#   images:
+#   - name: example
+#     sourceRepository: https://schwarzit@dev.azure.com/schwarzit/schwarzit.ske/_git/example-controller
+#     repository: reg.infra.ske.eu01.stackit.cloud/ske/example
+#     tag: "0.2.9"
+
+gardener:
+  version: ""

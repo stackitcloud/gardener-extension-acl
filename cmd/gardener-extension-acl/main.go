@@ -13,12 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package main
 
-// Config contains configuration for the extension service.
-type Config struct {
-	// TODO define options
-	ChartPath string
-	// AdditionalAllowedCIDRs additional allowed cidrs that will be added to the list of allowed cidrs.
-	AdditionalAllowedCIDRs []string
+import (
+	"os"
+
+	"github.com/gardener/gardener/cmd/utils"
+	"github.com/gardener/gardener/pkg/logger"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+
+	"github.com/stackitcloud/gardener-extension-acl/cmd/gardener-extension-acl/app"
+)
+
+func main() {
+	utils.DeduplicateWarnings()
+
+	logf.SetLogger(logger.MustNewZapLogger(logger.InfoLevel, logger.FormatJSON))
+
+	if err := app.NewControllerManagerCommand(signals.SetupSignalHandler()).Execute(); err != nil {
+		logf.Log.Error(err, "Error executing the main controller command")
+		os.Exit(1)
+	}
 }

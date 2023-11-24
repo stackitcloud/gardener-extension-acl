@@ -17,8 +17,9 @@ package imagevector
 
 import (
 	"github.com/gardener/gardener/pkg/utils/imagevector"
-	"github.com/stackitcloud/gardener-extension-acl/charts"
 	"k8s.io/apimachinery/pkg/util/runtime"
+
+	"github.com/stackitcloud/gardener-extension-acl/charts"
 )
 
 var imageVector imagevector.ImageVector
