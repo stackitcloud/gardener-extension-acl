@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -16,29 +17,24 @@ import (
 
 var _ = Describe("actuator test", func() {
 	var (
-		a                       *actuator
-		shootNamespace1         string
-		istioNamespace1         string
-		istioNamespace1Selector map[string]string
+		a                                *actuator
+		shootNamespace1, shootNamespace2 string
+		istioNamespace1                  string
+		istioNamespace1Selector          map[string]string
 	)
 
 	a = getNewActuator()
 
 	BeforeEach(func() {
 		shootNamespace1 = createNewShootNamespace()
-
 		istioNamespace1, istioNamespace1Selector = createNewIstioNamespace()
 
 		createNewEnvoyFilter(shootNamespace1, istioNamespace1)
-
 		createNewGateway(shootNamespace1, istioNamespace1Selector)
-
 		createNewCluster(shootNamespace1)
-
 		createNewInfrastructure(shootNamespace1)
 
 		a = getNewActuator()
-
 	})
 
 	AfterEach(func() {
@@ -46,8 +42,8 @@ var _ = Describe("actuator test", func() {
 		deleteNamespace(istioNamespace1)
 	})
 
-	Describe("check envoy filters for shoot", func() {
-		It("should create acl-vpn object", func() {
+	Describe("reconciliation of an ACL extension object", func() {
+		It("should create an acl-vpn EnvoyFilter object with the correct contents", func() {
 			extSpec := ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"1.2.3.4/24"},
@@ -63,18 +59,11 @@ var _ = Describe("actuator test", func() {
 			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
 
 			envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
-			Expect(k8sClient.Get(
-				ctx, types.NamespacedName{
-					Name:      "acl-vpn",
-					Namespace: istioNamespace1,
-				},
-				envoyFilter,
-			)).To(Succeed())
-
-			Expect(envoyFilter.Spec.ConfigPatches).ToNot(BeNil())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "acl-vpn", Namespace: istioNamespace1}, envoyFilter)).To(Succeed())
+			Expect(envoyFilter.Spec.MarshalJSON()).To(ContainSubstring("1.2.3.4"))
 		})
 
-		It("should create managed resource for acl-api-shoot object", func() {
+		It("should create managed resource for acl-api-shoot EnvoyFilter object", func() {
 			extSpec := ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"1.2.3.4/24"},
@@ -88,14 +77,71 @@ var _ = Describe("actuator test", func() {
 			Expect(ext).To(Not(BeNil()))
 
 			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
+
 			mr := &v1alpha1.ManagedResource{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
+			secret := &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
+			Expect(secret.Data["seed"]).To(ContainSubstring("1.2.3.4"))
+		})
+	})
+
+	Describe("reconciliation of an extension object with other ACL extensions being present", func() {
+		BeforeEach(func() {
+			shootNamespace2 = createNewShootNamespace()
+			createNewEnvoyFilter(shootNamespace2, istioNamespace1)
+			createNewGateway(shootNamespace2, istioNamespace1Selector)
+			createNewCluster(shootNamespace2)
+			createNewInfrastructure(shootNamespace2)
+		})
+
+		AfterEach(func() {
+			deleteNamespace(shootNamespace2)
+		})
+
+		It("should create an acl-vpn EnvoyFilter object with the correct contents", func() {
+			extSpec1 := ExtensionSpec{
+				Rule: &envoyfilters.ACLRule{
+					Cidrs:  []string{"1.2.3.4/24"},
+					Action: "ALLOW",
+					Type:   "remote_ip",
+				},
+			}
+			extSpecJSON1, err := json.Marshal(extSpec1)
+			Expect(err).To(BeNil())
+			ext1 := createNewExtension(shootNamespace1, extSpecJSON1)
+			Expect(ext1).To(Not(BeNil()))
+
+			extSpec2 := ExtensionSpec{
+				Rule: &envoyfilters.ACLRule{
+					Cidrs:  []string{"5.6.7.8/24"},
+					Action: "ALLOW",
+					Type:   "remote_ip",
+				},
+			}
+			extSpecJSON2, err := json.Marshal(extSpec2)
+			Expect(err).To(BeNil())
+			ext2 := createNewExtension(shootNamespace2, extSpecJSON2)
+			Expect(ext2).To(Not(BeNil()))
+
+			// reconcile either of the two extensions
+			Expect(a.Reconcile(ctx, logger, ext1)).To(Succeed())
+
+			envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
 			Expect(k8sClient.Get(
 				ctx, types.NamespacedName{
-					Name:      ResourceNameSeed,
-					Namespace: shootNamespace1,
+					Name:      "acl-vpn",
+					Namespace: istioNamespace1,
 				},
-				mr,
+				envoyFilter,
 			)).To(Succeed())
+
+			// as there is only one acl-vpn EnvoyFilter, this EnvoyFilter must
+			// contain the allowed CIDRs from all ACL extensions
+			Expect(envoyFilter.Spec.MarshalJSON()).To(And(
+				ContainSubstring("1.2.3.4"),
+				ContainSubstring("5.6.7.8"),
+			))
 		})
 	})
 })
@@ -111,15 +157,11 @@ var _ = Describe("actuator unit test", func() {
 		var istioNamespaceSelector map[string]string
 
 		namespace = createNewShootNamespace()
-
 		istioNamespace, istioNamespaceSelector = createNewIstioNamespace()
 
 		createNewGateway(namespace, istioNamespaceSelector)
-
 		createNewCluster(namespace)
-
 		createNewInfrastructure(namespace)
-
 		namespace = createNewShootNamespace()
 
 		a = getNewActuator()
@@ -151,6 +193,7 @@ var _ = Describe("actuator unit test", func() {
 				Expect(envoyFilter.Annotations).ToNot(BeNil())
 			})
 		})
+
 		When("the extension resource is being deleted, and the envoyfilter has an annotation", func() {
 			It("Should remove the hash annotation", func() {
 				createNewEnvoyFilter(namespace, istioNamespace)
