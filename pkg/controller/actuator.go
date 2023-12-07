@@ -202,6 +202,9 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 			return err
 		}
 	}
+
+	extState.IstioNamespace = &istioNamespace
+
 	return a.updateStatus(ctx, ex, extSpec, extState)
 }
 
@@ -569,6 +572,10 @@ func HashData(data interface{}) (string, error) {
 	return strings.ToLower(base32.StdEncoding.EncodeToString(bytes[:]))[:16], nil
 }
 
+// findIstioNamepsaceForExtension finds the Istio namespace by the Istio Gateway
+// object named "kube-apiserver", which is expected to be present in every
+// Shoot namespace. This Gateway object has a Selector field, from which we can
+// determine the namespace in which the Istio Ingress is deployed.
 func (a *actuator) findIstioNamespaceForExtension(
 	ctx context.Context, ex *extensionsv1alpha1.Extension,
 ) (
