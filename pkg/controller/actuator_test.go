@@ -28,10 +28,15 @@ var _ = Describe("actuator test", func() {
 
 	BeforeEach(func() {
 		shootNamespace1 = createNewShootNamespace()
-		istioNamespace1, istioNamespace1Selector = createNewIstioNamespace()
+		istioNamespace1 = createNewIstioNamespace()
+		istioNamespace1Selector = map[string]string{
+			"app":   "istio-ingressgateway",
+			"istio": istioNamespace1,
+		}
 
 		createNewEnvoyFilter(shootNamespace1, istioNamespace1)
 		createNewGateway(shootNamespace1, istioNamespace1Selector)
+		createNewIstioDeployment(istioNamespace1, istioNamespace1Selector)
 		createNewCluster(shootNamespace1)
 		createNewInfrastructure(shootNamespace1)
 
@@ -203,11 +208,16 @@ var _ = Describe("actuator test", func() {
 			Expect(envoyFilter.Spec.MarshalJSON()).To(ContainSubstring("1.2.3.4"))
 
 			By("2) allowing for the shoot to switch to a different Istio namespace")
-			istioNamespace2, istioNamespace2Selector = createNewIstioNamespace()
+			istioNamespace2 = createNewIstioNamespace()
+			istioNamespace2Selector = map[string]string{
+				"app":   "istio-ingressgateway",
+				"istio": istioNamespace2,
+			}
 
 			// switching the istio namespace by recreating the gateway in the
 			// shoot namespace with a new selector and creating a new
-			// EnvoyFilter for the shoot in the second istio namespace
+			// EnvoyFilter for the shoot and Istio Deployment in the second
+			// istio namespace
 			gw := &istionetworkingv1beta1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "kube-apiserver",
@@ -216,6 +226,7 @@ var _ = Describe("actuator test", func() {
 			}
 			Expect(k8sClient.Delete(ctx, gw)).To(Succeed())
 			createNewGateway(shootNamespace1, istioNamespace2Selector)
+			createNewIstioDeployment(istioNamespace2, istioNamespace2Selector)
 			createNewEnvoyFilter(shootNamespace1, istioNamespace2)
 
 			By("3) creating the EnvoyFilter object correctly in the NEW namespace")
@@ -250,12 +261,16 @@ var _ = Describe("actuator unit test", func() {
 		var istioNamespaceSelector map[string]string
 
 		namespace = createNewShootNamespace()
-		istioNamespace, istioNamespaceSelector = createNewIstioNamespace()
+		istioNamespace = createNewIstioNamespace()
+		istioNamespaceSelector = map[string]string{
+			"app":   "istio-ingressgateway",
+			"istio": istioNamespace,
+		}
 
 		createNewGateway(namespace, istioNamespaceSelector)
+		createNewIstioDeployment(istioNamespace, istioNamespaceSelector)
 		createNewCluster(namespace)
 		createNewInfrastructure(namespace)
-		namespace = createNewShootNamespace()
 
 		a = getNewActuator()
 	})

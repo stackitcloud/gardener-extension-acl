@@ -18,6 +18,10 @@ spec:
           - ...
 ```
 
+The extension also supports multiple ingress namespaces, e.g. when using
+Gardener `ExposureClasses` or deploying Highly Available Control Planes (see
+[ADR03](./docs/adr/03_multiple_istio_namespaces.md) for more information).
+
 Please read on for more information.
 
 ## Installation

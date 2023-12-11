@@ -22,7 +22,6 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"net"
 	"strings"
 	"time"
@@ -38,7 +37,7 @@ import (
 	"github.com/pkg/errors"
 	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
-	corev1 "k8s.io/api/core/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -69,8 +68,9 @@ const (
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
 	// TODO implement
-	ImageName       = "image-name"
-	deletionTimeout = 2 * time.Minute
+	ImageName        = "image-name"
+	deletionTimeout  = 2 * time.Minute
+	istioGatewayName = "kube-apiserver"
 )
 
 // Error variables for controller pkg
@@ -574,8 +574,9 @@ func HashData(data interface{}) (string, error) {
 
 // findIstioNamepsaceForExtension finds the Istio namespace by the Istio Gateway
 // object named "kube-apiserver", which is expected to be present in every
-// Shoot namespace. This Gateway object has a Selector field, from which we can
-// determine the namespace in which the Istio Ingress is deployed.
+// Shoot namespace. This Gateway object has a Selector field that selects a
+// Deployment in the namespace we need. We list Deployments filtered by the
+// labelSelector and return the namespace of the returned Deployment.
 func (a *actuator) findIstioNamespaceForExtension(
 	ctx context.Context, ex *extensionsv1alpha1.Extension,
 ) (
@@ -587,27 +588,22 @@ func (a *actuator) findIstioNamespaceForExtension(
 
 	err = a.client.Get(ctx, client.ObjectKey{
 		Namespace: ex.Namespace,
-		Name:      "kube-apiserver",
+		Name:      istioGatewayName,
 	}, &gw)
 	if err != nil {
 		return "", nil, err
 	}
 
-	namespaceSelector := maps.Clone(gw.Spec.Selector)
+	labelsSelector := client.MatchingLabels(gw.Spec.Selector)
 
-	delete(namespaceSelector, "app")
-
-	labelsSelector := client.MatchingLabels(namespaceSelector)
-
-	nsList := corev1.NamespaceList{}
-	err = a.client.List(ctx, &nsList, labelsSelector)
+	deployments := appsv1.DeploymentList{}
+	err = a.client.List(ctx, &deployments, labelsSelector)
 	if err != nil {
 		return "", nil, err
 	}
-
-	if len(nsList.Items) != 1 {
-		return "", nil, errors.New("no istio namespace could be selected")
+	if len(deployments.Items) != 1 {
+		return "", nil, fmt.Errorf("no istio namespace could be selected, because the numer of deployments found is %d", len(deployments.Items))
 	}
 
-	return nsList.Items[0].Name, gw.Spec.Selector, nil
+	return deployments.Items[0].Namespace, gw.Spec.Selector, nil
 }

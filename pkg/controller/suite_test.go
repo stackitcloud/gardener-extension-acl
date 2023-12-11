@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"maps"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -17,6 +16,7 @@ import (
 	"istio.io/api/networking/v1beta1"
 	istionetworkingv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -91,33 +91,58 @@ func createNewShootNamespace() string {
 	return generatedName
 }
 
-func createNewIstioNamespace() (string, map[string]string) { //nolint:gocritic // no named results needed
+func createNewIstioNamespace() string { //nolint:gocritic // no named results needed
 	generatedName := "istio-ingress-namespace" + strconv.Itoa(istioNamespaceCounter)
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: generatedName,
 			Labels: map[string]string{
 				"istioNamespace": generatedName,
-				"label":          "test",
 			},
 		},
 	}
 	istioNamespaceCounter++
 	Expect(k8sClient.Create(ctx, namespace)).ShouldNot(HaveOccurred())
-	return generatedName, namespace.GetLabels()
+	return generatedName
+}
+
+func createNewIstioDeployment(namespace string, labels map[string]string) {
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "istio-ingressgateway-",
+			Namespace:    namespace,
+			Labels:       labels,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "fake",
+							Image: "pause",
+						},
+					},
+				},
+			},
+		},
+	}
+	Expect(k8sClient.Create(ctx, deployment)).ShouldNot(HaveOccurred())
 }
 
 func createNewGateway(shootNamespace string, labels map[string]string) {
-	selectorLabels := maps.Clone(labels)
-	selectorLabels["app"] = "test"
-
 	gw := &istionetworkingv1beta1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "kube-apiserver",
 			Namespace: shootNamespace,
 		},
 		Spec: v1beta1.Gateway{
-			Selector: selectorLabels,
+			Selector: labels,
 		},
 	}
 	Expect(k8sClient.Create(ctx, gw)).ShouldNot(HaveOccurred())
