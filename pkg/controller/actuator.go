@@ -29,6 +29,7 @@ import (
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/utils/chart"
@@ -164,18 +165,24 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCIDRs...)
 	}
 
-	shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
+	// Gardener supports workerless Shoots. These don't have an associated
+	// Infrastructure object and don't need Node- or Pod-specific CIDRs to be
+	// allowed. Therefore, skip these steps for workerless Shoots.
+	if !v1beta1helper.IsWorkerless(cluster.Shoot) {
+		shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
 
-	infra, err := helper.GetInfrastructureForExtension(ctx, a.client, ex, cluster.Shoot.Name)
-	if err != nil {
-		return err
-	}
+		infra, err := helper.GetInfrastructureForExtension(ctx, a.client, ex, cluster.Shoot.Name)
+		if err != nil {
+			return err
+		}
 
-	providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
-	if err != nil {
-		return err
+		providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
+		if err != nil {
+			return err
+		}
+
+		shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
 	}
-	shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
 
 	if err := a.createSeedResources(
 		ctx,
@@ -532,24 +539,29 @@ func (a *actuator) getAllShootsWithACLExtension(
 			return nil, nil, err
 		}
 
-		infra := &extensionsv1alpha1.Infrastructure{}
-		namespacedName := types.NamespacedName{
-			Namespace: ex.GetNamespace(),
-			Name:      cluster.Shoot.Name,
-		}
-
-		if err := a.client.Get(ctx, namespacedName, infra); err != nil {
-			return nil, nil, err
-		}
-
 		var shootSpecificCIDRs []string
 
-		shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
-		providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
-		if err != nil {
-			return nil, nil, err
+		// Gardener supports workerless Shoots. These don't have an associated
+		// Infrastructure object and don't need Node- or Pod-specific CIDRs to be
+		// allowed. Therefore, skip these steps for workerless Shoots.
+		if !v1beta1helper.IsWorkerless(cluster.Shoot) {
+			infra := &extensionsv1alpha1.Infrastructure{}
+			namespacedName := types.NamespacedName{
+				Namespace: ex.GetNamespace(),
+				Name:      cluster.Shoot.Name,
+			}
+
+			if err := a.client.Get(ctx, namespacedName, infra); err != nil {
+				return nil, nil, err
+			}
+
+			shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
+			providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
+			if err != nil {
+				return nil, nil, err
+			}
+			shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
 		}
-		shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
 
 		mappings = append(mappings, envoyfilters.ACLMapping{
 			ShootName:          ex.Namespace,

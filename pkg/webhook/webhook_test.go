@@ -37,15 +37,11 @@ var _ = Describe("webhook unit test", func() {
 	BeforeEach(func() {
 		name = "some-shoot"
 		namespace = createNewNamespace()
-		cluster = getNewCluster(namespace, &gardencorev1beta1.Shoot{}, &gardencorev1beta1.Seed{})
 		infra = getNewInfrastructure(namespace, name, "non-existent", []byte("{}"), []byte("{}"))
-		e = getNewWebhook()
-
-		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 		Expect(k8sClient.Create(ctx, infra)).To(Succeed())
 
 		// set up default shoot part of cluster resource
-		shootJSON, err := json.Marshal(&gardencorev1beta1.Shoot{
+		shoot := &gardencorev1beta1.Shoot{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      name,
 				Namespace: namespace,
@@ -57,13 +53,20 @@ var _ = Describe("webhook unit test", func() {
 					Services: ptr.To("100.64.0.0/13"),
 					Type:     ptr.To("calico"),
 				},
+				// we need a provider section with at least one worker pool,
+				// otherwise the Shoot will be considered workerless
+				Provider: gardencorev1beta1.Provider{
+					Workers: []gardencorev1beta1.Worker{
+						{
+							Name: "workerpool",
+						},
+					},
+				},
 			},
-		})
-		cluster.Spec.Shoot.Raw = shootJSON
-		Expect(err).To(BeNil())
+		}
 
 		// set up default seed part of cluster resource
-		seedJSON, err := json.Marshal(&gardencorev1beta1.Seed{
+		seed := &gardencorev1beta1.Seed{
 			Spec: gardencorev1beta1.SeedSpec{
 				Networks: gardencorev1beta1.SeedNetworks{
 					Nodes:    ptr.To("100.250.0.0/16"),
@@ -71,11 +74,12 @@ var _ = Describe("webhook unit test", func() {
 					Services: "10.64.0.0/13",
 				},
 			},
-		})
-		Expect(err).To(BeNil())
-		cluster.Spec.Seed.Raw = seedJSON
+		}
 
-		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+		cluster = getNewCluster(namespace, shoot, seed)
+		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+
+		e = getNewWebhook()
 	})
 
 	AfterEach(func() {
@@ -352,6 +356,95 @@ var _ = Describe("webhook unit test", func() {
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "10.9.8.7",
 													"prefix_len":     32,
+												},
+											},
+										},
+									},
+								},
+								"action": "ALLOW",
+							},
+							"@type": "type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC",
+						},
+					},
+
+					{
+						"name": "envoy.filters.network.tcp_proxy",
+						"typed_config": map[string]interface{}{
+							"@type":       "type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy",
+							"cluster":     "outbound|443||kube-apiserver." + namespace + ".svc.cluster.local",
+							"stat_prefix": "outbound|443||kube-apiserver." + namespace + ".svc.cluster.local",
+						},
+					},
+				}
+
+				Expect(ar.Patches[0].Value).To(Equal(expectedFilters))
+			})
+		})
+
+		When("the Shoot is workerless, and there is one allow rule", func() {
+			extSpec := getExtensionSpec()
+
+			BeforeEach(func() {
+				addRuleToSpec(extSpec, "ALLOW", "source_ip", "0.0.0.0/0")
+				ext = getNewExtension(namespace, *extSpec)
+				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
+
+				// define a workerless shoot
+				shoot := &gardencorev1beta1.Shoot{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      name,
+						Namespace: namespace,
+					},
+					Spec: gardencorev1beta1.ShootSpec{},
+				}
+				shootJSON, err := json.Marshal(shoot)
+				Expect(err).To(BeNil())
+
+				cluster.Spec.Shoot = runtime.RawExtension{Raw: shootJSON}
+				Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+			})
+
+			AfterEach(func() {
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, ext))).To(Succeed())
+			})
+
+			It("patches only the rule into the filters object, and no CIDRs for Seed|Shoot nodes and pods", func() {
+				df, dfJSON := getEnvoyFilterFromFile(namespace)
+
+				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
+
+				Expect(ar.Allowed).To(BeTrue())
+
+				expectedFilters := []map[string]interface{}{
+					{
+						"name": "acl-internal-source_ip",
+						"typed_config": map[string]interface{}{
+							"stat_prefix": "envoyrbac",
+							"rules": map[string]interface{}{
+								"policies": map[string]interface{}{
+									"acl-internal": map[string]interface{}{
+										"permissions": []map[string]interface{}{
+											{
+												"any": true,
+											},
+										},
+										"principals": []map[string]interface{}{
+											{
+												"source_ip": map[string]interface{}{
+													"address_prefix": "0.0.0.0",
+													"prefix_len":     0,
+												},
+											},
+											{
+												"remote_ip": map[string]interface{}{
+													"address_prefix": "100.250.0.0",
+													"prefix_len":     16,
+												},
+											},
+											{
+												"remote_ip": map[string]interface{}{
+													"address_prefix": "10.96.0.0",
+													"prefix_len":     11,
 												},
 											},
 										},

@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"strings"
 
+	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/tidwall/gjson"
 	"gomodules.xyz/jsonpatch/v2"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -68,54 +70,57 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	filters := []map[string]interface{}{}
-
-	// patch envoyfilter according to rules
-	// otherwhise just the original filter will be applied
-	if err == nil && aclExtension.DeletionTimestamp.IsZero() {
-		extSpec := &controller.ExtensionSpec{}
-		if err := json.Unmarshal(aclExtension.Spec.ProviderConfig.Raw, extSpec); err != nil {
-			return admission.Errored(http.StatusInternalServerError, err)
+	// if an error occured or the extension is in deletion, just allow without
+	// introducing any patches
+	if err != nil || !aclExtension.DeletionTimestamp.IsZero() {
+		return admission.Response{
+			AdmissionResponse: admissionv1.AdmissionResponse{
+				Allowed: true,
+			},
 		}
+	}
 
-		if err := controller.ValidateExtensionSpec(extSpec); err != nil {
-			return admission.Errored(http.StatusBadRequest, err)
-		}
+	extSpec := &controller.ExtensionSpec{}
+	if err := json.Unmarshal(aclExtension.Spec.ProviderConfig.Raw, extSpec); err != nil {
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
 
-		cluster, err := helper.GetClusterForExtension(ctx, e.Client, aclExtension)
-		if err != nil {
-			return admission.Errored(http.StatusInternalServerError, err)
-		}
+	if err := controller.ValidateExtensionSpec(extSpec); err != nil {
+		return admission.Errored(http.StatusBadRequest, err)
+	}
 
-		var shootSpecificCIRDs []string
-		var alwaysAllowedCIDRs []string
+	cluster, err := helper.GetClusterForExtension(ctx, e.Client, aclExtension)
+	if err != nil {
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
 
-		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, helper.GetSeedSpecificAllowedCIDRs(cluster.Seed)...)
+	var alwaysAllowedCIDRs []string
+	var shootSpecificCIRDs []string
 
-		if len(e.AdditionalAllowedCIDRs) >= 1 {
-			alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, e.AdditionalAllowedCIDRs...)
-		}
+	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, helper.GetSeedSpecificAllowedCIDRs(cluster.Seed)...)
 
+	if len(e.AdditionalAllowedCIDRs) >= 1 {
+		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, e.AdditionalAllowedCIDRs...)
+	}
+
+	// Gardener supports workerless Shoots. These don't have an associated
+	// Infrastructure object and don't need Node- or Pod-specific CIDRs to be
+	// allowed. Therefore, skip these steps for workerless Shoots.
+	if !v1beta1helper.IsWorkerless(cluster.Shoot) {
 		shootSpecificCIRDs = append(shootSpecificCIRDs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
 		shootSpecificCIRDs = append(shootSpecificCIRDs, helper.GetShootPodSpecificAllowedCIDRs(cluster.Shoot)...)
 
 		infra, err := helper.GetInfrastructureForExtension(ctx, e.Client, aclExtension, cluster.Shoot.Name)
 		if err != nil {
-			return admission.Response{}
+			return admission.Errored(http.StatusInternalServerError, err)
 		}
 
 		providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
 		if err != nil {
 			return admission.Errored(http.StatusInternalServerError, err)
 		}
+
 		shootSpecificCIRDs = append(shootSpecificCIRDs, providerSpecificCIRDs...)
-
-		filter, err := envoyfilters.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
-		if err != nil {
-			return admission.Errored(http.StatusInternalServerError, err)
-		}
-
-		filters = append(filters, filter)
 	}
 
 	originalFilter := gjson.Get(originalObjectJSON, `spec.configPatches.0.patch.value.filters.#(name="envoy.filters.network.tcp_proxy")`)
@@ -124,10 +129,18 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	// make sure the original filter is the last
-	filters = append(filters, originalFilterMap)
+	filterPatch, err := envoyfilters.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
+	if err != nil {
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
 
-	pt := admissionv1.PatchTypeJSONPatch
+	// make sure the original filter is the last
+	filterPatches := []map[string]interface{}{filterPatch, originalFilterMap}
+
+	return buildAdmissionResponseWithFilterPatches(filterPatches)
+}
+
+func buildAdmissionResponseWithFilterPatches(filters []map[string]interface{}) admission.Response {
 	return admission.Response{
 		Patches: []jsonpatch.Operation{
 			{
@@ -138,7 +151,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 		},
 		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed:   true,
-			PatchType: &pt,
+			PatchType: ptr.To(admissionv1.PatchTypeJSONPatch),
 		},
 	}
 }
