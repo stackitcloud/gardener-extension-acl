@@ -65,6 +65,7 @@ const (
 	// IngressNamespace is the namespace of the istio
 	IngressNamespace = "istio-ingress"
 	// HashAnnotationName name of annotation for triggering the envoyfilter webhook
+	// DEPRECATED: Remove after annotation has been removed from all EnvoyFilters
 	HashAnnotationName = "acl-ext-rule-hash"
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
@@ -144,7 +145,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		}
 	}
 
-	if err := a.updateEnvoyFilterHash(ctx, ex.GetNamespace(), extSpec, istioNamespace, false); err != nil {
+	if err := a.triggerWebhook(ctx, ex.GetNamespace(), istioNamespace); err != nil {
 		return err
 	}
 
@@ -266,7 +267,7 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 		return err
 	}
 
-	if err := a.updateEnvoyFilterHash(ctx, namespace, nil, istioNamespace, true); err != nil {
+	if err := a.triggerWebhook(ctx, namespace, istioNamespace); err != nil {
 		return err
 	}
 
@@ -441,13 +442,13 @@ func (a *actuator) updateStatus(
 	return a.client.Status().Patch(ctx, ex, patch)
 }
 
-func (a *actuator) updateEnvoyFilterHash(
-	ctx context.Context,
-	shootName string,
-	extSpec *ExtensionSpec,
-	istioNamespace string,
-	inDeletion bool,
-) error {
+// triggerWebhook allows us to "reconcile" the existing EnvoyFilter which we
+// need to modify using a mutating webhook. This is achieved by sending an empty
+// patch for this EnvoyFilter, which invokes the ACL webhook component. This
+// makes sure this EnvoyFilter is kept in sync with the ACL extension config
+// (e.g. when the allowed CIDRS from the extension spec or the
+// alwaysAllowedCIDRs change).
+func (a *actuator) triggerWebhook(ctx context.Context, shootName, istioNamespace string) error {
 	// get envoyfilter with the shoot's name
 	envoyFilter := &istionetworkv1alpha3.EnvoyFilter{}
 	namespacedName := types.NamespacedName{
@@ -459,32 +460,20 @@ func (a *actuator) updateEnvoyFilterHash(
 		return client.IgnoreNotFound(err)
 	}
 
-	if inDeletion {
+	// TODO remove migration code: previously, hash annotations have been used
+	// to check if the rule set of an ACL extension object had changed. If that
+	// was the case, the changed hash annotation would trigger the webhook.
+	// Sending an empty patch is better, as it's 1) easier and 2) also updates
+	// the EnvoyFilter when the alwaysAllowedCIDRs changed, which wasn't
+	// correctly handled before
+	// --> migration code start
+	if _, ok := envoyFilter.Annotations[HashAnnotationName]; ok {
 		delete(envoyFilter.Annotations, HashAnnotationName)
 		return a.client.Update(ctx, envoyFilter)
 	}
+	// --> migration code end
 
-	// calculate the new hash
-	newHashString, err := HashData(extSpec.Rule)
-	if err != nil {
-		return err
-	}
-
-	// get the annotation hash
-	if envoyFilter.Annotations == nil {
-		envoyFilter.Annotations = map[string]string{}
-	}
-
-	oldHashString, ok := envoyFilter.Annotations[HashAnnotationName]
-
-	// set hash if not present or different
-	if !ok || oldHashString != newHashString {
-		envoyFilter.Annotations[HashAnnotationName] = newHashString
-		return a.client.Update(ctx, envoyFilter)
-	}
-
-	// hash unchanged, do nothing
-	return nil
+	return a.client.Patch(ctx, envoyFilter, client.RawPatch(types.MergePatchType, []byte("{}")))
 }
 
 // getAllShootsWithACLExtension returns a list of all shoots that have the ACL

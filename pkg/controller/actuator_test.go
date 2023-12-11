@@ -279,35 +279,24 @@ var _ = Describe("actuator unit test", func() {
 		deleteNamespace(namespace)
 	})
 
-	Describe("updateEnvoyFilterHash", func() {
-		When("there is an extension resource with one rule", func() {
-			It("Should add an anotation with a hash", func() {
-				createNewEnvoyFilter(namespace, istioNamespace)
-				envoyFilter := &istionetworkingClientGo.EnvoyFilter{
-					ObjectMeta: metav1.ObjectMeta{Name: namespace, Namespace: istioNamespace},
-				}
-				extSpec := &ExtensionSpec{}
-				addRuleToSpec(extSpec, "DENY", "source_ip", "0.0.0.0/0")
-
-				Expect(a.updateEnvoyFilterHash(ctx, namespace, extSpec, istioNamespace, false)).To(Succeed())
-				Expect(k8sClient.Get(
-					ctx, types.NamespacedName{
-						Name:      envoyFilter.Name,
-						Namespace: envoyFilter.Namespace,
-					},
-					envoyFilter,
-				)).To(Succeed())
-
-				Expect(envoyFilter.Annotations).ToNot(BeNil())
-			})
-		})
-
-		When("the extension resource is being deleted, and the envoyfilter has an annotation", func() {
+	// TODO: test case can be removed together with the migration code in the
+	// triggerWebhook() function, the test only checks that the deprecated hash
+	// annotation is properly removed
+	Describe("triggerWebhook", func() {
+		When("the envoyfilter has a hash annotation", func() {
 			It("Should remove the hash annotation", func() {
-				createNewEnvoyFilter(namespace, istioNamespace)
 				envoyFilter := &istionetworkingClientGo.EnvoyFilter{
-					ObjectMeta: metav1.ObjectMeta{Name: namespace, Namespace: istioNamespace},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      namespace,
+						Namespace: istioNamespace,
+						Annotations: map[string]string{
+							"acl-ext-rule-hash": "should-be-removed",
+						},
+					},
 				}
+				Expect(k8sClient.Create(ctx, envoyFilter)).To(Succeed())
+
+				Expect(a.triggerWebhook(ctx, namespace, istioNamespace)).To(Succeed())
 				Expect(k8sClient.Get(
 					ctx, types.NamespacedName{
 						Name:      envoyFilter.Name,
@@ -316,21 +305,7 @@ var _ = Describe("actuator unit test", func() {
 					envoyFilter,
 				)).To(Succeed())
 
-				envoyFilter.Annotations = map[string]string{
-					HashAnnotationName: "should-be-removed",
-				}
-
-				Expect(a.updateEnvoyFilterHash(ctx, namespace, nil, istioNamespace, true)).To(Succeed())
-				Expect(k8sClient.Get(
-					ctx, types.NamespacedName{
-						Name:      envoyFilter.Name,
-						Namespace: envoyFilter.Namespace,
-					},
-					envoyFilter,
-				)).To(Succeed())
-
-				_, ok := envoyFilter.Annotations[HashAnnotationName]
-				Expect(ok).To(BeFalse())
+				Expect(envoyFilter.Annotations).ToNot(HaveKey("acl-ext-rule-hash"))
 			})
 		})
 	})
