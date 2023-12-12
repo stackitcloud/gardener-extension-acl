@@ -11,7 +11,6 @@ REPO_ROOT                   := $(shell dirname $(realpath $(lastword $(MAKEFILE_
 HACK_DIR                    := $(REPO_ROOT)/hack
 VERSION                     := $(shell git describe --tag --always --dirty)
 TAG							:= $(VERSION)
-LD_FLAGS                    := -w $(shell EFFECTIVE_VERSION=$(VERSION) bash $(HACK_DIRECTORY)/get-build-ld-flags.sh k8s.io/component-base $(REPO_ROOT)/go.mod $(EXTENSION_PREFIX)-$(NAME) 2>&1 | grep -v .dockerignore)
 LEADER_ELECTION             := false
 IGNORE_OPERATION_ANNOTATION := false
 
@@ -27,14 +26,17 @@ include hack/tools.mk
 
 GOIMPORTSREVISER_VERSION := v3.5.6
 
-.PHONY: start
-start:
+.PHONY: run
+run:
 	@LEADER_ELECTION_NAMESPACE=garden GO111MODULE=on go run \
-		-ldflags $(LD_FLAGS) \
 		./cmd/$(EXTENSION_PREFIX)-$(NAME) \
 		--kubeconfig=${KUBECONFIG} \
 		--ignore-operation-annotation=$(IGNORE_OPERATION_ANNOTATION) \
-		--leader-election=$(LEADER_ELECTION)
+		--leader-election=$(LEADER_ELECTION) \
+		--webhook-config-mode=url \
+		--webhook-config-url="host.docker.internal:9443" \
+		--webhook-config-cert-dir=example/certs \
+		--webhook-config-server-port=9443
 
 .PHONY: debug
 debug:
@@ -50,7 +52,6 @@ debug:
 
 PUSH ?= false
 images: export KO_DOCKER_REPO = $(REPO)
-images: export LD_FLAGS := $(LD_FLAGS)
 
 .PHONY: images
 images: $(KO)

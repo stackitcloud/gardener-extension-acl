@@ -28,7 +28,6 @@ import (
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
@@ -213,7 +212,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	extState.IstioNamespace = &istioNamespace
 
-	return a.updateStatus(ctx, ex, extSpec, extState)
+	return a.updateStatus(ctx, ex, extState)
 }
 
 // ValidateExtensionSpec checks if the ExtensionSpec exists, and if its action,
@@ -307,7 +306,7 @@ func (a *actuator) reconcileVPNEnvoyFilter(
 	envoyFilter.SetName(name)
 
 	if len(aclMappings) == 0 {
-		// no shoot in this namespace with the acl extension so we can delete the config
+		// no shoot in this namespace with the ACL extension, so we can delete the config
 		err = a.client.Delete(ctx, envoyFilter)
 		return client.IgnoreNotFound(err)
 	}
@@ -425,18 +424,14 @@ func (a *actuator) createManagedResource(
 func (a *actuator) updateStatus(
 	ctx context.Context,
 	ex *extensionsv1alpha1.Extension,
-	_ *ExtensionSpec,
 	state *ExtensionState,
 ) error {
-	var resources []gardencorev1beta1.NamedResourceReference
-
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
 
 	patch := client.MergeFrom(ex.DeepCopy())
-	ex.Status.Resources = resources
 
 	ex.Status.State = &runtime.RawExtension{Raw: stateJSON}
 	return a.client.Status().Patch(ctx, ex, patch)
@@ -493,7 +488,7 @@ func (a *actuator) getAllShootsWithACLExtension(
 
 	mappings := []envoyfilters.ACLMapping{}
 
-	var istioLables map[string]string
+	var istioLabels map[string]string
 
 	for i := range extensions.Items {
 		ex := &extensions.Items[i]
@@ -502,9 +497,9 @@ func (a *actuator) getAllShootsWithACLExtension(
 		}
 
 		var shootIstioNamespace string
-		var shootIstioLables map[string]string
+		var shootIstioLabels map[string]string
 
-		shootIstioNamespace, shootIstioLables, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
+		shootIstioNamespace, shootIstioLabels, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -512,8 +507,8 @@ func (a *actuator) getAllShootsWithACLExtension(
 			continue
 		}
 
-		if istioLables == nil {
-			istioLables = shootIstioLables
+		if istioLabels == nil {
+			istioLabels = shootIstioLabels
 		}
 
 		extSpec := &ExtensionSpec{}
@@ -558,7 +553,7 @@ func (a *actuator) getAllShootsWithACLExtension(
 			ShootSpecificCIDRs: shootSpecificCIDRs,
 		})
 	}
-	return mappings, istioLables, nil
+	return mappings, istioLabels, nil
 }
 
 // HashData returns a 16 char hash for the given object.
@@ -603,7 +598,7 @@ func (a *actuator) findIstioNamespaceForExtension(
 		return "", nil, err
 	}
 	if len(deployments.Items) != 1 {
-		return "", nil, fmt.Errorf("no istio namespace could be selected, because the numer of deployments found is %d", len(deployments.Items))
+		return "", nil, fmt.Errorf("no istio namespace could be selected, because the number of deployments found is %d", len(deployments.Items))
 	}
 
 	return deployments.Items[0].Namespace, gw.Spec.Selector, nil

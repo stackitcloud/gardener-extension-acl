@@ -92,7 +92,6 @@ func (o *Options) run(ctx context.Context) error {
 	ctrlConfig.ApplyHealthCheckConfig(&healthcheck.DefaultAddOptions.HealthCheckConfig)
 	ctrlConfig.Apply(&controller.DefaultAddOptions.ExtensionConfig)
 	webhook.DefaultAddOptions.AllowedCIDRs = ctrlConfig.AdditionalAllowedCIDRs
-	ctrlConfig.Apply(&controller.DefaultAddOptions.ExtensionConfig)
 
 	o.controllerOptions.Completed().Apply(&controller.DefaultAddOptions.ControllerOptions)
 	o.healthOptions.Completed().Apply(&healthcheck.DefaultAddOptions.Controller)

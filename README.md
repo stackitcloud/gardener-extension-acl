@@ -166,6 +166,7 @@ kubectl scale deployment -n extension-acl-XXXXXXX --replicas=0 gardener-extensio
 ```
 
 Now you can run the acl-extension locally to debug it.
+
 ```bash
-go run cmd/gardener-extension-acl/main.go --webhook-config-mode=url --webhook-config-url="host.docker.internal:9443" --webhook-config-cert-dir=example/certs --leader-election=false --webhook-config-server-port=9443
+make run
 ```
