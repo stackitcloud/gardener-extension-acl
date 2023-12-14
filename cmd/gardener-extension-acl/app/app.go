@@ -22,7 +22,8 @@ import (
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/util"
 	"github.com/spf13/cobra"
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	componentbaseconfig "k8s.io/component-base/config"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -80,7 +81,10 @@ func (o *Options) run(ctx context.Context) error {
 		return fmt.Errorf("could not update manager scheme: %s", err)
 	}
 
-	if err := istionetworkingClientGo.AddToScheme(mgr.GetScheme()); err != nil {
+	if err := istionetworkv1alpha3.AddToScheme(mgr.GetScheme()); err != nil {
+		return fmt.Errorf("could not update manager scheme: %s", err)
+	}
+	if err := istionetworkv1beta1.AddToScheme(mgr.GetScheme()); err != nil {
 		return fmt.Errorf("could not update manager scheme: %s", err)
 	}
 
@@ -88,7 +92,6 @@ func (o *Options) run(ctx context.Context) error {
 	ctrlConfig.ApplyHealthCheckConfig(&healthcheck.DefaultAddOptions.HealthCheckConfig)
 	ctrlConfig.Apply(&controller.DefaultAddOptions.ExtensionConfig)
 	webhook.DefaultAddOptions.AllowedCIDRs = ctrlConfig.AdditionalAllowedCIDRs
-	ctrlConfig.Apply(&controller.DefaultAddOptions.ExtensionConfig)
 
 	o.controllerOptions.Completed().Apply(&controller.DefaultAddOptions.ControllerOptions)
 	o.healthOptions.Completed().Apply(&healthcheck.DefaultAddOptions.Controller)

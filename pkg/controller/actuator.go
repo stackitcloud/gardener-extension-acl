@@ -28,14 +28,16 @@ import (
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
 	"github.com/gardener/gardener/pkg/utils/chart"
-	managedresources "github.com/gardener/gardener/pkg/utils/managedresources"
+	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -62,12 +64,14 @@ const (
 	// IngressNamespace is the namespace of the istio
 	IngressNamespace = "istio-ingress"
 	// HashAnnotationName name of annotation for triggering the envoyfilter webhook
+	// DEPRECATED: Remove after annotation has been removed from all EnvoyFilters
 	HashAnnotationName = "acl-ext-rule-hash"
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
 	// TODO implement
-	ImageName       = "image-name"
-	deletionTimeout = 2 * time.Minute
+	ImageName        = "image-name"
+	deletionTimeout  = 2 * time.Minute
+	istioGatewayName = "kube-apiserver"
 )
 
 // Error variables for controller pkg
@@ -79,6 +83,11 @@ var (
 	ErrNoExtensionsFound     = errors.New("could not list any extensions")
 	ErrNoAdvertisedAddresses = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
 )
+
+// ExtensionState contains the State of the Extension
+type ExtensionState struct {
+	IstioNamespace *string `json:"istioNamespace"`
+}
 
 // NewActuator returns an actuator responsible for Extension resources.
 func NewActuator(mgr manager.Manager, cfg config.Config) extension.Actuator {
@@ -104,6 +113,8 @@ type ExtensionSpec struct {
 }
 
 // Reconcile the Extension resource.
+//
+//nolint:gocyclo // this is the main reconcile loop
 func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
 	cluster, err := helper.GetClusterForExtension(ctx, a.client, ex)
 	if err != nil {
@@ -116,17 +127,28 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 			return err
 		}
 	}
-
+	// validate the ExtensionSpec
 	if err := ValidateExtensionSpec(extSpec); err != nil {
 		return err
 	}
 
-	if err := a.updateEnvoyFilterHash(ctx, ex.GetNamespace(), extSpec, false); err != nil {
+	istioNamespace, istioLabels, err := a.findIstioNamespaceForExtension(ctx, ex)
+	if err != nil {
+		return err
+	}
+
+	extState := &ExtensionState{}
+	if ex.Status.State != nil && ex.Status.State.Raw != nil {
+		if err := json.Unmarshal(ex.Status.State.Raw, &extState); err != nil {
+			return err
+		}
+	}
+
+	if err := a.triggerWebhook(ctx, ex.GetNamespace(), istioNamespace); err != nil {
 		return err
 	}
 
 	hosts := make([]string, 0)
-
 	if cluster.Shoot.Status.AdvertisedAddresses == nil || len(cluster.Shoot.Status.AdvertisedAddresses) < 1 {
 		return ErrNoAdvertisedAddresses
 	}
@@ -143,18 +165,24 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCIDRs...)
 	}
 
-	shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
+	// Gardener supports workerless Shoots. These don't have an associated
+	// Infrastructure object and don't need Node- or Pod-specific CIDRs to be
+	// allowed. Therefore, skip these steps for workerless Shoots.
+	if !v1beta1helper.IsWorkerless(cluster.Shoot) {
+		shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
 
-	infra, err := helper.GetInfrastructureForExtension(ctx, a.client, ex, cluster.Shoot.Name)
-	if err != nil {
-		return err
-	}
+		infra, err := helper.GetInfrastructureForExtension(ctx, a.client, ex, cluster.Shoot.Name)
+		if err != nil {
+			return err
+		}
 
-	providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
-	if err != nil {
-		return err
+		providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
+		if err != nil {
+			return err
+		}
+
+		shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
 	}
-	shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
 
 	if err := a.createSeedResources(
 		ctx,
@@ -165,15 +193,26 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		hosts,
 		shootSpecificCIDRs,
 		alwaysAllowedCIDRs,
+		istioNamespace,
+		istioLabels,
 	); err != nil {
 		return err
 	}
 
-	if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs); err != nil {
+	if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, istioNamespace, istioLabels); err != nil {
 		return err
 	}
 
-	return a.updateStatus(ctx, ex, extSpec)
+	if extState.IstioNamespace != nil && *extState.IstioNamespace != istioNamespace {
+		// we need to cleanup the old vpn object if the istioNamespace changed
+		if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, *extState.IstioNamespace, nil); err != nil {
+			return err
+		}
+	}
+
+	extState.IstioNamespace = &istioNamespace
+
+	return a.updateStatus(ctx, ex, extState)
 }
 
 // ValidateExtensionSpec checks if the ExtensionSpec exists, and if its action,
@@ -222,7 +261,12 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	namespace := ex.GetNamespace()
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
-	if err := a.updateEnvoyFilterHash(ctx, namespace, nil, true); err != nil {
+	istioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, ex)
+	if err != nil {
+		return err
+	}
+
+	if err := a.triggerWebhook(ctx, namespace, istioNamespace); err != nil {
 		return err
 	}
 
@@ -242,15 +286,10 @@ func (a *actuator) Migrate(ctx context.Context, log logr.Logger, ex *extensionsv
 func (a *actuator) reconcileVPNEnvoyFilter(
 	ctx context.Context,
 	alwaysAllowedCIDRs []string,
+	istioNamespace string,
+	istioLabels map[string]string,
 ) error {
-	aclMappings, err := a.getAllShootsWithACLExtension(ctx)
-	if err != nil {
-		return err
-	}
-
-	vpnEnvoyFilterSpec, err := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
-		aclMappings, alwaysAllowedCIDRs,
-	)
+	aclMappings, istioLabelsFromExt, err := a.getAllShootsWithACLExtension(ctx, istioNamespace)
 	if err != nil {
 		return err
 	}
@@ -262,9 +301,25 @@ func (a *actuator) reconcileVPNEnvoyFilter(
 	// build EnvoyFilter object as map[string]interface{}
 	// because the actual EnvoyFilter struct is a pain to type
 	envoyFilter := &unstructured.Unstructured{}
-	envoyFilter.SetGroupVersionKind(istionetworkingClientGo.SchemeGroupVersion.WithKind("EnvoyFilter"))
-	envoyFilter.SetNamespace(IngressNamespace)
+	envoyFilter.SetGroupVersionKind(istionetworkv1alpha3.SchemeGroupVersion.WithKind("EnvoyFilter"))
+	envoyFilter.SetNamespace(istioNamespace)
 	envoyFilter.SetName(name)
+
+	if len(aclMappings) == 0 {
+		// no shoot in this namespace with the ACL extension, so we can delete the config
+		err = a.client.Delete(ctx, envoyFilter)
+		return client.IgnoreNotFound(err)
+	}
+	if istioLabels == nil {
+		istioLabels = istioLabelsFromExt
+	}
+
+	vpnEnvoyFilterSpec, err := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
+		aclMappings, alwaysAllowedCIDRs, istioLabels,
+	)
+	if err != nil {
+		return err
+	}
 
 	err = a.client.Get(ctx, client.ObjectKeyFromObject(envoyFilter), envoyFilter)
 	if client.IgnoreNotFound(err) != nil {
@@ -289,11 +344,13 @@ func (a *actuator) createSeedResources(
 	hosts []string,
 	shootSpecificCIRDs []string,
 	alwaysAllowedCIDRs []string,
+	istioNamespace string,
+	istioLabels map[string]string,
 ) error {
 	var err error
 
 	apiEnvoyFilterSpec, err := envoyfilters.BuildAPIEnvoyFilterSpecForHelmChart(
-		spec.Rule, hosts, append(alwaysAllowedCIDRs, shootSpecificCIRDs...),
+		spec.Rule, hosts, append(alwaysAllowedCIDRs, shootSpecificCIRDs...), istioLabels,
 	)
 	if err != nil {
 		return err
@@ -301,7 +358,7 @@ func (a *actuator) createSeedResources(
 
 	cfg := map[string]interface{}{
 		"shootName":          cluster.Shoot.Status.TechnicalID,
-		"targetNamespace":    IngressNamespace,
+		"targetNamespace":    istioNamespace,
 		"apiEnvoyFilterSpec": apiEnvoyFilterSpec,
 	}
 
@@ -364,19 +421,33 @@ func (a *actuator) createManagedResource(
 	)
 }
 
-func (a *actuator) updateStatus(ctx context.Context, ex *extensionsv1alpha1.Extension, _ *ExtensionSpec) error {
-	var resources []gardencorev1beta1.NamedResourceReference
+func (a *actuator) updateStatus(
+	ctx context.Context,
+	ex *extensionsv1alpha1.Extension,
+	state *ExtensionState,
+) error {
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
 
 	patch := client.MergeFrom(ex.DeepCopy())
-	ex.Status.Resources = resources
+
+	ex.Status.State = &runtime.RawExtension{Raw: stateJSON}
 	return a.client.Status().Patch(ctx, ex, patch)
 }
 
-func (a *actuator) updateEnvoyFilterHash(ctx context.Context, shootName string, extSpec *ExtensionSpec, inDeletion bool) error {
+// triggerWebhook allows us to "reconcile" the existing EnvoyFilter which we
+// need to modify using a mutating webhook. This is achieved by sending an empty
+// patch for this EnvoyFilter, which invokes the ACL webhook component. This
+// makes sure this EnvoyFilter is kept in sync with the ACL extension config
+// (e.g. when the allowed CIDRS from the extension spec or the
+// alwaysAllowedCIDRs change).
+func (a *actuator) triggerWebhook(ctx context.Context, shootName, istioNamespace string) error {
 	// get envoyfilter with the shoot's name
-	envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
+	envoyFilter := &istionetworkv1alpha3.EnvoyFilter{}
 	namespacedName := types.NamespacedName{
-		Namespace: IngressNamespace,
+		Namespace: istioNamespace,
 		Name:      shootName,
 	}
 
@@ -384,84 +455,97 @@ func (a *actuator) updateEnvoyFilterHash(ctx context.Context, shootName string, 
 		return client.IgnoreNotFound(err)
 	}
 
-	if inDeletion {
+	// TODO remove migration code: previously, hash annotations have been used
+	// to check if the rule set of an ACL extension object had changed. If that
+	// was the case, the changed hash annotation would trigger the webhook.
+	// Sending an empty patch is better, as it's 1) easier and 2) also updates
+	// the EnvoyFilter when the alwaysAllowedCIDRs changed, which wasn't
+	// correctly handled before
+	// --> migration code start
+	if _, ok := envoyFilter.Annotations[HashAnnotationName]; ok {
 		delete(envoyFilter.Annotations, HashAnnotationName)
 		return a.client.Update(ctx, envoyFilter)
 	}
+	// --> migration code end
 
-	// calculate the new hash
-	newHashString, err := HashData(extSpec.Rule)
-	if err != nil {
-		return err
-	}
-
-	// get the annotation hash
-	if envoyFilter.Annotations == nil {
-		envoyFilter.Annotations = map[string]string{}
-	}
-
-	oldHashString, ok := envoyFilter.Annotations[HashAnnotationName]
-
-	// set hash if not present or different
-	if !ok || oldHashString != newHashString {
-		envoyFilter.Annotations[HashAnnotationName] = newHashString
-		return a.client.Update(ctx, envoyFilter)
-	}
-
-	// hash unchanged, do nothing
-	return nil
+	return a.client.Patch(ctx, envoyFilter, client.RawPatch(types.MergePatchType, []byte("{}")))
 }
 
 // getAllShootsWithACLExtension returns a list of all shoots that have the ACL
 // extension enabled, together with their rule.
-func (a *actuator) getAllShootsWithACLExtension(ctx context.Context) ([]envoyfilters.ACLMapping, error) {
+func (a *actuator) getAllShootsWithACLExtension(
+	ctx context.Context, istioNamespace string,
+) ([]envoyfilters.ACLMapping, map[string]string, error) {
 	extensions := &extensionsv1alpha1.ExtensionList{}
 	err := a.client.List(ctx, extensions)
 	if err != client.IgnoreNotFound(err) {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if len(extensions.Items) < 1 {
-		return nil, ErrNoExtensionsFound
+		return nil, nil, ErrNoExtensionsFound
 	}
 
 	mappings := []envoyfilters.ACLMapping{}
+
+	var istioLabels map[string]string
 
 	for i := range extensions.Items {
 		ex := &extensions.Items[i]
 		if ex.Spec.Type != Type {
 			continue
 		}
+
+		var shootIstioNamespace string
+		var shootIstioLabels map[string]string
+
+		shootIstioNamespace, shootIstioLabels, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
+		if err != nil {
+			return nil, nil, err
+		}
+		if istioNamespace != shootIstioNamespace {
+			continue
+		}
+
+		if istioLabels == nil {
+			istioLabels = shootIstioLabels
+		}
+
 		extSpec := &ExtensionSpec{}
 		if ex.Spec.ProviderConfig != nil && ex.Spec.ProviderConfig.Raw != nil {
 			if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 
 		cluster, err := controller.GetCluster(ctx, a.client, ex.GetNamespace())
 		if err != nil {
-			return nil, err
-		}
-
-		infra := &extensionsv1alpha1.Infrastructure{}
-		namespacedName := types.NamespacedName{
-			Namespace: ex.GetNamespace(),
-			Name:      cluster.Shoot.Name,
-		}
-
-		if err := a.client.Get(ctx, namespacedName, infra); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		var shootSpecificCIDRs []string
 
-		shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
-		providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
-		if err != nil {
-			return nil, err
+		// Gardener supports workerless Shoots. These don't have an associated
+		// Infrastructure object and don't need Node- or Pod-specific CIDRs to be
+		// allowed. Therefore, skip these steps for workerless Shoots.
+		if !v1beta1helper.IsWorkerless(cluster.Shoot) {
+			infra := &extensionsv1alpha1.Infrastructure{}
+			namespacedName := types.NamespacedName{
+				Namespace: ex.GetNamespace(),
+				Name:      cluster.Shoot.Name,
+			}
+
+			if err := a.client.Get(ctx, namespacedName, infra); err != nil {
+				return nil, nil, err
+			}
+
+			shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
+			providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
+			if err != nil {
+				return nil, nil, err
+			}
+			shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
 		}
-		shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
 
 		mappings = append(mappings, envoyfilters.ACLMapping{
 			ShootName:          ex.Namespace,
@@ -469,7 +553,7 @@ func (a *actuator) getAllShootsWithACLExtension(ctx context.Context) ([]envoyfil
 			ShootSpecificCIDRs: shootSpecificCIDRs,
 		})
 	}
-	return mappings, nil
+	return mappings, istioLabels, nil
 }
 
 // HashData returns a 16 char hash for the given object.
@@ -482,4 +566,40 @@ func HashData(data interface{}) (string, error) {
 
 	bytes := sha256.Sum256(jsonSpec)
 	return strings.ToLower(base32.StdEncoding.EncodeToString(bytes[:]))[:16], nil
+}
+
+// findIstioNamepsaceForExtension finds the Istio namespace by the Istio Gateway
+// object named "kube-apiserver", which is expected to be present in every
+// Shoot namespace. This Gateway object has a Selector field that selects a
+// Deployment in the namespace we need. We list Deployments filtered by the
+// labelSelector and return the namespace of the returned Deployment.
+func (a *actuator) findIstioNamespaceForExtension(
+	ctx context.Context, ex *extensionsv1alpha1.Extension,
+) (
+	istioNamespace string,
+	istioLabels map[string]string,
+	err error,
+) {
+	gw := istionetworkv1beta1.Gateway{}
+
+	err = a.client.Get(ctx, client.ObjectKey{
+		Namespace: ex.Namespace,
+		Name:      istioGatewayName,
+	}, &gw)
+	if err != nil {
+		return "", nil, err
+	}
+
+	labelsSelector := client.MatchingLabels(gw.Spec.Selector)
+
+	deployments := appsv1.DeploymentList{}
+	err = a.client.List(ctx, &deployments, labelsSelector)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(deployments.Items) != 1 {
+		return "", nil, fmt.Errorf("no istio namespace could be selected, because the number of deployments found is %d", len(deployments.Items))
+	}
+
+	return deployments.Items[0].Namespace, gw.Spec.Selector, nil
 }

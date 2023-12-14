@@ -79,6 +79,9 @@ containing the internal networking configuration. We then check if there is an
 it contains rules, we patch the incoming `EnvoyFilter` with those rules and send
 the result back to the API server.
 
+> The following description of the hashing procedure to trigger the webhook has
+> been superseded by [ADR04](04_trigger_webhook.md).
+
 A challenge with this approach is that the webhook (in contrast to the extension
 controller) is only triggered when `EnvoyFilters` are created or updated.
 However, the webhook also needs to act when a change is made to the `Extension`

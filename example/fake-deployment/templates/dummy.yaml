@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: dummy
+  name: dummy
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dummy
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: dummy
+    spec:
+      containers:
+      - image: nginx
+        name: nginx
+        resources: {}

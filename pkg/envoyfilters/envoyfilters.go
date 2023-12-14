@@ -33,7 +33,7 @@ type ACLRule struct {
 // BuildAPIEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for API server
 // networking for every rule in the extension spec.
 func BuildAPIEnvoyFilterSpecForHelmChart(
-	rule *ACLRule, hosts, alwaysAllowedCIDRs []string,
+	rule *ACLRule, hosts, alwaysAllowedCIDRs []string, istioLabels map[string]string,
 ) (map[string]interface{}, error) {
 	apiConfigPatch, err := CreateAPIConfigPatchFromRule(rule, hosts, alwaysAllowedCIDRs)
 	if err != nil {
@@ -46,10 +46,7 @@ func BuildAPIEnvoyFilterSpecForHelmChart(
 
 	return map[string]interface{}{
 		"workloadSelector": map[string]interface{}{
-			"labels": map[string]interface{}{
-				"app":   "istio-ingressgateway",
-				"istio": "ingressgateway",
-			},
+			"labels": istioLabels,
 		},
 		"configPatches": configPatches,
 	}, nil
@@ -64,7 +61,7 @@ func BuildAPIEnvoyFilterSpecForHelmChart(
 // same as the seed namespace of the shoot. (Gardener uses the seedNamespace
 // value in the botanist vpnshoot task.)
 func BuildVPNEnvoyFilterSpecForHelmChart(
-	mappings []ACLMapping, alwaysAllowedCIDRs []string,
+	mappings []ACLMapping, alwaysAllowedCIDRs []string, istioLabels map[string]string,
 ) (map[string]interface{}, error) {
 	vpnConfigPatch, err := CreateVPNConfigPatchFromRule(mappings, alwaysAllowedCIDRs)
 	if err != nil {
@@ -77,10 +74,7 @@ func BuildVPNEnvoyFilterSpecForHelmChart(
 
 	return map[string]interface{}{
 		"workloadSelector": map[string]interface{}{
-			"labels": map[string]interface{}{
-				"app":   "istio-ingressgateway",
-				"istio": "ingressgateway",
-			},
+			"labels": istioLabels,
 		},
 		"configPatches": configPatches,
 	}, nil

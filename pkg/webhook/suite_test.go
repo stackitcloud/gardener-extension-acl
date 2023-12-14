@@ -9,7 +9,7 @@ import (
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +32,7 @@ var testEnv *envtest.Environment
 var clientScheme *runtime.Scheme
 var ctx = context.TODO()
 var namespaceCounter = 1
+var istioNamespace = "istio-ingress"
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -68,7 +69,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-	createIngressNamespace()
+	createIngressNamespace(istioNamespace)
 })
 
 var _ = AfterSuite(func() {
@@ -89,10 +90,10 @@ func createNewNamespace() string {
 	return generatedName
 }
 
-func createIngressNamespace() {
+func createIngressNamespace(name string) {
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: controller.IngressNamespace,
+			Name: name,
 		},
 	}
 	Expect(k8sClient.Create(ctx, namespace)).ShouldNot(HaveOccurred())
