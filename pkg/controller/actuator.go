@@ -132,7 +132,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	istioNamespace, istioLabels, err := a.findIstioNamespaceForExtension(ctx, ex)
+	istioNamespace, istioLabels, err := a.findIstioNamespaceForExtension(ctx, ex, false)
 	if err != nil {
 		return err
 	}
@@ -261,7 +261,7 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	namespace := ex.GetNamespace()
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
-	istioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, ex)
+	istioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, ex, false)
 	if err != nil {
 		return err
 	}
@@ -499,7 +499,14 @@ func (a *actuator) getAllShootsWithACLExtension(
 		var shootIstioNamespace string
 		var shootIstioLabels map[string]string
 
-		shootIstioNamespace, shootIstioLabels, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
+		// Note that we set ignoreNotFound to `true` here, in order to NOT fail
+		// when hibernated clusters have the ACL extension enabled. When a
+		// Gateway object can't be found in a hibernated cluster's namespace,
+		// the function returns without an error, and sets the
+		// shootIstioNamespace to "" (empty string). The rest of the loops'
+		// iteration is then skipped using the `continue` as
+		// `istioNamespace != shootIstioNamespace` evaluates to `true`.
+		shootIstioNamespace, shootIstioLabels, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i], true)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -568,13 +575,18 @@ func HashData(data interface{}) (string, error) {
 	return strings.ToLower(base32.StdEncoding.EncodeToString(bytes[:]))[:16], nil
 }
 
-// findIstioNamepsaceForExtension finds the Istio namespace by the Istio Gateway
+// findIstioNamespaceForExtension finds the Istio namespace by the Istio Gateway
 // object named "kube-apiserver", which is expected to be present in every
-// Shoot namespace. This Gateway object has a Selector field that selects a
-// Deployment in the namespace we need. We list Deployments filtered by the
-// labelSelector and return the namespace of the returned Deployment.
+// Shoot namespace (except when the Shoot is hibernated). This Gateway object
+// has a Selector field that selects a Deployment in the namespace we need. We
+// list Deployments filtered by the labelSelector and return the namespace of
+// the returned Deployment.
+//
+// Use ignoreNotFound=true to not return an error when the requested Gateway is
+// not found (which is the case for hiberanted clusters). This can be helpful
+// when you just want to skip unavailable clusters.
 func (a *actuator) findIstioNamespaceForExtension(
-	ctx context.Context, ex *extensionsv1alpha1.Extension,
+	ctx context.Context, ex *extensionsv1alpha1.Extension, ignoreNotFound bool,
 ) (
 	istioNamespace string,
 	istioLabels map[string]string,
@@ -586,6 +598,10 @@ func (a *actuator) findIstioNamespaceForExtension(
 		Namespace: ex.Namespace,
 		Name:      istioGatewayName,
 	}, &gw)
+	// ignore `NotFound` errors when the caller requires it
+	if ignoreNotFound && apierrors.IsNotFound(err) {
+		return "", nil, nil
+	}
 	if err != nil {
 		return "", nil, err
 	}
