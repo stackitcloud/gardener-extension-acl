@@ -121,6 +121,13 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
+	// we do not reconcile hibernated clusters, as they don't have a Gateway
+	// resource for the extension to get the istio namespace from
+	if cluster.Shoot != nil && cluster.Shoot.Spec.Hibernation != nil &&
+		cluster.Shoot.Spec.Hibernation.Enabled != nil && *cluster.Shoot.Spec.Hibernation.Enabled {
+		return nil
+	}
+
 	extSpec := &ExtensionSpec{}
 	if ex.Spec.ProviderConfig != nil && ex.Spec.ProviderConfig.Raw != nil {
 		if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
@@ -132,7 +139,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	istioNamespace, istioLabels, err := a.findIstioNamespaceForExtension(ctx, ex, false)
+	istioNamespace, istioLabels, err := a.findIstioNamespaceForExtension(ctx, ex)
 	if err != nil {
 		return err
 	}
@@ -261,7 +268,8 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	namespace := ex.GetNamespace()
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
-	istioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, ex, false)
+	istioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, ex)
+	// TODO how to handle missing Gateway objects during deletion (NotFoundErrors)?
 	if err != nil {
 		return err
 	}
@@ -499,18 +507,14 @@ func (a *actuator) getAllShootsWithACLExtension(
 		var shootIstioNamespace string
 		var shootIstioLabels map[string]string
 
-		// Note that we set ignoreNotFound to `true` here, in order to NOT fail
-		// when hibernated clusters have the ACL extension enabled. When a
-		// Gateway object can't be found in a hibernated cluster's namespace,
-		// the function returns without an error, and sets the
-		// shootIstioNamespace to "" (empty string). The rest of the loops'
-		// iteration is then skipped using the `continue` as
-		// `istioNamespace != shootIstioNamespace` evaluates to `true`.
-		shootIstioNamespace, shootIstioLabels, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i], true)
-		if err != nil {
+		// Note that we ignore NotFoundErrors here, in order to NOT fail
+		// when there are hibernated clusters that have the ACL extension
+		// enabled. The addition of their respective rules is just skipped.
+		shootIstioNamespace, shootIstioLabels, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
+		if client.IgnoreNotFound(err) != nil {
 			return nil, nil, err
 		}
-		if istioNamespace != shootIstioNamespace {
+		if apierrors.IsNotFound(err) || istioNamespace != shootIstioNamespace {
 			continue
 		}
 
@@ -577,16 +581,14 @@ func HashData(data interface{}) (string, error) {
 
 // findIstioNamespaceForExtension finds the Istio namespace by the Istio Gateway
 // object named "kube-apiserver", which is expected to be present in every
-// Shoot namespace (except when the Shoot is hibernated). This Gateway object
-// has a Selector field that selects a Deployment in the namespace we need. We
-// list Deployments filtered by the labelSelector and return the namespace of
-// the returned Deployment.
+// Shoot namespace (except when the Shoot is hibernated - in this case, the
+// function returns a NotFoundError which the caller should handle).
 //
-// Use ignoreNotFound=true to not return an error when the requested Gateway is
-// not found (which is the case for hiberanted clusters). This can be helpful
-// when you just want to skip unavailable clusters.
+// The Gateway object has a Selector field that selects a Deployment in the
+// namespace we need. We list Deployments filtered by the labelSelector and
+// return the namespace of the returned Deployment.
 func (a *actuator) findIstioNamespaceForExtension(
-	ctx context.Context, ex *extensionsv1alpha1.Extension, ignoreNotFound bool,
+	ctx context.Context, ex *extensionsv1alpha1.Extension,
 ) (
 	istioNamespace string,
 	istioLabels map[string]string,
@@ -598,10 +600,6 @@ func (a *actuator) findIstioNamespaceForExtension(
 		Namespace: ex.Namespace,
 		Name:      istioGatewayName,
 	}, &gw)
-	// ignore `NotFound` errors when the caller requires it
-	if ignoreNotFound && apierrors.IsNotFound(err) {
-		return "", nil, nil
-	}
 	if err != nil {
 		return "", nil, err
 	}
