@@ -549,7 +549,7 @@ func (a *actuator) getAllShootsWithACLExtension(
 				continue
 			}
 
-			istioNamespace = *extState.IstioNamespace
+			shootIstioNamespace = *extState.IstioNamespace
 		}
 
 		if istioNamespace != shootIstioNamespace {
