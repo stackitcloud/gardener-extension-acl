@@ -294,6 +294,47 @@ var _ = Describe("actuator test", func() {
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 	})
+
+	Describe("deletion of a hibernated cluster (no Gateway resource exists)", func() {
+		It("should properly clean up according ManagedResource", func() {
+			// arrange
+			extSpec := ExtensionSpec{
+				Rule: &envoyfilters.ACLRule{
+					Cidrs:  []string{"1.2.3.4/24"},
+					Action: "ALLOW",
+					Type:   "remote_ip",
+				},
+			}
+			extSpecJSON, err := json.Marshal(extSpec)
+			Expect(err).To(BeNil())
+			ext := createNewExtension(shootNamespace1, extSpecJSON)
+			Expect(ext).To(Not(BeNil()))
+
+			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
+
+			mr := &v1alpha1.ManagedResource{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
+
+			// simulate a hibernated cluster by deleting the Gateway object
+			gw := &istionetworkingv1beta1.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "kube-apiserver",
+					Namespace: shootNamespace1,
+				},
+			}
+
+			Expect(k8sClient.Delete(ctx, gw)).To(Succeed())
+
+			// act
+			Expect(a.Delete(ctx, logger, ext)).To(Succeed())
+
+			// assert
+			mr = &v1alpha1.ManagedResource{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)
+			Expect(err).ToNot(BeNil())
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+	})
 })
 
 var _ = Describe("actuator unit test", func() {

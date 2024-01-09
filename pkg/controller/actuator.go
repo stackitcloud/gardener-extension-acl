@@ -121,13 +121,6 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	// we do not reconcile hibernated clusters, as they don't have a Gateway
-	// resource for the extension to get the istio namespace from
-	if cluster.Shoot != nil && cluster.Shoot.Spec.Hibernation != nil &&
-		cluster.Shoot.Spec.Hibernation.Enabled != nil && *cluster.Shoot.Spec.Hibernation.Enabled {
-		return nil
-	}
-
 	extSpec := &ExtensionSpec{}
 	if ex.Spec.ProviderConfig != nil && ex.Spec.ProviderConfig.Raw != nil {
 		if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
@@ -141,14 +134,18 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	istioNamespace, istioLabels, err := a.findIstioNamespaceForExtension(ctx, ex)
 	if err != nil {
+		// we do not reconcile hibernated clusters, as they don't have a Gateway
+		// resource for the extension to get the istio namespace from
+		if cluster.Shoot != nil && cluster.Shoot.Spec.Hibernation != nil &&
+			cluster.Shoot.Spec.Hibernation.Enabled != nil && *cluster.Shoot.Spec.Hibernation.Enabled {
+			return client.IgnoreNotFound(err)
+		}
 		return err
 	}
 
-	extState := &ExtensionState{}
-	if ex.Status.State != nil && ex.Status.State.Raw != nil {
-		if err := json.Unmarshal(ex.Status.State.Raw, &extState); err != nil {
-			return err
-		}
+	extState, err := getExtensionState(ex)
+	if err != nil {
+		return err
 	}
 
 	if err := a.triggerWebhook(ctx, ex.GetNamespace(), istioNamespace); err != nil {
@@ -268,10 +265,26 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	namespace := ex.GetNamespace()
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
+	var istioNamespace string
+
 	istioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, ex)
-	// TODO how to handle missing Gateway objects during deletion (NotFoundErrors)?
-	if err != nil {
+	if client.IgnoreNotFound(err) != nil {
 		return err
+	}
+	if apierrors.IsNotFound(err) {
+		exState, err := getExtensionState(ex)
+		if err != nil {
+			return err
+		}
+		if exState.IstioNamespace == nil {
+			// we have never reconciled this cluster completely, therefore no
+			// cleanup needs to be performed
+			return nil
+		}
+
+		// the cluster has no Gateway object, but we can get the information
+		// from the extension state
+		istioNamespace = *exState.IstioNamespace
 	}
 
 	if err := a.triggerWebhook(ctx, namespace, istioNamespace); err != nil {
@@ -445,6 +458,17 @@ func (a *actuator) updateStatus(
 	return a.client.Status().Patch(ctx, ex, patch)
 }
 
+func getExtensionState(ex *extensionsv1alpha1.Extension) (*ExtensionState, error) {
+	extState := &ExtensionState{}
+	if ex.Status.State != nil && ex.Status.State.Raw != nil {
+		if err := json.Unmarshal(ex.Status.State.Raw, &extState); err != nil {
+			return nil, err
+		}
+	}
+
+	return extState, nil
+}
+
 // triggerWebhook allows us to "reconcile" the existing EnvoyFilter which we
 // need to modify using a mutating webhook. This is achieved by sending an empty
 // patch for this EnvoyFilter, which invokes the ACL webhook component. This
@@ -507,14 +531,28 @@ func (a *actuator) getAllShootsWithACLExtension(
 		var shootIstioNamespace string
 		var shootIstioLabels map[string]string
 
-		// Note that we ignore NotFoundErrors here, in order to NOT fail
-		// when there are hibernated clusters that have the ACL extension
-		// enabled. The addition of their respective rules is just skipped.
 		shootIstioNamespace, shootIstioLabels, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
 		if client.IgnoreNotFound(err) != nil {
 			return nil, nil, err
 		}
-		if apierrors.IsNotFound(err) || istioNamespace != shootIstioNamespace {
+		// If we don't find a Gateway object to get the Istio Namespace from, we
+		// try the extension status as a fallback. If both aren't available, we
+		// ignore the Shoot's ACL rules entirely in this pass. This can only
+		// occur when the ACL extension for the Shoot in question itself has
+		// never been reconciled before.
+		if apierrors.IsNotFound(err) {
+			extState, err := getExtensionState(ex)
+			if err != nil {
+				return nil, nil, err
+			}
+			if extState.IstioNamespace == nil {
+				continue
+			}
+
+			istioNamespace = *extState.IstioNamespace
+		}
+
+		if istioNamespace != shootIstioNamespace {
 			continue
 		}
 
