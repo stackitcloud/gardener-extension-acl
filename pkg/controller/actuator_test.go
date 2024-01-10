@@ -181,6 +181,52 @@ var _ = Describe("actuator test", func() {
 				ContainSubstring("5.6.7.8"),
 			))
 		})
+
+		It("should not fail when the Gateway resource can't be found for an extension other than the one being reconciled (e.g. for hibernated clusters)", func() {
+			// arrange
+			extSpec1 := ExtensionSpec{
+				Rule: &envoyfilters.ACLRule{
+					Cidrs:  []string{"1.2.3.4/24"},
+					Action: "ALLOW",
+					Type:   "remote_ip",
+				},
+			}
+			extSpecJSON1, err := json.Marshal(extSpec1)
+			Expect(err).To(BeNil())
+			ext1 := createNewExtension(shootNamespace1, extSpecJSON1)
+			Expect(ext1).To(Not(BeNil()))
+
+			// contents of the seconds extension don't matter, it just needs to exist
+			ext2 := createNewExtension(shootNamespace2, []byte("{}"))
+			Expect(ext2).To(Not(BeNil()))
+
+			// simulate a hibernated cluster by deleting the Gateway object
+			gw2 := &istionetworkingv1beta1.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "kube-apiserver",
+					Namespace: shootNamespace2,
+				},
+			}
+			Expect(k8sClient.Delete(ctx, gw2)).To(Succeed())
+
+			// act (reconcile the existing extension)
+			Expect(a.Reconcile(ctx, logger, ext1)).To(Succeed())
+
+			// assert
+			envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
+			Expect(k8sClient.Get(
+				ctx, types.NamespacedName{
+					Name:      "acl-vpn",
+					Namespace: istioNamespace1,
+				},
+				envoyFilter,
+			)).To(Succeed())
+
+			// we expect the filter to contain the settings from the first extension
+			Expect(envoyFilter.Spec.MarshalJSON()).To(And(
+				ContainSubstring("1.2.3.4"),
+			))
+		})
 	})
 
 	Describe("a shoot switching the istio namespace (e.g. when being migrated to HA)", func() {
@@ -245,6 +291,47 @@ var _ = Describe("actuator test", func() {
 			By("4) should have removed the EnvoyFilter object in the ORIGINAL namespace")
 			envoyFilter = &istionetworkingClientGo.EnvoyFilter{}
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: "acl-vpn", Namespace: istioNamespace1}, envoyFilter)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+	})
+
+	Describe("deletion of a hibernated cluster (no Gateway resource exists)", func() {
+		It("should properly clean up according ManagedResource", func() {
+			// arrange
+			extSpec := ExtensionSpec{
+				Rule: &envoyfilters.ACLRule{
+					Cidrs:  []string{"1.2.3.4/24"},
+					Action: "ALLOW",
+					Type:   "remote_ip",
+				},
+			}
+			extSpecJSON, err := json.Marshal(extSpec)
+			Expect(err).To(BeNil())
+			ext := createNewExtension(shootNamespace1, extSpecJSON)
+			Expect(ext).To(Not(BeNil()))
+
+			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
+
+			mr := &v1alpha1.ManagedResource{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
+
+			// simulate a hibernated cluster by deleting the Gateway object
+			gw := &istionetworkingv1beta1.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "kube-apiserver",
+					Namespace: shootNamespace1,
+				},
+			}
+
+			Expect(k8sClient.Delete(ctx, gw)).To(Succeed())
+
+			// act
+			Expect(a.Delete(ctx, logger, ext)).To(Succeed())
+
+			// assert
+			mr = &v1alpha1.ManagedResource{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)
+			Expect(err).ToNot(BeNil())
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 	})

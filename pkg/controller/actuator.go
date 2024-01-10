@@ -134,14 +134,17 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	istioNamespace, istioLabels, err := a.findIstioNamespaceForExtension(ctx, ex)
 	if err != nil {
+		// we ignore errors for hibernated clusters if they don't have a Gateway
+		// resource for the extension to get the istio namespace from
+		if controller.IsHibernated(cluster) {
+			return client.IgnoreNotFound(err)
+		}
 		return err
 	}
 
-	extState := &ExtensionState{}
-	if ex.Status.State != nil && ex.Status.State.Raw != nil {
-		if err := json.Unmarshal(ex.Status.State.Raw, &extState); err != nil {
-			return err
-		}
+	extState, err := getExtensionState(ex)
+	if err != nil {
+		return err
 	}
 
 	if err := a.triggerWebhook(ctx, ex.GetNamespace(), istioNamespace); err != nil {
@@ -261,16 +264,33 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	namespace := ex.GetNamespace()
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
+	if err := a.deleteSeedResources(ctx, log, namespace); err != nil {
+		return err
+	}
+
+	var istioNamespace string
+
 	istioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, ex)
-	if err != nil {
+	if client.IgnoreNotFound(err) != nil {
 		return err
 	}
+	if apierrors.IsNotFound(err) {
+		exState, err := getExtensionState(ex)
+		if err != nil {
+			return err
+		}
+		if exState.IstioNamespace == nil {
+			// we have never reconciled this cluster completely, therefore no
+			// cleanup needs to be performed
+			return nil
+		}
 
-	if err := a.triggerWebhook(ctx, namespace, istioNamespace); err != nil {
-		return err
+		// the cluster has no Gateway object, but we can get the information
+		// from the extension state
+		istioNamespace = *exState.IstioNamespace
 	}
 
-	return a.deleteSeedResources(ctx, log, namespace)
+	return a.triggerWebhook(ctx, namespace, istioNamespace)
 }
 
 // Restore the Extension resource.
@@ -437,6 +457,17 @@ func (a *actuator) updateStatus(
 	return a.client.Status().Patch(ctx, ex, patch)
 }
 
+func getExtensionState(ex *extensionsv1alpha1.Extension) (*ExtensionState, error) {
+	extState := &ExtensionState{}
+	if ex.Status.State != nil && ex.Status.State.Raw != nil {
+		if err := json.Unmarshal(ex.Status.State.Raw, &extState); err != nil {
+			return nil, err
+		}
+	}
+
+	return extState, nil
+}
+
 // triggerWebhook allows us to "reconcile" the existing EnvoyFilter which we
 // need to modify using a mutating webhook. This is achieved by sending an empty
 // patch for this EnvoyFilter, which invokes the ACL webhook component. This
@@ -500,9 +531,26 @@ func (a *actuator) getAllShootsWithACLExtension(
 		var shootIstioLabels map[string]string
 
 		shootIstioNamespace, shootIstioLabels, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
-		if err != nil {
+		if client.IgnoreNotFound(err) != nil {
 			return nil, nil, err
 		}
+		// If we don't find a Gateway object to get the Istio Namespace from, we
+		// try the extension status as a fallback. If both aren't available, we
+		// ignore the Shoot's ACL rules entirely in this pass. This can only
+		// occur when the ACL extension for the Shoot in question itself has
+		// never been reconciled before.
+		if apierrors.IsNotFound(err) {
+			extState, err := getExtensionState(ex)
+			if err != nil {
+				return nil, nil, err
+			}
+			if extState.IstioNamespace == nil {
+				continue
+			}
+
+			shootIstioNamespace = *extState.IstioNamespace
+		}
+
 		if istioNamespace != shootIstioNamespace {
 			continue
 		}
@@ -568,11 +616,14 @@ func HashData(data interface{}) (string, error) {
 	return strings.ToLower(base32.StdEncoding.EncodeToString(bytes[:]))[:16], nil
 }
 
-// findIstioNamepsaceForExtension finds the Istio namespace by the Istio Gateway
+// findIstioNamespaceForExtension finds the Istio namespace by the Istio Gateway
 // object named "kube-apiserver", which is expected to be present in every
-// Shoot namespace. This Gateway object has a Selector field that selects a
-// Deployment in the namespace we need. We list Deployments filtered by the
-// labelSelector and return the namespace of the returned Deployment.
+// Shoot namespace (except when the Shoot is hibernated - in this case, the
+// function returns a NotFoundError which the caller should handle).
+//
+// The Gateway object has a Selector field that selects a Deployment in the
+// namespace we need. We list Deployments filtered by the labelSelector and
+// return the namespace of the returned Deployment.
 func (a *actuator) findIstioNamespaceForExtension(
 	ctx context.Context, ex *extensionsv1alpha1.Extension,
 ) (
