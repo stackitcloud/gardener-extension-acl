@@ -134,10 +134,9 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	istioNamespace, istioLabels, err := a.findIstioNamespaceForExtension(ctx, ex)
 	if err != nil {
-		// we do not reconcile hibernated clusters, as they don't have a Gateway
+		// we ignore errors for hibernated clusters if they don't have a Gateway
 		// resource for the extension to get the istio namespace from
-		if cluster.Shoot != nil && cluster.Shoot.Spec.Hibernation != nil &&
-			cluster.Shoot.Spec.Hibernation.Enabled != nil && *cluster.Shoot.Spec.Hibernation.Enabled {
+		if controller.IsHibernated(cluster) {
 			return client.IgnoreNotFound(err)
 		}
 		return err
@@ -265,6 +264,10 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	namespace := ex.GetNamespace()
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
+	if err := a.deleteSeedResources(ctx, log, namespace); err != nil {
+		return err
+	}
+
 	var istioNamespace string
 
 	istioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, ex)
@@ -287,11 +290,7 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 		istioNamespace = *exState.IstioNamespace
 	}
 
-	if err := a.triggerWebhook(ctx, namespace, istioNamespace); err != nil {
-		return err
-	}
-
-	return a.deleteSeedResources(ctx, log, namespace)
+	return a.triggerWebhook(ctx, namespace, istioNamespace)
 }
 
 // Restore the Extension resource.
