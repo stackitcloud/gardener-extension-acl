@@ -34,10 +34,8 @@ func AddToManagerWithOptions(
 ) error {
 	logger.Info("Adding webhook to manager")
 
-	decoder, err := admission.NewDecoder(mgr.GetScheme())
-	if err != nil {
-		return err
-	}
+	decoder := admission.NewDecoder(mgr.GetScheme())
+
 	mgr.GetWebhookServer().Register(WebhookPath, &webhook.Admission{Handler: &EnvoyFilterWebhook{
 		Client:                 mgr.GetClient(),
 		AdditionalAllowedCIDRs: options.AllowedCIDRs,

@@ -36,7 +36,6 @@ spec:
         - --disable-controllers={{ .Values.disableControllers | join "," }}
         - --ignore-operation-annotation={{ .Values.controllers.ignoreOperationAnnotation }}
         - --leader-election-id={{ include "name" . }}-leader-election
-        - --leader-election-resource-lock={{ .Values.leaderElection.resourceLock }}
         - --chart-path=/charts
         {{- if .Values.additionalAllowedCidrs }}
         - --additional-allowed-cidrs={{ .Values.additionalAllowedCidrs | join "," }}

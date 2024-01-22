@@ -473,8 +473,7 @@ var _ = Describe("webhook unit test", func() {
 })
 
 func getNewWebhook() *EnvoyFilterWebhook {
-	decoder, err := admission.NewDecoder(clientScheme)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	decoder := admission.NewDecoder(clientScheme)
 	return &EnvoyFilterWebhook{
 		Client:  k8sClient,
 		Decoder: decoder,

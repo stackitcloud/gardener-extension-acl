@@ -15,6 +15,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	defaultwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 )
@@ -85,7 +86,13 @@ func (c *AddToManagerConfig) AddToManager(ctx context.Context, mgr manager.Manag
 	}
 	webhookServer := mgr.GetWebhookServer()
 
-	servicePort := webhookServer.Port
+	defaultServer, ok := webhookServer.(*defaultwebhook.DefaultServer)
+	if !ok {
+		return fmt.Errorf("expected *webhook.DefaultServer, got %T", webhookServer)
+	}
+
+	servicePort := defaultServer.Options.Port
+
 	if (c.Server.Mode == extensionswebhook.ModeService || c.Server.Mode == extensionswebhook.ModeURLWithServiceName) && c.Server.ServicePort > 0 {
 		servicePort = c.Server.ServicePort
 	}
@@ -108,7 +115,7 @@ func (c *AddToManagerConfig) AddToManager(ctx context.Context, mgr manager.Manag
 		mgr.GetLogger().Info("Running webhooks with unmanaged certificates (i.e., the webhook CA will not be rotated automatically). " +
 			"This mode is supposed to be used for development purposes only. Make sure to configure --webhook-config-namespace in production.")
 
-		caBundle, err := certificates.GenerateUnmanagedCertificates(c.extensionName, webhookServer.CertDir, c.Server.Mode, c.Server.URL)
+		caBundle, err := certificates.GenerateUnmanagedCertificates(c.extensionName, defaultServer.Options.CertDir, c.Server.Mode, c.Server.URL)
 		if err != nil {
 			return fmt.Errorf("error generating new certificates for webhook server: %w", err)
 		}
@@ -137,9 +144,10 @@ func (c *AddToManagerConfig) AddToManager(ctx context.Context, mgr manager.Manag
 	if err := certificates.AddCertificateManagementToManager(
 		ctx,
 		mgr,
+		nil,
 		c.Clock,
-		[]client.Object{
-			webhookConfig,
+		extensionswebhook.Configs{
+			MutatingWebhookConfig: webhookConfig,
 		},
 		nil,
 		nil,

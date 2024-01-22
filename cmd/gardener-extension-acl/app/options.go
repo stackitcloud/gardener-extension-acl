@@ -20,7 +20,6 @@ import (
 
 	extensionscmdcontroller "github.com/gardener/gardener/extensions/pkg/controller/cmd"
 	extensionscmdwebhook "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
-	"k8s.io/client-go/tools/leaderelection/resourcelock"
 
 	extensioncmd "github.com/stackitcloud/gardener-extension-acl/pkg/cmd"
 )
@@ -53,10 +52,9 @@ func NewOptions() *Options {
 		restOptions: &extensionscmdcontroller.RESTOptions{},
 		managerOptions: &extensionscmdcontroller.ManagerOptions{
 			// These are default values.
-			LeaderElection:             true,
-			LeaderElectionID:           extensionscmdcontroller.LeaderElectionNameID(ExtensionName),
-			LeaderElectionResourceLock: resourcelock.LeasesResourceLock,
-			LeaderElectionNamespace:    os.Getenv("LEADER_ELECTION_NAMESPACE"),
+			LeaderElection:          true,
+			LeaderElectionID:        extensionscmdcontroller.LeaderElectionNameID(ExtensionName),
+			LeaderElectionNamespace: os.Getenv("LEADER_ELECTION_NAMESPACE"),
 		},
 		controllerOptions: &extensionscmdcontroller.ControllerOptions{
 			// This is a default value.
