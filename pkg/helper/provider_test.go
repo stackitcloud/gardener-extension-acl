@@ -32,6 +32,30 @@ var _ = Describe("provider Unit Tests", func() {
 				Expect(allowedCIDRs).To(Equal([]string{"a", "b"}))
 			})
 		})
+		When("there is an infrastructure object that supports the EgressCIDRs field", func() {
+			It("Should add the EgressCIDRs to the alwaysAllowedCIDRs slice and should not error", func() {
+				infra := &extensionsv1alpha1.Infrastructure{
+					Spec: extensionsv1alpha1.InfrastructureSpec{
+						DefaultSpec: extensionsv1alpha1.DefaultSpec{
+							Type: openstack.Type,
+						},
+					},
+					Status: extensionsv1alpha1.InfrastructureStatus{
+						EgressCIDRs: []string{
+							"10.9.8.7/32",
+							"1.1.1.0/24",
+						},
+					},
+				}
+
+				allowedCIDRs := []string{"a", "b"}
+				providerIPs, err := GetProviderSpecificAllowedCIDRs(infra)
+				Expect(err).To(Succeed())
+
+				allowedCIDRs = append(allowedCIDRs, providerIPs...)
+				Expect(allowedCIDRs).To(Equal([]string{"a", "b", "10.9.8.7/32", "1.1.1.0/24"}))
+			})
+		})
 		When("there is an infrastructure object of type 'openstack'", func() {
 			It("Should add the router IP to the alwaysAllowedCIDRs slice and should not error", func() {
 				infraStatusJSON, err := json.Marshal(&openstackv1alpha1.InfrastructureStatus{
