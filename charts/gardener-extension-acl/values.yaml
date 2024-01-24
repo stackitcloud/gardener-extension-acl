@@ -3,9 +3,6 @@ imagePullPolicy: IfNotPresent
 
 replicaCount: 2
 
-leaderElection:
-  resourceLock: leases
-
 resources:
   requests:
     cpu: "50m"
