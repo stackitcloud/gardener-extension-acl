@@ -293,6 +293,11 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	return a.triggerWebhook(ctx, namespace, istioNamespace)
 }
 
+// ForceDelete implements Network.Actuator.
+func (a *actuator) ForceDelete(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
+	return a.Delete(ctx, log, ex)
+}
+
 // Restore the Extension resource.
 func (a *actuator) Restore(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
 	return a.Reconcile(ctx, log, ex)

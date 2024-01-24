@@ -2,11 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-HACK_DIRECTORY := $(shell go list -m -f '{{.Dir}}' github.com/gardener/gardener)/hack
+ENSURE_GARDENER_MOD         := $(shell go get github.com/gardener/gardener@$$(go list -m -f "{{.Version}}" github.com/gardener/gardener))
+GARDENER_HACK_DIR           := $(shell go list -mod=mod -m -f "{{.Dir}}" github.com/gardener/gardener)/hack
 
 EXTENSION_PREFIX            := gardener-extension
 NAME                        := acl
-REPO 						:= ghcr.io/stackitcloud/gardener-extension-acl
+REPO                        := ghcr.io/stackitcloud/gardener-extension-acl
 REPO_ROOT                   := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 HACK_DIR                    := $(REPO_ROOT)/hack
 VERSION                     := $(shell git describe --tag --always --dirty)
@@ -20,9 +21,9 @@ SHELL=/usr/bin/env bash -o pipefail
 # Tools                                 #
 #########################################
 
-TOOLS_DIR := hack/tools
--include $(HACK_DIRECTORY)/tools.mk
-include hack/tools.mk
+TOOLS_DIR := $(HACK_DIR)/tools
+include $(GARDENER_HACK_DIR)/tools.mk
+include $(HACK_DIR)/tools.mk
 
 GOIMPORTSREVISER_VERSION := v3.5.6
 
@@ -63,7 +64,7 @@ images: $(KO)
 
 .PHONY: tidy
 tidy:
-	go mod tidy
+	@GO111MODULE=on go mod tidy
 
 # run `make init` to perform an initial go mod cache sync which is required for other make targets
 init: tidy
@@ -72,25 +73,24 @@ revendor: tidy
 
 .PHONY: clean
 clean:
-	@bash $(HACK_DIRECTORY)/clean.sh ./cmd/... ./pkg/...
+	@bash $(GARDENER_HACK_DIR)/clean.sh ./cmd/... ./pkg/...
 
 .PHONY: check-generate
 check-generate:
-	@bash $(HACK_DIRECTORY)/check-generate.sh $(REPO_ROOT)
+	@bash $(GARDENER_HACK_DIR)/check-generate.sh $(REPO_ROOT)
 
 .PHONY: check
 check: $(GOIMPORTS) $(GOLANGCI_LINT) $(HELM)
-	@bash $(HACK_DIRECTORY)/check.sh --golangci-lint-config=./.golangci.yaml ./cmd/... ./pkg/...
-	@bash $(HACK_DIRECTORY)/check-charts.sh ./charts
+	@bash $(GARDENER_HACK_DIR)/check.sh --golangci-lint-config=./.golangci.yaml ./cmd/... ./pkg/...
+	@bash $(GARDENER_HACK_DIR)/check-charts.sh ./charts
 
 .PHONY: generate
-generate: $(HELM) $(YQ)
-	@bash $(HACK_DIRECTORY)/generate-controller-registration.sh acl charts/gardener-extension-acl latest deploy/extension/base/controller-registration.yaml Extension:acl
-	@bash $(HACK_DIRECTORY)/generate.sh ./cmd/... ./pkg/...
+generate: $(VGOPATH) $(HELM) $(YQ)
+	@REPO_ROOT=$(REPO_ROOT) VGOPATH=$(VGOPATH) bash $(GARDENER_HACK_DIR)/generate-controller-registration.sh acl charts/gardener-extension-acl latest deploy/extension/base/controller-registration.yaml Extension:acl
 
 .PHONY: format
 format: $(GOIMPORTS) $(GOIMPORTSREVISER)
-	@bash $(HACK_DIRECTORY)/format.sh ./cmd ./pkg
+	@bash $(GARDENER_HACK_DIR)/format.sh ./cmd ./pkg
 
 .PHONY: test
 test: $(REPORT_COLLECTOR) $(SETUP_ENVTEST)
@@ -98,11 +98,11 @@ test: $(REPORT_COLLECTOR) $(SETUP_ENVTEST)
 
 .PHONY: test-cov
 test-cov:
-	@bash $(HACK_DIRECTORY)/test-cover.sh ./cmd/... ./pkg/...
+	@bash $(GARDENER_HACK_DIR)/test-cover.sh ./cmd/... ./pkg/...
 
 .PHONY: test-cov-clean
 test-cov-clean:
-	@bash $(HACK_DIRECTORY)/test-cover-clean.sh
+	@bash $(GARDENER_HACK_DIR)/test-cover-clean.sh
 
 .PHONY: verify
 verify: check format test
