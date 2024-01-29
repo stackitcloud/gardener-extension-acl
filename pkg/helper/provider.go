@@ -20,6 +20,10 @@ func GetProviderSpecificAllowedCIDRs(
 	infra *extensionsv1alpha1.Infrastructure,
 ) ([]string, error) {
 	cidrs := make([]string, 0)
+	if len(infra.Status.EgressCIDRs) > 0 {
+		cidrs = append(cidrs, infra.Status.EgressCIDRs...)
+		return cidrs, nil
+	}
 
 	//nolint:gocritic // Will likely be extended with other infra types in the future
 	switch infra.Spec.Type {
