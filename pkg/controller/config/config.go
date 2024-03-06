@@ -21,4 +21,6 @@ type Config struct {
 	ChartPath string
 	// AdditionalAllowedCIDRs additional allowed cidrs that will be added to the list of allowed cidrs.
 	AdditionalAllowedCIDRs []string
+	// MaxAllowedCIDRs is the maximum number of allowed CIDRs per cluster
+	MaxAllowedCIDRs int
 }
