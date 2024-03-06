@@ -7,15 +7,27 @@ GARDENER_HACK_DIR           := $(shell go list -mod=mod -m -f "{{.Dir}}" github.
 
 EXTENSION_PREFIX            := gardener-extension
 NAME                        := acl
-REPO                        := ghcr.io/stackitcloud/gardener-extension-acl
+ADMISSION_NAME              := admission-acl
+REPO                        := ghcr.io/stackitcloud
 REPO_ROOT                   := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 HACK_DIR                    := $(REPO_ROOT)/hack
 VERSION                     := $(shell git describe --tag --always --dirty)
-TAG							:= $(VERSION)
+TAG                         := $(VERSION)
+LD_FLAGS                    := "-w $(shell bash $(GARDENER_HACK_DIR)/get-build-ld-flags.sh "" $(REPO_ROOT)/VERSION "$(EXTENSION_PREFIX)")"
 LEADER_ELECTION             := false
 IGNORE_OPERATION_ANNOTATION := false
 
 SHELL=/usr/bin/env bash -o pipefail
+
+WEBHOOK_CONFIG_PORT	:= 10250
+WEBHOOK_CONFIG_MODE	:= url
+WEBHOOK_CONFIG_URL	:= host.docker.internal:$(WEBHOOK_CONFIG_PORT)
+EXTENSION_NAMESPACE	:= garden
+
+WEBHOOK_PARAM := --webhook-config-url=$(WEBHOOK_CONFIG_URL)
+ifeq ($(WEBHOOK_CONFIG_MODE), service)
+  WEBHOOK_PARAM := --webhook-config-namespace=$(EXTENSION_NAMESPACE)
+endif
 
 #########################################
 # Tools                                 #
@@ -47,16 +59,29 @@ debug:
 		--ignore-operation-annotation=$(IGNORE_OPERATION_ANNOTATION) \
 		--leader-election=$(LEADER_ELECTION)
 
+.PHONY: start-admission
+start-admission:
+	@LEADER_ELECTION_NAMESPACE=garden go run \
+		-ldflags $(LD_FLAGS) \
+		./cmd/$(EXTENSION_PREFIX)-$(ADMISSION_NAME) \
+		--maxAllowedCIDRs=50 \
+		--webhook-config-server-host=0.0.0.0 \
+		--webhook-config-server-port=$(WEBHOOK_CONFIG_PORT) \
+		--webhook-config-mode=$(WEBHOOK_CONFIG_MODE) \
+		$(WEBHOOK_PARAM)
+
 #################################################################
 # Rules related to binary build, Docker image build and release #
 #################################################################
 
 PUSH ?= false
-images: export KO_DOCKER_REPO = $(REPO)
+images: export KO_DOCKER_REPO = $(REPO)/$(EXTENSION_PREFIX)-$(NAME)
 
 .PHONY: images
 images: $(KO)
-	KO_DOCKER_REPO=$(REPO) $(KO) build --image-label org.opencontainers.image.source="https://github.com/stackitcloud/gardener-extension-acl" --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-acl
+	KO_DOCKER_REPO=$(REPO)/$(EXTENSION_PREFIX)-$(NAME) $(KO) build --image-label org.opencontainers.image.source="https://github.com/stackitcloud/gardener-extension-acl" --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-acl
+	KO_DOCKER_REPO=$(REPO)/$(EXTENSION_PREFIX)-$(ADMISSION_NAME) $(KO) build --image-label org.opencontainers.image.source="https://github.com/stackitcloud/gardener-extension-admission-acl" --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-admission-acl
+
 
 #####################################################################
 # Rules for verification, formatting, linting, testing and cleaning #
