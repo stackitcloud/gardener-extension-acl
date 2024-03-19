@@ -383,8 +383,14 @@ func (a *actuator) createSeedResources(
 
 	ingressSNI := helper.GetSeedIngressDomain(cluster.Seed)
 	shootID := helper.ComputeShootID(cluster.Shoot)
+
+	defaultIstioLables := map[string]string{
+		"app":   "istio-ingressgateway",
+		"istio": "ingressgateway",
+	}
+
 	ingressEnvoyFilterSpec, err := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
-		spec.Rule, ingressSNI, shootID, append(alwaysAllowedCIDRs, shootSpecificCIRDs...), istioLabels,
+		spec.Rule, ingressSNI, shootID, append(alwaysAllowedCIDRs, shootSpecificCIRDs...), defaultIstioLables,
 	)
 	if err != nil {
 		return err
