@@ -51,25 +51,6 @@ var _ = Describe("actuator test", func() {
 	})
 
 	Describe("reconciliation of an ACL extension object", func() {
-		It("should create an acl-vpn EnvoyFilter object with the correct contents", func() {
-			extSpec := extensionspec.ExtensionSpec{
-				Rule: &envoyfilters.ACLRule{
-					Cidrs:  []string{"1.2.3.4/24"},
-					Action: "ALLOW",
-					Type:   "remote_ip",
-				},
-			}
-			extSpecJSON, err := json.Marshal(extSpec)
-			Expect(err).To(BeNil())
-			ext := createNewExtension(shootNamespace1, extSpecJSON)
-			Expect(ext).To(Not(BeNil()))
-
-			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
-
-			envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "acl-vpn", Namespace: istioNamespace1}, envoyFilter)).To(Succeed())
-			Expect(envoyFilter.Spec.MarshalJSON()).To(ContainSubstring("1.2.3.4"))
-		})
 
 		It("should create managed resource for acl-api-shoot EnvoyFilter object", func() {
 			extSpec := extensionspec.ExtensionSpec{
@@ -198,53 +179,6 @@ var _ = Describe("actuator test", func() {
 			deleteNamespace(shootNamespace2)
 		})
 
-		It("should create an acl-vpn EnvoyFilter object with the correct contents (from both extensions)", func() {
-			// arrange
-			extSpec1 := extensionspec.ExtensionSpec{
-				Rule: &envoyfilters.ACLRule{
-					Cidrs:  []string{"1.2.3.4/24"},
-					Action: "ALLOW",
-					Type:   "remote_ip",
-				},
-			}
-			extSpecJSON1, err := json.Marshal(extSpec1)
-			Expect(err).To(BeNil())
-			ext1 := createNewExtension(shootNamespace1, extSpecJSON1)
-			Expect(ext1).To(Not(BeNil()))
-
-			extSpec2 := extensionspec.ExtensionSpec{
-				Rule: &envoyfilters.ACLRule{
-					Cidrs:  []string{"5.6.7.8/24"},
-					Action: "ALLOW",
-					Type:   "remote_ip",
-				},
-			}
-			extSpecJSON2, err := json.Marshal(extSpec2)
-			Expect(err).To(BeNil())
-			ext2 := createNewExtension(shootNamespace2, extSpecJSON2)
-			Expect(ext2).To(Not(BeNil()))
-
-			// act (shouldn't matter which extension is reconciled)
-			Expect(a.Reconcile(ctx, logger, ext1)).To(Succeed())
-
-			// assert
-			envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
-			Expect(k8sClient.Get(
-				ctx, types.NamespacedName{
-					Name:      "acl-vpn",
-					Namespace: istioNamespace1,
-				},
-				envoyFilter,
-			)).To(Succeed())
-
-			// as there is only one acl-vpn EnvoyFilter, this EnvoyFilter must
-			// contain the allowed CIDRs from all ACL extensions
-			Expect(envoyFilter.Spec.MarshalJSON()).To(And(
-				ContainSubstring("1.2.3.4"),
-				ContainSubstring("5.6.7.8"),
-			))
-		})
-
 		It("should not fail when the Gateway resource can't be found for an extension other than the one being reconciled (e.g. for hibernated clusters)", func() {
 			// arrange
 			extSpec1 := extensionspec.ExtensionSpec{
@@ -275,20 +209,6 @@ var _ = Describe("actuator test", func() {
 			// act (reconcile the existing extension)
 			Expect(a.Reconcile(ctx, logger, ext1)).To(Succeed())
 
-			// assert
-			envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
-			Expect(k8sClient.Get(
-				ctx, types.NamespacedName{
-					Name:      "acl-vpn",
-					Namespace: istioNamespace1,
-				},
-				envoyFilter,
-			)).To(Succeed())
-
-			// we expect the filter to contain the settings from the first extension
-			Expect(envoyFilter.Spec.MarshalJSON()).To(And(
-				ContainSubstring("1.2.3.4"),
-			))
 		})
 	})
 
@@ -312,9 +232,12 @@ var _ = Describe("actuator test", func() {
 			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
 
 			// assert
-			envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "acl-vpn", Namespace: istioNamespace1}, envoyFilter)).To(Succeed())
-			Expect(envoyFilter.Spec.MarshalJSON()).To(ContainSubstring("1.2.3.4"))
+			mr := &v1alpha1.ManagedResource{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
+			secret := &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
+			Expect(secret.Data["seed"]).To(ContainSubstring("1.2.3.4"))
+			Expect(secret.Data["seed"]).To(ContainSubstring(istioNamespace1))
 
 			By("2) allowing for the shoot to switch to a different Istio namespace")
 			istioNamespace2 = createNewIstioNamespace()
@@ -347,14 +270,12 @@ var _ = Describe("actuator test", func() {
 			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
 
 			// assert
-			envoyFilter = &istionetworkingClientGo.EnvoyFilter{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "acl-vpn", Namespace: istioNamespace2}, envoyFilter)).To(Succeed())
-			Expect(envoyFilter.Spec.MarshalJSON()).To(ContainSubstring("1.2.3.4"))
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
+			Expect(secret.Data["seed"]).To(ContainSubstring(istioNamespace2))
 
 			By("4) should have removed the EnvoyFilter object in the ORIGINAL namespace")
-			envoyFilter = &istionetworkingClientGo.EnvoyFilter{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: "acl-vpn", Namespace: istioNamespace1}, envoyFilter)
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			Expect(secret.Data["seed"]).NotTo(ContainSubstring(istioNamespace1))
 		})
 	})
 

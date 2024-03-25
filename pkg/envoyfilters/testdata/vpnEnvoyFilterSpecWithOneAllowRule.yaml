@@ -13,38 +13,33 @@ configPatches:
           rules:
             action: ALLOW
             policies:
-              acl-vpn-inverse:
-                  permissions:
-                  - any: true
-                  principals:
-                    - and_ids:
-                        ids:
-                          - not_id:
-                              header:
-                                name: reversed-vpn
-                                string_match:
-                                  contains: .shoot--projectname--shootname.
-              shoot--projectname--shootname:
+              bar--foo-inverse:
                 permissions:
-                - any: true
+                - not_rule:
+                    header:
+                      name: reversed-vpn
+                      string_match:
+                        exact: outbound|1194||vpn-seed-server.shoot--bar--foo.svc.cluster.local
                 principals:
-                - and_ids:
-                    ids:
-                    - or_ids:
-                        ids:
-                        - remote_ip:
-                            address_prefix: 0.0.0.0
-                            prefix_len: 0
-                        - remote_ip:
-                            address_prefix: 10.250.0.0
-                            prefix_len: 16
-                        - remote_ip:
-                            address_prefix: 10.96.0.0
-                            prefix_len: 11
-                    - header:
-                        name: reversed-vpn
-                        string_match:
-                          contains: .shoot--projectname--shootname.
+                - remote_ip:
+                    address_prefix: 0.0.0.0
+                    prefix_len: 0
+              bar--foo:
+                permissions:
+                - header:
+                    name: reversed-vpn
+                    string_match:
+                      exact: outbound|1194||vpn-seed-server.shoot--bar--foo.svc.cluster.local
+                principals:
+                - remote_ip:
+                    address_prefix: 10.180.0.0
+                    prefix_len: 16
+                - remote_ip:
+                    address_prefix: 10.250.0.0
+                    prefix_len: 16
+                - remote_ip:
+                    address_prefix: 10.96.0.0
+                    prefix_len: 11
           stat_prefix: envoyrbac
 workloadSelector:
   labels:

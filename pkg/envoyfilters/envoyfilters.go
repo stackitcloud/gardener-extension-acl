@@ -84,9 +84,10 @@ func BuildIngressEnvoyFilterSpecForHelmChart(
 // same as the seed namespace of the shoot. (Gardener uses the seedNamespace
 // value in the botanist vpnshoot task.)
 func BuildVPNEnvoyFilterSpecForHelmChart(
-	mappings []ACLMapping, alwaysAllowedCIDRs []string, istioLabels map[string]string,
+	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
 ) (map[string]interface{}, error) {
-	vpnConfigPatch, err := CreateVPNConfigPatchFromRule(mappings, alwaysAllowedCIDRs)
+	shootID := helper.ComputeShortShootID(cluster.Shoot)
+	vpnConfigPatch, err := CreateVPNConfigPatchFromRule(rule, shootID, alwaysAllowedCIDRs)
 	if err != nil {
 		return nil, err
 	}
@@ -194,24 +195,10 @@ func CreateIngressConfigPatchFromRule(
 // CreateVPNConfigPatchFromRule combines a list of ACLMappings and the
 // alwaysAllowedCIDRs into a HTTP filter patch that can be applied to the
 // `GATEWAY` HTTP filter chain for the VPN.
-func CreateVPNConfigPatchFromRule(
-	mappings []ACLMapping, alwaysAllowedCIDRs []string,
+func CreateVPNConfigPatchFromRule(rule *ACLRule,
+	shootID string, alwaysAllowedCIDRs []string,
 ) (map[string]interface{}, error) {
 	rbacName := "acl-vpn"
-
-	policies := map[string]interface{}{}
-
-	policies[rbacName+"-inverse"] = createInverseVPNPolicy(mappings)
-
-	for i := range mappings {
-		mapping := &mappings[i]
-		policies[mapping.ShootName] = createVPNPolicyForShoot(
-			&mapping.Rule,
-			append(alwaysAllowedCIDRs, mapping.ShootSpecificCIDRs...),
-			mapping.ShootName,
-		)
-	}
-
 	return map[string]interface{}{
 		"applyTo": "HTTP_FILTER",
 		"match": map[string]interface{}{
@@ -225,12 +212,42 @@ func CreateVPNConfigPatchFromRule(
 			"value": map[string]interface{}{
 				"name": rbacName,
 				"typed_config": map[string]interface{}{
-					"@type":       "type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC",
-					"stat_prefix": "envoyrbac",
+					"@type": "type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC",
 					"rules": map[string]interface{}{
-						"action":   "ALLOW",
-						"policies": policies,
+						"action": "ALLOW",
+						"policies": map[string]interface{}{
+							shootID + "-inverse": map[string]interface{}{
+								"permissions": []map[string]interface{}{{
+									"not_rule": map[string]interface{}{
+										"header": map[string]interface{}{
+											"name": "reversed-vpn",
+											"string_match": map[string]interface{}{
+												"exact": "outbound|1194||vpn-seed-server.shoot--" + shootID + ".svc.cluster.local",
+											},
+										},
+									},
+								}},
+								"principals": []map[string]interface{}{{
+									"remote_ip": map[string]interface{}{
+										"address_prefix": "0.0.0.0",
+										"prefix_len":     0,
+									},
+								}},
+							},
+							shootID: map[string]interface{}{
+								"permissions": []map[string]interface{}{{
+									"header": map[string]interface{}{
+										"name": "reversed-vpn",
+										"string_match": map[string]interface{}{
+											"exact": "outbound|1194||vpn-seed-server.shoot--" + shootID + ".svc.cluster.local",
+										},
+									},
+								}},
+								"principals": ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs),
+							},
+						},
 					},
+					"stat_prefix": "envoyrbac",
 				},
 			},
 		},
@@ -330,82 +347,6 @@ func typedConfigToPatch(rbacName, ruleAction, filterType string, principals []ma
 						{"any": true},
 					},
 					"principals": principals,
-				},
-			},
-		},
-	}
-}
-
-func createVPNPolicyForShoot(rule *ACLRule, alwaysAllowedCIDRs []string, technicalShootID string) map[string]interface{} {
-	// In the case of VPN, we need to nest the principal rules in a EnvoyFilter
-	// "and_ids" structure, because we add an additional principal matching on
-	// the "reversed-vpn" header, which needs to be ANDed with the other rules.
-	// Principals are concatenated using an OR rule, so matching one of them sufficies...
-	oredPrincipals := ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs)
-
-	// ...but only if the VPN header is also set, therefore combine via AND rule
-	return map[string]interface{}{
-		"permissions": []map[string]interface{}{
-			{"any": true},
-		},
-		"principals": []map[string]interface{}{
-			{
-				"and_ids": map[string]interface{}{
-					"ids": []map[string]interface{}{
-						{
-							"or_ids": map[string]interface{}{
-								"ids": oredPrincipals,
-							},
-						},
-						{
-							"header": map[string]interface{}{
-								"name": "reversed-vpn",
-								"string_match": map[string]interface{}{
-									// The actual header value will look something like
-									// `outbound|1194||vpn-seed-server.<technical-ID>.svc.cluster.local`.
-									// Include dots in the contains matcher as anchors, to always match the entire technical shoot ID.
-									// Otherwise, if there was one cluster named `foo` and one named `foo-bar` (in the same project),
-									// `foo` would effectively inherit the ACL of `foo-bar`.
-									"contains": "." + technicalShootID + ".",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func createInverseVPNPolicy(mappings []ACLMapping) map[string]interface{} {
-	notHeaderPrincipals := []map[string]interface{}{}
-
-	for i := range mappings {
-		notHeaderPrincipals = append(notHeaderPrincipals, map[string]interface{}{
-			"not_id": map[string]interface{}{
-				"header": map[string]interface{}{
-					"name": "reversed-vpn",
-					"string_match": map[string]interface{}{
-						// The actual header value will look something like
-						// `outbound|1194||vpn-seed-server.<technical-ID>.svc.cluster.local`.
-						// Include dots in the contains matcher as anchors, to always match the entire technical shoot ID.
-						// Otherwise, if there was one cluster named `foo` and one named `foo-bar` (in the same project),
-						// `foo` would effectively inherit the ACL of `foo-bar`.
-						"contains": "." + mappings[i].ShootName + ".",
-					},
-				},
-			},
-		})
-	}
-
-	return map[string]interface{}{
-		"permissions": []map[string]interface{}{
-			{"any": true},
-		},
-		"principals": []map[string]interface{}{
-			{
-				"and_ids": map[string]interface{}{
-					"ids": notHeaderPrincipals,
 				},
 			},
 		},
