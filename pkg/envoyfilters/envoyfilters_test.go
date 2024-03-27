@@ -37,6 +37,25 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 		})
 	})
 
+	Describe("BuildIngressEnvoyFilterSpecForHelmChart", func() {
+		When("there is an extension resource with one rule", func() {
+			It("Should create an envoyFilter spec matching the expected one", func() {
+				rule := createRule("ALLOW", "remote_ip", "10.180.0.0/16")
+				ingressSNI := "ingress.testseed.dev.ske.eu01.stackit.cloud"
+				shootID := "project-shoot"
+
+				labels := map[string]string{
+					"app":   "istio-ingressgateway",
+					"istio": "ingressgateway",
+				}
+				result, err := BuildIngressEnvoyFilterSpecForHelmChart(rule, ingressSNI, shootID, alwaysAllowedCIDRs, labels)
+
+				Expect(err).ToNot(HaveOccurred())
+				checkIfMapEqualsYAML(result, "ingressEnvoyFilterSpecWithOneAllowRule.yaml")
+			})
+		})
+	})
+
 	Describe("BuildVPNEnvoyFilterSpecForHelmChart", func() {
 		When("there is one shoot with a rule", func() {
 			It("Should create a envoyFilter spec matching the expected one", func() {
@@ -83,6 +102,7 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 			})
 		})
 	})
+
 })
 
 //nolint:unparam // action currently only accepts ALLOW but that might change, so we leave the parameterization

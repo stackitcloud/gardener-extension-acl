@@ -381,10 +381,26 @@ func (a *actuator) createSeedResources(
 		return err
 	}
 
+	ingressSNI := helper.GetSeedIngressDomain(cluster.Seed)
+	shootID := helper.ComputeShootID(cluster.Shoot)
+
+	defaultIstioLabels := map[string]string{
+		"app":   "istio-ingressgateway",
+		"istio": "ingressgateway",
+	}
+
+	ingressEnvoyFilterSpec, err := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
+		spec.Rule, ingressSNI, shootID, append(alwaysAllowedCIDRs, shootSpecificCIRDs...), defaultIstioLabels,
+	)
+	if err != nil {
+		return err
+	}
+
 	cfg := map[string]interface{}{
-		"shootName":          cluster.Shoot.Status.TechnicalID,
-		"targetNamespace":    istioNamespace,
-		"apiEnvoyFilterSpec": apiEnvoyFilterSpec,
+		"shootName":              cluster.Shoot.Status.TechnicalID,
+		"targetNamespace":        istioNamespace,
+		"apiEnvoyFilterSpec":     apiEnvoyFilterSpec,
+		"ingressEnvoyFilterSpec": ingressEnvoyFilterSpec,
 	}
 
 	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})
