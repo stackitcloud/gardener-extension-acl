@@ -203,6 +203,9 @@ func createNewCluster(shootNamespace string) {
 							Nodes: ptr.To("10.250.0.0/24"),
 							Pods:  "10.10.0.0/24",
 						},
+						Ingress: &gardencorev1beta1.Ingress{
+							Domain: "ingress.test",
+						},
 					},
 				},
 			},
