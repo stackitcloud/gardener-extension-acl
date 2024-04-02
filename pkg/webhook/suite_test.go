@@ -11,6 +11,7 @@ import (
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
@@ -22,8 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 )
 
 var cfg *rest.Config
@@ -108,7 +107,7 @@ func deleteNamespace(name string) {
 	Expect(k8sClient.Delete(ctx, namespace)).ShouldNot(HaveOccurred())
 }
 
-func getNewExtension(namespace string, spec controller.ExtensionSpec) *extensionsv1alpha1.Extension {
+func getNewExtension(namespace string, spec extensionspec.ExtensionSpec) *extensionsv1alpha1.Extension {
 	rawSpec, err := json.Marshal(spec)
 	Expect(err).ToNot(HaveOccurred())
 

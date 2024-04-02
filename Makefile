@@ -13,7 +13,6 @@ REPO_ROOT                   := $(shell dirname $(realpath $(lastword $(MAKEFILE_
 HACK_DIR                    := $(REPO_ROOT)/hack
 VERSION                     := $(shell git describe --tag --always --dirty)
 TAG                         := $(VERSION)
-LD_FLAGS                    := "-w $(shell bash $(GARDENER_HACK_DIR)/get-build-ld-flags.sh "" $(REPO_ROOT)/VERSION "$(EXTENSION_PREFIX)")"
 LEADER_ELECTION             := false
 IGNORE_OPERATION_ANNOTATION := false
 
@@ -62,7 +61,6 @@ debug:
 .PHONY: start-admission
 start-admission:
 	@LEADER_ELECTION_NAMESPACE=garden go run \
-		-ldflags $(LD_FLAGS) \
 		./cmd/$(EXTENSION_PREFIX)-$(ADMISSION_NAME) \
 		--maxAllowedCIDRs=50 \
 		--webhook-config-server-host=0.0.0.0 \
@@ -75,13 +73,11 @@ start-admission:
 #################################################################
 
 PUSH ?= false
-images: export KO_DOCKER_REPO = $(REPO)/$(EXTENSION_PREFIX)-$(NAME)
 
 .PHONY: images
 images: $(KO)
 	KO_DOCKER_REPO=$(REPO)/$(EXTENSION_PREFIX)-$(NAME) $(KO) build --image-label org.opencontainers.image.source="https://github.com/stackitcloud/gardener-extension-acl" --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-acl
-	KO_DOCKER_REPO=$(REPO)/$(EXTENSION_PREFIX)-$(ADMISSION_NAME) $(KO) build --image-label org.opencontainers.image.source="https://github.com/stackitcloud/gardener-extension-admission-acl" --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-admission-acl
-
+	KO_DOCKER_REPO=$(REPO)/$(EXTENSION_PREFIX)-$(ADMISSION_NAME) $(KO) build --image-label org.opencontainers.image.source="https://github.com/stackitcloud/gardener-extension-acl" --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-admission-acl
 
 #####################################################################
 # Rules for verification, formatting, linting, testing and cleaning #

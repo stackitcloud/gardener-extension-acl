@@ -50,6 +50,7 @@ import (
 	"github.com/stackitcloud/gardener-extension-acl/charts"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 )
@@ -106,12 +107,6 @@ type actuator struct {
 	extensionConfig config.Config
 }
 
-// ExtensionSpec is the content of the ProviderConfig of the acl extension object
-type ExtensionSpec struct {
-	// Rule contain the user-defined Access Control Rule
-	Rule *envoyfilters.ACLRule `json:"rule"`
-}
-
 // Reconcile the Extension resource.
 //
 //nolint:gocyclo // this is the main reconcile loop
@@ -121,7 +116,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	extSpec := &ExtensionSpec{}
+	extSpec := &extensionspec.ExtensionSpec{}
 	if ex.Spec.ProviderConfig != nil && ex.Spec.ProviderConfig.Raw != nil {
 		if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
 			return err
@@ -220,7 +215,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 // ValidateExtensionSpec checks if the ExtensionSpec exists, and if its action,
 // type and CIDRs are valid.
-func ValidateExtensionSpec(spec *ExtensionSpec) error {
+func ValidateExtensionSpec(spec *extensionspec.ExtensionSpec) error {
 	rule := spec.Rule
 
 	if rule == nil {
@@ -364,7 +359,7 @@ func (a *actuator) createSeedResources(
 	ctx context.Context,
 	log logr.Logger,
 	namespace string,
-	spec *ExtensionSpec,
+	spec *extensionspec.ExtensionSpec,
 	cluster *controller.Cluster,
 	hosts []string,
 	shootSpecificCIRDs []string,
@@ -564,7 +559,7 @@ func (a *actuator) getAllShootsWithACLExtension(
 			istioLabels = shootIstioLabels
 		}
 
-		extSpec := &ExtensionSpec{}
+		extSpec := &extensionspec.ExtensionSpec{}
 		if ex.Spec.ProviderConfig != nil && ex.Spec.ProviderConfig.Raw != nil {
 			if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
 				return nil, nil, err

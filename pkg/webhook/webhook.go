@@ -19,6 +19,7 @@ import (
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 )
 
@@ -80,7 +81,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 		}
 	}
 
-	extSpec := &controller.ExtensionSpec{}
+	extSpec := &extensionspec.ExtensionSpec{}
 	if err := json.Unmarshal(aclExtension.Spec.ProviderConfig.Raw, extSpec); err != nil {
 		return admission.Errored(http.StatusInternalServerError, err)
 	}

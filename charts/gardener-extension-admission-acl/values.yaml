@@ -2,10 +2,11 @@ global:
   virtualGarden:
     enabled: false
   image:
-    repository: ghcr.io/stackitcloud/gardener-extension-admission-acl:latest
+    repository: ghcr.io/stackitcloud/gardener-extension-admission-acl
     tag: latest
     pullPolicy: IfNotPresent
   replicaCount: 1
+  healthPort: 8081
   resources: {}
   vpa:
     enabled: true

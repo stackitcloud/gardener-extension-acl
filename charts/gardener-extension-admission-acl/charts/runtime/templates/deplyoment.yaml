@@ -32,8 +32,7 @@ spec:
       - name: {{ include "name" . }}
         image: {{ include "image" .Values.global.image }}
         imagePullPolicy: {{ .Values.global.image.pullPolicy }}
-        command:
-        - /gardener-extension-admission-acl
+        args:
         - --webhook-config-server-port={{ .Values.global.webhookConfig.serverPort }}
         {{- if .Values.global.virtualGarden.enabled }}
         - --webhook-config-mode=url

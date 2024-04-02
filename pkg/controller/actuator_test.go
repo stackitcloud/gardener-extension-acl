@@ -16,6 +16,7 @@ import (
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
 )
 
 var _ = Describe("actuator test", func() {
@@ -50,7 +51,7 @@ var _ = Describe("actuator test", func() {
 
 	Describe("reconciliation of an ACL extension object", func() {
 		It("should create an acl-vpn EnvoyFilter object with the correct contents", func() {
-			extSpec := ExtensionSpec{
+			extSpec := extensionspec.ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"1.2.3.4/24"},
 					Action: "ALLOW",
@@ -70,7 +71,7 @@ var _ = Describe("actuator test", func() {
 		})
 
 		It("should create managed resource for acl-api-shoot EnvoyFilter object", func() {
-			extSpec := ExtensionSpec{
+			extSpec := extensionspec.ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"1.2.3.4/24"},
 					Action: "ALLOW",
@@ -93,7 +94,7 @@ var _ = Describe("actuator test", func() {
 
 		It("should record the last seen istio namespace in the status of the extension object", func() {
 			// arrange
-			extSpec := ExtensionSpec{
+			extSpec := extensionspec.ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"1.2.3.4/24"},
 					Action: "ALLOW",
@@ -137,7 +138,7 @@ var _ = Describe("actuator test", func() {
 
 		It("should create an acl-vpn EnvoyFilter object with the correct contents (from both extensions)", func() {
 			// arrange
-			extSpec1 := ExtensionSpec{
+			extSpec1 := extensionspec.ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"1.2.3.4/24"},
 					Action: "ALLOW",
@@ -149,7 +150,7 @@ var _ = Describe("actuator test", func() {
 			ext1 := createNewExtension(shootNamespace1, extSpecJSON1)
 			Expect(ext1).To(Not(BeNil()))
 
-			extSpec2 := ExtensionSpec{
+			extSpec2 := extensionspec.ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"5.6.7.8/24"},
 					Action: "ALLOW",
@@ -184,7 +185,7 @@ var _ = Describe("actuator test", func() {
 
 		It("should not fail when the Gateway resource can't be found for an extension other than the one being reconciled (e.g. for hibernated clusters)", func() {
 			// arrange
-			extSpec1 := ExtensionSpec{
+			extSpec1 := extensionspec.ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"1.2.3.4/24"},
 					Action: "ALLOW",
@@ -233,7 +234,7 @@ var _ = Describe("actuator test", func() {
 		It("should modify the EnvoyFilter objects accordingly", func() {
 			By("1) creating the EnvoyFilter object correctly in the ORIGINAL namespace")
 			// arrange
-			extSpec := ExtensionSpec{
+			extSpec := extensionspec.ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"1.2.3.4/24"},
 					Action: "ALLOW",
@@ -298,7 +299,7 @@ var _ = Describe("actuator test", func() {
 	Describe("deletion of a hibernated cluster (no Gateway resource exists)", func() {
 		It("should properly clean up according ManagedResource", func() {
 			// arrange
-			extSpec := ExtensionSpec{
+			extSpec := extensionspec.ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"1.2.3.4/24"},
 					Action: "ALLOW",
@@ -400,7 +401,7 @@ var _ = Describe("actuator unit test", func() {
 	Describe("ValidateExtensionSpec", func() {
 		When("there is an extension resource with one valid rule", func() {
 			It("Should not return an error", func() {
-				extSpec := &ExtensionSpec{}
+				extSpec := &extensionspec.ExtensionSpec{}
 				addRuleToSpec(extSpec, "DENY", "source_ip", "0.0.0.0/0")
 
 				Expect(ValidateExtensionSpec(extSpec)).To(Succeed())
@@ -409,14 +410,14 @@ var _ = Describe("actuator unit test", func() {
 
 		When("there is an extension resource without rules", func() {
 			It("Should return an error", func() {
-				extSpec := &ExtensionSpec{}
+				extSpec := &extensionspec.ExtensionSpec{}
 				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecRule))
 			})
 		})
 
 		When("there is an extension resource with a rule with invalid rule type", func() {
 			It("Should return the correct error", func() {
-				extSpec := &ExtensionSpec{}
+				extSpec := &extensionspec.ExtensionSpec{}
 				addRuleToSpec(extSpec, "DENY", "nonexistent", "0.0.0.0/0")
 
 				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecType))
@@ -425,7 +426,7 @@ var _ = Describe("actuator unit test", func() {
 
 		When("there is an extension resource with a rule with invalid rule action", func() {
 			It("Should return the correct error", func() {
-				extSpec := &ExtensionSpec{}
+				extSpec := &extensionspec.ExtensionSpec{}
 				addRuleToSpec(extSpec, "NONEXISTENT", "remote_ip", "0.0.0.0/0")
 
 				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecAction))
@@ -434,7 +435,7 @@ var _ = Describe("actuator unit test", func() {
 
 		When("there is an extension resource with CIDR", func() {
 			It("Should return the correct error", func() {
-				extSpec := &ExtensionSpec{}
+				extSpec := &extensionspec.ExtensionSpec{}
 				addRuleToSpec(extSpec, "DENY", "remote_ip", "n0n3x1st3/nt")
 
 				// we're not testing for a specific error, as they come from the
@@ -445,7 +446,7 @@ var _ = Describe("actuator unit test", func() {
 
 		When("there is an extension resource with a rule without CIDR", func() {
 			It("Should return the correct error", func() {
-				extSpec := &ExtensionSpec{}
+				extSpec := &extensionspec.ExtensionSpec{}
 
 				extSpec.Rule = &envoyfilters.ACLRule{
 					Action: "DENY",
@@ -460,7 +461,7 @@ var _ = Describe("actuator unit test", func() {
 
 		When("there is an extension resource with a rule with invalid CIDR", func() {
 			It("Should return the correct error", func() {
-				extSpec := &ExtensionSpec{}
+				extSpec := &extensionspec.ExtensionSpec{}
 				addRuleToSpec(extSpec, "DENY", "remote_ip", "n0n3x1st3/nt")
 
 				// we're not testing for a specific error, as they come from the
@@ -481,7 +482,7 @@ func getNewActuator() *actuator {
 	}
 }
 
-func addRuleToSpec(extSpec *ExtensionSpec, action, ruleType, cidr string) {
+func addRuleToSpec(extSpec *extensionspec.ExtensionSpec, action, ruleType, cidr string) {
 	extSpec.Rule = &envoyfilters.ACLRule{
 		Cidrs: []string{
 			cidr,
