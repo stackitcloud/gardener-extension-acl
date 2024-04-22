@@ -8,6 +8,9 @@ build:
     - image: ghcr.io/stackitcloud/gardener-extension-acl
       ko:
         main: ./cmd/gardener-extension-acl
+    - image: ghcr.io/stackitcloud/gardener-extension-admission-acl
+      ko:
+        main: ./cmd/gardener-extension-admission-acl
 resourceSelector:
   allow:
     # instruct skaffold to inject the built image reference into the image field in our ControllerDeployment
@@ -19,3 +22,7 @@ manifests:
       - ./deploy/extension/local
 deploy:
   kubectl: {}
+  helm:
+    releases:
+      - name: gardener-extension-admission-acl
+        chartPath: ./charts/gardener-extension-admission-acl

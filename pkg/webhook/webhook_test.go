@@ -20,8 +20,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
 )
 
 var _ = Describe("webhook unit test", func() {
@@ -526,13 +526,13 @@ func getNewInfrastructure(
 	}
 }
 
-func getExtensionSpec() *controller.ExtensionSpec {
-	return &controller.ExtensionSpec{
+func getExtensionSpec() *extensionspec.ExtensionSpec {
+	return &extensionspec.ExtensionSpec{
 		Rule: &envoyfilters.ACLRule{},
 	}
 }
 
-func addRuleToSpec(extSpec *controller.ExtensionSpec, action, ruleType, cidr string) {
+func addRuleToSpec(extSpec *extensionspec.ExtensionSpec, action, ruleType, cidr string) {
 	extSpec.Rule = &envoyfilters.ACLRule{
 		Cidrs: []string{
 			cidr,
