@@ -1,44 +1,45 @@
-configPatches:
-- applyTo: NETWORK_FILTER
-  match:
-    context: GATEWAY
-    listener:
-      filterChain:
-        sni: '*.ingress.testseed.dev.ske.eu01.stackit.cloud'
-  patch:
-    operation: INSERT_FIRST
-    value:
-      name: acl-ingress
-      typed_config:
-        '@type': type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC
-        rules:
-          action: ALLOW
-          policies:
-            project-shoot:
-              permissions:
-              - requested_server_name:
-                  suffix: -project-shoot.ingress.testseed.dev.ske.eu01.stackit.cloud
-              principals:
-              - remote_ip:
-                  address_prefix: 10.180.0.0
-                  prefix_len: 16
-              - remote_ip:
-                  address_prefix: 10.250.0.0
-                  prefix_len: 16
-              - remote_ip:
-                  address_prefix: 10.96.0.0
-                  prefix_len: 11
-            project-shoot-inverse: 
-              permissions:
-                  - not_rule:
-                      requested_server_name:
-                        suffix: -project-shoot.ingress.testseed.dev.ske.eu01.stackit.cloud
-              principals:
-              - remote_ip:
-                  address_prefix: 0.0.0.0
-                  prefix_len: 0
-        stat_prefix: envoyrbac
-workloadSelector:
-  labels:
-    app: istio-ingressgateway
-    istio: ingressgateway
+ingressEnvoyFilterSpec:
+  configPatches:
+  - applyTo: NETWORK_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        filterChain:
+          sni: '*.ingress.testseed.dev.ske.eu01.stackit.cloud'
+    patch:
+      operation: INSERT_FIRST
+      value:
+        name: acl-ingress
+        typed_config:
+          '@type': type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC
+          rules:
+            action: ALLOW
+            policies:
+              bar--foo:
+                permissions:
+                - requested_server_name:
+                    suffix: -bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud
+                principals:
+                - remote_ip:
+                    address_prefix: 10.180.0.0
+                    prefix_len: 16
+                - remote_ip:
+                    address_prefix: 10.250.0.0
+                    prefix_len: 16
+                - remote_ip:
+                    address_prefix: 10.96.0.0
+                    prefix_len: 11
+              bar--foo-inverse: 
+                permissions:
+                    - not_rule:
+                        requested_server_name:
+                          suffix: -bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud
+                principals:
+                - remote_ip:
+                    address_prefix: 0.0.0.0
+                    prefix_len: 0
+          stat_prefix: envoyrbac
+  workloadSelector:
+    labels:
+      app: istio-ingressgateway
+      istio: ingressgateway

@@ -34,11 +34,14 @@ func GetShootPodSpecificAllowedCIDRs(shoot *v1beta1.Shoot) []string {
 	return cidrs
 }
 
+// Copied calculation of shortID from here https://github.com/gardener/gardener/blob/41a694b024144465bd4f02f39d6d1c3493549c2f/pkg/gardenlet/operation/operation.go#L435-L442
+// TODO: Move to a shared helper function.
+
 // technicalIDPattern addresses the ambiguity that one or two dashes could follow the prefix "shoot" in the technical ID of the shoot.
 var technicalIDPattern = regexp.MustCompile(fmt.Sprintf("^%s-?", v1beta1constants.TechnicalIDPrefix))
 
-// ComputeShootID computes the host for a given prefix.
-func ComputeShootID(shoot *v1beta1.Shoot) string {
+// ComputeShortShootID computes the host for a given prefix.
+func ComputeShortShootID(shoot *v1beta1.Shoot) string {
 	shortID := technicalIDPattern.ReplaceAllString(shoot.Status.TechnicalID, "")
 	return shortID
 }

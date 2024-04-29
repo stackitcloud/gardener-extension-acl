@@ -4,6 +4,11 @@ import (
 	"errors"
 	"net"
 	"strings"
+
+	"github.com/gardener/gardener/extensions/pkg/controller"
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+
+	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 )
 
 // Error variables for envoyfilters pkg
@@ -55,21 +60,30 @@ func BuildAPIEnvoyFilterSpecForHelmChart(
 // BuildIngressEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for
 // endpoints using the seed ingress domain.
 func BuildIngressEnvoyFilterSpecForHelmChart(
-	rule *ACLRule, seedIngressDomain, shootID string, alwaysAllowedCIDRs []string, istioLabels map[string]string,
-) (map[string]interface{}, error) {
-	ingressConfigPatch, err := CreateIngressConfigPatchFromRule(rule, seedIngressDomain, shootID, alwaysAllowedCIDRs)
-	if err != nil {
-		return nil, err
+	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, cfg map[string]interface{},
+) error {
+	seedIngressDomain := helper.GetSeedIngressDomain(cluster.Seed)
+	if seedIngressDomain != "" {
+		shootID := helper.ComputeShortShootID(cluster.Shoot)
+
+		istioLabels := map[string]string{
+			v1beta1constants.LabelApp: v1beta1constants.DefaultIngressGatewayAppLabelValue,
+			"istio":                   "ingressgateway",
+		}
+
+		ingressConfigPatch := CreateIngressConfigPatchFromRule(rule, seedIngressDomain, shootID, alwaysAllowedCIDRs)
+
+		configPatches := []map[string]interface{}{
+			ingressConfigPatch,
+		}
+		cfg["ingressEnvoyFilterSpec"] = map[string]interface{}{
+			"workloadSelector": map[string]interface{}{
+				"labels": istioLabels,
+			},
+			"configPatches": configPatches,
+		}
 	}
-	configPatches := []map[string]interface{}{
-		ingressConfigPatch,
-	}
-	return map[string]interface{}{
-		"workloadSelector": map[string]interface{}{
-			"labels": istioLabels,
-		},
-		"configPatches": configPatches,
-	}, nil
+	return nil
 }
 
 // BuildVPNEnvoyFilterSpecForHelmChart assembles a single EnvoyFilter for all
@@ -132,7 +146,7 @@ func CreateAPIConfigPatchFromRule(
 // applied to the `GATEWAY` network filter chain matching the wildcard ingress domain.
 func CreateIngressConfigPatchFromRule(
 	rule *ACLRule, seedIngressDomain, shootID string, alwaysAllowedCIDRs []string,
-) (map[string]interface{}, error) {
+) map[string]interface{} {
 	rbacName := "acl-ingress"
 	ingressSuffix := "-" + shootID + "." + seedIngressDomain
 	return map[string]interface{}{
@@ -184,7 +198,7 @@ func CreateIngressConfigPatchFromRule(
 				},
 			},
 		},
-	}, nil
+	}
 }
 
 // CreateVPNConfigPatchFromRule combines a list of ACLMappings and the

@@ -374,33 +374,25 @@ func (a *actuator) createSeedResources(
 ) error {
 	var err error
 
+	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, shootSpecificCIRDs...)
+
 	apiEnvoyFilterSpec, err := envoyfilters.BuildAPIEnvoyFilterSpecForHelmChart(
-		spec.Rule, hosts, append(alwaysAllowedCIDRs, shootSpecificCIRDs...), istioLabels,
-	)
-	if err != nil {
-		return err
-	}
-
-	ingressSNI := helper.GetSeedIngressDomain(cluster.Seed)
-	shootID := helper.ComputeShootID(cluster.Shoot)
-
-	defaultIstioLabels := map[string]string{
-		"app":   "istio-ingressgateway",
-		"istio": "ingressgateway",
-	}
-
-	ingressEnvoyFilterSpec, err := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
-		spec.Rule, ingressSNI, shootID, append(alwaysAllowedCIDRs, shootSpecificCIRDs...), defaultIstioLabels,
+		spec.Rule, hosts, alwaysAllowedCIDRs, istioLabels,
 	)
 	if err != nil {
 		return err
 	}
 
 	cfg := map[string]interface{}{
-		"shootName":              cluster.Shoot.Status.TechnicalID,
-		"targetNamespace":        istioNamespace,
-		"apiEnvoyFilterSpec":     apiEnvoyFilterSpec,
-		"ingressEnvoyFilterSpec": ingressEnvoyFilterSpec,
+		"shootName":          cluster.Shoot.Status.TechnicalID,
+		"targetNamespace":    istioNamespace,
+		"apiEnvoyFilterSpec": apiEnvoyFilterSpec,
+	}
+
+	err = envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
+		cluster, spec.Rule, alwaysAllowedCIDRs, cfg)
+	if err != nil {
+		return err
 	}
 
 	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})

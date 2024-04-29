@@ -2,7 +2,7 @@
 
 With https://github.com/gardener/gardener/pull/9038 `nginx-ingress` moved behind `istio`. This allows us to filter access to observability components `alertmanager`, `plutono`, `prometheus` and `vali`. When SNI matches the wildcard ingress domain, traffic is send to the nginx ingress service. 
 
-![Ingress Chain](./docs/adr/ingress-chain.svg)
+![Ingress Chain](ingress-chain.svg)
 
 There is a single `listener` for all shoots. Filters for all shoots ard inserted into one filter chain. The filter of a shoot allows traffic to other shoots and checks the ip ranges for the actual shoot. If one filter denys the access, the rest of the filter chain is not tested. Only if all filters allow access, the traffic is forwarded to the nginx service.
 

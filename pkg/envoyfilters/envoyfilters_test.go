@@ -4,9 +4,12 @@ import (
 	"os"
 	"path"
 
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	"github.com/gardener/gardener/pkg/extensions"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("EnvoyFilter Unit Tests", func() {
@@ -14,6 +17,23 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 		alwaysAllowedCIDRs = []string{
 			"10.250.0.0/16",
 			"10.96.0.0/11",
+		}
+		cluster = &extensions.Cluster{
+			Shoot: &gardencorev1beta1.Shoot{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Status: gardencorev1beta1.ShootStatus{
+					TechnicalID: "shoot--bar--foo",
+				},
+			},
+			Seed: &gardencorev1beta1.Seed{
+				Spec: gardencorev1beta1.SeedSpec{
+					Ingress: &gardencorev1beta1.Ingress{
+						Domain: "ingress.testseed.dev.ske.eu01.stackit.cloud",
+					},
+				},
+			},
 		}
 	)
 
@@ -41,17 +61,20 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 		When("there is an extension resource with one rule", func() {
 			It("Should create an envoyFilter spec matching the expected one", func() {
 				rule := createRule("ALLOW", "remote_ip", "10.180.0.0/16")
-				ingressSNI := "ingress.testseed.dev.ske.eu01.stackit.cloud"
-				shootID := "project-shoot"
+				cfg := map[string]interface{}{}
 
-				labels := map[string]string{
-					"app":   "istio-ingressgateway",
-					"istio": "ingressgateway",
-				}
-				result, err := BuildIngressEnvoyFilterSpecForHelmChart(rule, ingressSNI, shootID, alwaysAllowedCIDRs, labels)
+				err := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, cfg)
 
 				Expect(err).ToNot(HaveOccurred())
-				checkIfMapEqualsYAML(result, "ingressEnvoyFilterSpecWithOneAllowRule.yaml")
+				checkIfMapEqualsYAML(cfg, "ingressEnvoyFilterSpecWithOneAllowRule.yaml")
+			})
+			It("Should not create an envoyFilter spec when seed has no ingress", func() {
+				rule := createRule("ALLOW", "remote_ip", "10.180.0.0/16")
+				cfg := map[string]interface{}{}
+				cluster.Seed.Spec.Ingress = nil
+				err := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, cfg)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(cfg["ingressEnvoyFilterSpec"]).To(BeNil())
 			})
 		})
 	})
@@ -130,6 +153,5 @@ func checkIfMapEqualsYAML(input map[string]interface{}, relTestingFilePath strin
 
 	inputByteArray, err := yaml.Marshal(input)
 	Expect(err).ToNot(HaveOccurred())
-
 	Expect(string(inputByteArray)).To(Equal(string(goldenYAMLProcessedByteArray)))
 }
