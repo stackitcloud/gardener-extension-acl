@@ -1,3 +1,4 @@
+{{- if .Values.ingressEnvoyFilterSpec }}
 apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
@@ -6,3 +7,5 @@ metadata:
   labels:
     {{- include "gardener-extension.labels" . | nindent 4 }}
 spec: {{- .Values.ingressEnvoyFilterSpec | toYaml | nindent 2 }}
+{{- end }}
+

@@ -28,6 +28,7 @@ import (
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
@@ -383,16 +384,19 @@ func (a *actuator) createSeedResources(
 		return err
 	}
 
-	cfg := map[string]interface{}{
-		"shootName":          cluster.Shoot.Status.TechnicalID,
-		"targetNamespace":    istioNamespace,
-		"apiEnvoyFilterSpec": apiEnvoyFilterSpec,
-	}
-
-	err = envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
-		cluster, spec.Rule, alwaysAllowedCIDRs, cfg)
+	defaultLabels, err := a.findDefaultIstioLabels(ctx)
 	if err != nil {
 		return err
+	}
+
+	ingressEnvoyFilterSpec := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
+		cluster, spec.Rule, alwaysAllowedCIDRs, defaultLabels)
+
+	cfg := map[string]interface{}{
+		"shootName":              cluster.Shoot.Status.TechnicalID,
+		"targetNamespace":        istioNamespace,
+		"apiEnvoyFilterSpec":     apiEnvoyFilterSpec,
+		"ingressEnvoyFilterSpec": ingressEnvoyFilterSpec,
 	}
 
 	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})
@@ -666,4 +670,22 @@ func (a *actuator) findIstioNamespaceForExtension(
 	}
 
 	return deployments.Items[0].Namespace, gw.Spec.Selector, nil
+}
+
+func (a *actuator) findDefaultIstioLabels(
+	ctx context.Context,
+) (
+	istioLabels map[string]string,
+	err error,
+) {
+	gwl := istionetworkv1beta1.GatewayList{}
+
+	err = a.client.List(ctx, &gwl, &client.ListOptions{Namespace: v1beta1constants.GardenNamespace})
+	if err != nil {
+		return nil, err
+	}
+	if len(gwl.Items) == 0 {
+		return nil, errors.New("no ingress gateway found in namespace")
+	}
+	return gwl.Items[0].Spec.Selector, nil
 }

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
-	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 )
@@ -60,23 +59,17 @@ func BuildAPIEnvoyFilterSpecForHelmChart(
 // BuildIngressEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for
 // endpoints using the seed ingress domain.
 func BuildIngressEnvoyFilterSpecForHelmChart(
-	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, cfg map[string]interface{},
-) error {
+	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
+) map[string]interface{} {
 	seedIngressDomain := helper.GetSeedIngressDomain(cluster.Seed)
 	if seedIngressDomain != "" {
 		shootID := helper.ComputeShortShootID(cluster.Shoot)
-
-		istioLabels := map[string]string{
-			v1beta1constants.LabelApp: v1beta1constants.DefaultIngressGatewayAppLabelValue,
-			"istio":                   "ingressgateway",
-		}
-
 		ingressConfigPatch := CreateIngressConfigPatchFromRule(rule, seedIngressDomain, shootID, alwaysAllowedCIDRs)
 
 		configPatches := []map[string]interface{}{
 			ingressConfigPatch,
 		}
-		cfg["ingressEnvoyFilterSpec"] = map[string]interface{}{
+		return map[string]interface{}{
 			"workloadSelector": map[string]interface{}{
 				"labels": istioLabels,
 			},

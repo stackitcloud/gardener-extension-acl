@@ -61,20 +61,23 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 		When("there is an extension resource with one rule", func() {
 			It("Should create an envoyFilter spec matching the expected one", func() {
 				rule := createRule("ALLOW", "remote_ip", "10.180.0.0/16")
-				cfg := map[string]interface{}{}
+				labels := map[string]string{
+					"app":   "istio-ingressgateway",
+					"istio": "ingressgateway",
+				}
+				ingressEnvoyFilterSpec := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
 
-				err := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, cfg)
-
-				Expect(err).ToNot(HaveOccurred())
-				checkIfMapEqualsYAML(cfg, "ingressEnvoyFilterSpecWithOneAllowRule.yaml")
+				checkIfMapEqualsYAML(ingressEnvoyFilterSpec, "ingressEnvoyFilterSpecWithOneAllowRule.yaml")
 			})
 			It("Should not create an envoyFilter spec when seed has no ingress", func() {
 				rule := createRule("ALLOW", "remote_ip", "10.180.0.0/16")
-				cfg := map[string]interface{}{}
 				cluster.Seed.Spec.Ingress = nil
-				err := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, cfg)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(cfg["ingressEnvoyFilterSpec"]).To(BeNil())
+				labels := map[string]string{
+					"app":   "istio-ingressgateway",
+					"istio": "ingressgateway",
+				}
+				ingressEnvoyFilterSpec := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+				Expect(ingressEnvoyFilterSpec["ingressEnvoyFilterSpec"]).To(BeNil())
 			})
 		})
 	})
