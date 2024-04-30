@@ -89,8 +89,6 @@ func CreateAPIConfigPatchFromRule(
 	if len(hosts) == 0 {
 		return nil, ErrNoHostsGiven
 	}
-	// TODO use all hosts?
-	host := hosts[0]
 	rbacName := "acl-api"
 	principals := ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs)
 
@@ -100,7 +98,12 @@ func CreateAPIConfigPatchFromRule(
 			"context": "GATEWAY",
 			"listener": map[string]interface{}{
 				"filterChain": map[string]interface{}{
-					"sni": host,
+					// There is one filter chain per shoot in the SNI listener that has two SNI matches: one for the internal and
+					// one for the external shoot domain.
+					// We can use either shoot domain to match the filter chain that we want to patch with this EnvoyFilter.
+					// The ACL config will apply to traffic going via both the internal and the external API server address.
+					// See: https://istio.io/latest/docs/reference/config/networking/envoy-filter/#EnvoyFilter-ListenerMatch-FilterChainMatch
+					"sni": hosts[0],
 				},
 			},
 		},
