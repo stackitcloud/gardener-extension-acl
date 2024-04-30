@@ -99,27 +99,29 @@ var _ = Describe("webhook unit test", func() {
 			})
 		})
 
-		When("the shoot uses the legacy technical ID format 'shoot-'", func() {
-			It("should not exit early and handle the EnvoyFilter", func() {
-				df, dfJSON := getEnvoyFilterFromFile("shoot-foo-bar")
-
-				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
-
-				Expect(ar.Allowed).To(BeTrue())
-				Expect(ar.Result.Message).To(ContainSubstring("not enabled for shoot"))
-				Expect(ar.Patch).To(BeEmpty())
-			})
-		})
-
 		When("there is no extension", func() {
-			It("issues no patch for the EnvoyFilter", func() {
-				df, dfJSON := getEnvoyFilterFromFile(namespace)
+			When("the shoot uses the legacy technical ID format 'shoot-'", func() {
+				It("issues no patch for the EnvoyFilter", func() {
+					df, dfJSON := getEnvoyFilterFromFile("shoot-foo-bar")
 
-				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
+					ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
 
-				Expect(ar.Allowed).To(BeTrue())
-				Expect(ar.Result.Message).To(ContainSubstring("not enabled for shoot"))
-				Expect(ar.Patch).To(BeEmpty())
+					Expect(ar.Allowed).To(BeTrue())
+					Expect(ar.Result.Message).To(ContainSubstring("not enabled for shoot"))
+					Expect(ar.Patch).To(BeEmpty())
+				})
+			})
+
+			When("the shoot uses the current technical ID format 'shoot--'", func() {
+				It("issues no patch for the EnvoyFilter", func() {
+					df, dfJSON := getEnvoyFilterFromFile(namespace)
+
+					ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
+
+					Expect(ar.Allowed).To(BeTrue())
+					Expect(ar.Result.Message).To(ContainSubstring("not enabled for shoot"))
+					Expect(ar.Patch).To(BeEmpty())
+				})
 			})
 		})
 
