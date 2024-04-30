@@ -3,9 +3,11 @@ package webhook
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/tidwall/gjson"
@@ -24,13 +26,9 @@ import (
 )
 
 const (
-	// ShootFilterPrefix is prefix from shoot technicalID
-	ShootFilterPrefix = "shoot--"
 	// ExtensionName contains the ACl extension name.
 	ExtensionName = "acl"
 )
-
-const allowedReasonNoPatchNecessary = "No patch necessary"
 
 // EnvoyFilterWebhook is a service struct that defines functions to handle
 // admission requests for EnvoyFilters.
@@ -60,8 +58,8 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 	originalObjectJSON string,
 ) admission.Response {
 	// filter out envoyfilters that are not managed by this webhook
-	if !strings.HasPrefix(filter.Name, ShootFilterPrefix) {
-		return admission.Allowed(allowedReasonNoPatchNecessary)
+	if !strings.HasPrefix(filter.Name, v1beta1constants.TechnicalIDPrefix) {
+		return admission.Allowed("requested object is not an EnvoyFilter managed by this webhook")
 	}
 
 	aclExtension := &extensionsv1alpha1.Extension{}
@@ -74,11 +72,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 	// if an error occured or the extension is in deletion, just allow without
 	// introducing any patches
 	if err != nil || !aclExtension.DeletionTimestamp.IsZero() {
-		return admission.Response{
-			AdmissionResponse: admissionv1.AdmissionResponse{
-				Allowed: true,
-			},
-		}
+		return admission.Allowed(fmt.Sprintf("extension %s not enabled for shoot %s or is in deletion", ExtensionName, filter.Name))
 	}
 
 	extSpec := &extensionspec.ExtensionSpec{}
