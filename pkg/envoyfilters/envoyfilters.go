@@ -44,15 +44,13 @@ func BuildAPIEnvoyFilterSpecForHelmChart(
 		return nil, err
 	}
 
-	configPatches := []map[string]interface{}{
-		apiConfigPatch,
-	}
-
 	return map[string]interface{}{
 		"workloadSelector": map[string]interface{}{
 			"labels": istioLabels,
 		},
-		"configPatches": configPatches,
+		"configPatches": []map[string]interface{}{
+			apiConfigPatch,
+		},
 	}, nil
 }
 
@@ -64,16 +62,14 @@ func BuildIngressEnvoyFilterSpecForHelmChart(
 	seedIngressDomain := helper.GetSeedIngressDomain(cluster.Seed)
 	if seedIngressDomain != "" {
 		shootID := helper.ComputeShortShootID(cluster.Shoot)
-		ingressConfigPatch := CreateIngressConfigPatchFromRule(rule, seedIngressDomain, shootID, alwaysAllowedCIDRs)
 
-		configPatches := []map[string]interface{}{
-			ingressConfigPatch,
-		}
 		return map[string]interface{}{
 			"workloadSelector": map[string]interface{}{
 				"labels": istioLabels,
 			},
-			"configPatches": configPatches,
+			"configPatches": []map[string]interface{}{
+				CreateIngressConfigPatchFromRule(rule, seedIngressDomain, shootID, alwaysAllowedCIDRs),
+			},
 		}
 	}
 	return nil
@@ -95,15 +91,13 @@ func BuildVPNEnvoyFilterSpecForHelmChart(
 		return nil, err
 	}
 
-	configPatches := []map[string]interface{}{
-		vpnConfigPatch,
-	}
-
 	return map[string]interface{}{
 		"workloadSelector": map[string]interface{}{
 			"labels": istioLabels,
 		},
-		"configPatches": configPatches,
+		"configPatches": []map[string]interface{}{
+			vpnConfigPatch,
+		},
 	}, nil
 }
 
