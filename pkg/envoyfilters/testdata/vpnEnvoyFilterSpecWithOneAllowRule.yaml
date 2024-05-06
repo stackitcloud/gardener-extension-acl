@@ -23,7 +23,7 @@ configPatches:
                               header:
                                 name: reversed-vpn
                                 string_match:
-                                  contains: shoot--projectname--shootname
+                                  contains: .shoot--projectname--shootname.
               shoot--projectname--shootname:
                 permissions:
                 - any: true
@@ -44,7 +44,7 @@ configPatches:
                     - header:
                         name: reversed-vpn
                         string_match:
-                          contains: shoot--projectname--shootname
+                          contains: .shoot--projectname--shootname.
           stat_prefix: envoyrbac
 workloadSelector:
   labels:

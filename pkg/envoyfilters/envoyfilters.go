@@ -361,7 +361,12 @@ func createVPNPolicyForShoot(rule *ACLRule, alwaysAllowedCIDRs []string, technic
 							"header": map[string]interface{}{
 								"name": "reversed-vpn",
 								"string_match": map[string]interface{}{
-									"contains": technicalShootID,
+									// The actual header value will look something like
+									// `outbound|1194||vpn-seed-server.<technical-ID>.svc.cluster.local`.
+									// Include dots in the contains matcher as anchors, to always match the entire technical shoot ID.
+									// Otherwise, if there was one cluster named `foo` and one named `foo-bar` (in the same project),
+									// `foo` would effectively inherit the ACL of `foo-bar`.
+									"contains": "." + technicalShootID + ".",
 								},
 							},
 						},
@@ -381,7 +386,12 @@ func createInverseVPNPolicy(mappings []ACLMapping) map[string]interface{} {
 				"header": map[string]interface{}{
 					"name": "reversed-vpn",
 					"string_match": map[string]interface{}{
-						"contains": mappings[i].ShootName,
+						// The actual header value will look something like
+						// `outbound|1194||vpn-seed-server.<technical-ID>.svc.cluster.local`.
+						// Include dots in the contains matcher as anchors, to always match the entire technical shoot ID.
+						// Otherwise, if there was one cluster named `foo` and one named `foo-bar` (in the same project),
+						// `foo` would effectively inherit the ACL of `foo-bar`.
+						"contains": "." + mappings[i].ShootName + ".",
 					},
 				},
 			},
