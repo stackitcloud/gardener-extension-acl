@@ -36,7 +36,7 @@ var _ = Describe("actuator test", func() {
 		}
 
 		createNewEnvoyFilter(shootNamespace1, istioNamespace1)
-		createNewGateway(shootNamespace1, istioNamespace1Selector)
+		createNewGateway("kube-apiserver", shootNamespace1, istioNamespace1Selector)
 		createNewIstioDeployment(istioNamespace1, istioNamespace1Selector)
 		createNewCluster(shootNamespace1)
 		createNewInfrastructure(shootNamespace1)
@@ -127,7 +127,7 @@ var _ = Describe("actuator test", func() {
 		BeforeEach(func() {
 			shootNamespace2 = createNewShootNamespace()
 			createNewEnvoyFilter(shootNamespace2, istioNamespace1)
-			createNewGateway(shootNamespace2, istioNamespace1Selector)
+			createNewGateway("kube-apiserver", shootNamespace2, istioNamespace1Selector)
 			createNewCluster(shootNamespace2)
 			createNewInfrastructure(shootNamespace2)
 		})
@@ -272,7 +272,7 @@ var _ = Describe("actuator test", func() {
 				},
 			}
 			Expect(k8sClient.Delete(ctx, gw)).To(Succeed())
-			createNewGateway(shootNamespace1, istioNamespace2Selector)
+			createNewGateway("kube-apiserver", shootNamespace1, istioNamespace2Selector)
 			createNewIstioDeployment(istioNamespace2, istioNamespace2Selector)
 			createNewEnvoyFilter(shootNamespace1, istioNamespace2)
 
@@ -355,7 +355,7 @@ var _ = Describe("actuator unit test", func() {
 			"istio": istioNamespace,
 		}
 
-		createNewGateway(namespace, istioNamespaceSelector)
+		createNewGateway("kube-apiserver", namespace, istioNamespaceSelector)
 		createNewIstioDeployment(istioNamespace, istioNamespaceSelector)
 		createNewCluster(namespace)
 		createNewInfrastructure(namespace)

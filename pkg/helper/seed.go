@@ -15,3 +15,12 @@ func GetSeedSpecificAllowedCIDRs(seed *v1beta1.Seed) []string {
 	}
 	return cidrs
 }
+
+// GetSeedIngressDomain returns the ingress domain of the seed
+func GetSeedIngressDomain(seed *v1beta1.Seed) string {
+	domain := ""
+	if seed.Spec.Ingress != nil {
+		domain = seed.Spec.Ingress.Domain
+	}
+	return domain
+}

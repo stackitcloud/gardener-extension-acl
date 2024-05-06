@@ -28,6 +28,7 @@ import (
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
@@ -70,9 +71,10 @@ const (
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
 	// TODO implement
-	ImageName        = "image-name"
-	deletionTimeout  = 2 * time.Minute
-	istioGatewayName = "kube-apiserver"
+	ImageName          = "image-name"
+	deletionTimeout    = 2 * time.Minute
+	istioGatewayName   = "kube-apiserver"
+	ingressGatewayName = "nginx-ingress-controller"
 )
 
 // Error variables for controller pkg
@@ -369,17 +371,28 @@ func (a *actuator) createSeedResources(
 ) error {
 	var err error
 
+	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, shootSpecificCIRDs...)
+
 	apiEnvoyFilterSpec, err := envoyfilters.BuildAPIEnvoyFilterSpecForHelmChart(
-		spec.Rule, hosts, append(alwaysAllowedCIDRs, shootSpecificCIRDs...), istioLabels,
+		spec.Rule, hosts, alwaysAllowedCIDRs, istioLabels,
 	)
 	if err != nil {
 		return err
 	}
 
+	defaultLabels, err := a.findDefaultIstioLabels(ctx)
+	if err != nil {
+		return err
+	}
+
+	ingressEnvoyFilterSpec := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
+		cluster, spec.Rule, alwaysAllowedCIDRs, defaultLabels)
+
 	cfg := map[string]interface{}{
-		"shootName":          cluster.Shoot.Status.TechnicalID,
-		"targetNamespace":    istioNamespace,
-		"apiEnvoyFilterSpec": apiEnvoyFilterSpec,
+		"shootName":              cluster.Shoot.Status.TechnicalID,
+		"targetNamespace":        istioNamespace,
+		"apiEnvoyFilterSpec":     apiEnvoyFilterSpec,
+		"ingressEnvoyFilterSpec": ingressEnvoyFilterSpec,
 	}
 
 	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})
@@ -653,4 +666,23 @@ func (a *actuator) findIstioNamespaceForExtension(
 	}
 
 	return deployments.Items[0].Namespace, gw.Spec.Selector, nil
+}
+
+func (a *actuator) findDefaultIstioLabels(
+	ctx context.Context,
+) (
+	istioLabels map[string]string,
+	err error,
+) {
+	gw := istionetworkv1beta1.Gateway{}
+
+	err = a.client.Get(ctx, client.ObjectKey{
+		Namespace: v1beta1constants.GardenNamespace,
+		Name:      ingressGatewayName,
+	}, &gw)
+	if err != nil {
+		return nil, err
+	}
+
+	return gw.Spec.Selector, nil
 }

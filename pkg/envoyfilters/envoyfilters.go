@@ -4,6 +4,10 @@ import (
 	"errors"
 	"net"
 	"strings"
+
+	"github.com/gardener/gardener/extensions/pkg/controller"
+
+	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 )
 
 // Error variables for envoyfilters pkg
@@ -40,16 +44,35 @@ func BuildAPIEnvoyFilterSpecForHelmChart(
 		return nil, err
 	}
 
-	configPatches := []map[string]interface{}{
-		apiConfigPatch,
-	}
-
 	return map[string]interface{}{
 		"workloadSelector": map[string]interface{}{
 			"labels": istioLabels,
 		},
-		"configPatches": configPatches,
+		"configPatches": []map[string]interface{}{
+			apiConfigPatch,
+		},
 	}, nil
+}
+
+// BuildIngressEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for
+// endpoints using the seed ingress domain.
+func BuildIngressEnvoyFilterSpecForHelmChart(
+	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
+) map[string]interface{} {
+	seedIngressDomain := helper.GetSeedIngressDomain(cluster.Seed)
+	if seedIngressDomain != "" {
+		shootID := helper.ComputeShortShootID(cluster.Shoot)
+
+		return map[string]interface{}{
+			"workloadSelector": map[string]interface{}{
+				"labels": istioLabels,
+			},
+			"configPatches": []map[string]interface{}{
+				CreateIngressConfigPatchFromRule(rule, seedIngressDomain, shootID, alwaysAllowedCIDRs),
+			},
+		}
+	}
+	return nil
 }
 
 // BuildVPNEnvoyFilterSpecForHelmChart assembles a single EnvoyFilter for all
@@ -68,15 +91,13 @@ func BuildVPNEnvoyFilterSpecForHelmChart(
 		return nil, err
 	}
 
-	configPatches := []map[string]interface{}{
-		vpnConfigPatch,
-	}
-
 	return map[string]interface{}{
 		"workloadSelector": map[string]interface{}{
 			"labels": istioLabels,
 		},
-		"configPatches": configPatches,
+		"configPatches": []map[string]interface{}{
+			vpnConfigPatch,
+		},
 	}, nil
 }
 
@@ -109,6 +130,65 @@ func CreateAPIConfigPatchFromRule(
 		},
 		"patch": principalsToPatch(rbacName, rule.Action, "network", principals),
 	}, nil
+}
+
+// CreateIngressConfigPatchFromRule creates a network filter patch that can be
+// applied to the `GATEWAY` network filter chain matching the wildcard ingress domain.
+func CreateIngressConfigPatchFromRule(
+	rule *ACLRule, seedIngressDomain, shootID string, alwaysAllowedCIDRs []string,
+) map[string]interface{} {
+	rbacName := "acl-ingress"
+	ingressSuffix := "-" + shootID + "." + seedIngressDomain
+	return map[string]interface{}{
+		"applyTo": "NETWORK_FILTER",
+		"match": map[string]interface{}{
+			"context": "GATEWAY",
+			"listener": map[string]interface{}{
+				"filterChain": map[string]interface{}{
+					"sni": "*." + seedIngressDomain,
+				},
+			},
+		},
+
+		"patch": map[string]interface{}{
+			"operation": "INSERT_FIRST",
+			"value": map[string]interface{}{
+				"name": rbacName,
+				"typed_config": map[string]interface{}{
+					"@type": "type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC",
+					"rules": map[string]interface{}{
+						"action": "ALLOW",
+						"policies": map[string]interface{}{
+							shootID + "-inverse": map[string]interface{}{
+								"permissions": []map[string]interface{}{{
+									"not_rule": map[string]interface{}{
+										"requested_server_name": map[string]interface{}{
+											"suffix": ingressSuffix,
+										},
+									},
+								}},
+								"principals": []map[string]interface{}{{
+									"remote_ip": map[string]interface{}{
+										"address_prefix": "0.0.0.0",
+										"prefix_len":     0,
+									},
+								}},
+							},
+							shootID: map[string]interface{}{
+								"permissions": []map[string]interface{}{{
+									"requested_server_name": map[string]interface{}{
+										"suffix": ingressSuffix,
+									},
+								}},
+								"principals": ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs),
+							},
+						},
+					},
+					"stat_prefix": "envoyrbac",
+				},
+			},
+		},
+	}
 }
 
 // CreateVPNConfigPatchFromRule combines a list of ACLMappings and the
