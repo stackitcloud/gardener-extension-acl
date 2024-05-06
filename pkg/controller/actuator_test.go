@@ -5,6 +5,7 @@ import (
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
+	. "github.com/gardener/gardener/pkg/utils/test/matchers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -120,6 +121,67 @@ var _ = Describe("actuator test", func() {
 
 			Expect(extState.IstioNamespace).ToNot(BeNil())
 			Expect(*extState.IstioNamespace).To(Equal(istioNamespace1))
+		})
+
+		// gardener >= v1.89, including https://github.com/gardener/gardener/pull/9038
+		Context("ingress-nginx is exposed via istio", func() {
+			BeforeEach(func() {
+				gateway := createNewGateway("nginx-ingress-controller", "garden", map[string]string{
+					"app":   "istio-ingressgateway",
+					"istio": "ingressgateway",
+				})
+
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(ctx, gateway)).To(Or(Succeed(), BeNotFoundError()))
+				})
+			})
+
+			It("should create managed resource including acl-ingress-shoot EnvoyFilter object", func() {
+				extSpec := extensionspec.ExtensionSpec{
+					Rule: &envoyfilters.ACLRule{
+						Cidrs:  []string{"1.2.3.4/24"},
+						Action: "ALLOW",
+						Type:   "remote_ip",
+					},
+				}
+				extSpecJSON, err := json.Marshal(extSpec)
+				Expect(err).To(BeNil())
+				ext := createNewExtension(shootNamespace1, extSpecJSON)
+				Expect(ext).To(Not(BeNil()))
+
+				Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
+
+				mr := &v1alpha1.ManagedResource{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
+				secret := &corev1.Secret{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
+				Expect(secret.Data["seed"]).To(ContainSubstring("acl-ingress-" + shootNamespace1))
+			})
+		})
+
+		// gardener < v1.89
+		Context("ingress-nginx is not exposed via istio", func() {
+			It("should create managed resource not including acl-ingress-shoot EnvoyFilter object", func() {
+				extSpec := extensionspec.ExtensionSpec{
+					Rule: &envoyfilters.ACLRule{
+						Cidrs:  []string{"1.2.3.4/24"},
+						Action: "ALLOW",
+						Type:   "remote_ip",
+					},
+				}
+				extSpecJSON, err := json.Marshal(extSpec)
+				Expect(err).To(BeNil())
+				ext := createNewExtension(shootNamespace1, extSpecJSON)
+				Expect(ext).To(Not(BeNil()))
+
+				Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
+
+				mr := &v1alpha1.ManagedResource{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
+				secret := &corev1.Secret{}
+				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
+				Expect(secret.Data["seed"]).NotTo(ContainSubstring("acl-ingress-" + shootNamespace1))
+			})
 		})
 	})
 
