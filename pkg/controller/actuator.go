@@ -380,19 +380,23 @@ func (a *actuator) createSeedResources(
 		return err
 	}
 
-	defaultLabels, err := a.findDefaultIstioLabels(ctx)
-	if err != nil {
-		return err
+	cfg := map[string]interface{}{
+		"shootName":          cluster.Shoot.Status.TechnicalID,
+		"targetNamespace":    istioNamespace,
+		"apiEnvoyFilterSpec": apiEnvoyFilterSpec,
 	}
 
-	ingressEnvoyFilterSpec := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
-		cluster, spec.Rule, alwaysAllowedCIDRs, defaultLabels)
+	defaultLabels, err := a.findDefaultIstioLabels(ctx)
+	if client.IgnoreNotFound(err) != nil {
+		return err
+	} else if err == nil {
+		// The `nginx-ingress-controller` Gateway object only exists in g/g@v1.89, (introduced with
+		// https://github.com/gardener/gardener/pull/9038).
+		// If it doesn't exist yet, we can't apply ACLs to shoot ingresses.
+		ingressEnvoyFilterSpec := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
+			cluster, spec.Rule, alwaysAllowedCIDRs, defaultLabels)
 
-	cfg := map[string]interface{}{
-		"shootName":              cluster.Shoot.Status.TechnicalID,
-		"targetNamespace":        istioNamespace,
-		"apiEnvoyFilterSpec":     apiEnvoyFilterSpec,
-		"ingressEnvoyFilterSpec": ingressEnvoyFilterSpec,
+		cfg["ingressEnvoyFilterSpec"] = ingressEnvoyFilterSpec
 	}
 
 	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})

@@ -72,11 +72,6 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 	createGardenNamespace()
-	istioNamespaceSelector := map[string]string{
-		"app":   "istio-ingressgateway",
-		"istio": "ingressgateway",
-	}
-	createNewGateway("nginx-ingress-controller", "garden", istioNamespaceSelector)
 })
 
 var _ = AfterSuite(func() {
@@ -150,7 +145,7 @@ func createNewIstioDeployment(namespace string, labels map[string]string) {
 	Expect(k8sClient.Create(ctx, deployment)).ShouldNot(HaveOccurred())
 }
 
-func createNewGateway(name, shootNamespace string, labels map[string]string) {
+func createNewGateway(name, shootNamespace string, labels map[string]string) *istionetworkingv1beta1.Gateway {
 	gw := &istionetworkingv1beta1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -161,6 +156,7 @@ func createNewGateway(name, shootNamespace string, labels map[string]string) {
 		},
 	}
 	Expect(k8sClient.Create(ctx, gw)).ShouldNot(HaveOccurred())
+	return gw
 }
 
 func createNewExtension(shootNamespace string, providerConfig []byte) *extensionsv1alpha1.Extension {
@@ -235,7 +231,9 @@ func createNewCluster(shootNamespace string) {
 							Pods:  nil,
 						},
 					},
-					Status: gardencorev1beta1.ShootStatus{ // needed to wait until k8s server is up and running
+					Status: gardencorev1beta1.ShootStatus{
+						TechnicalID: shootNamespace,
+						// needed to wait until k8s server is up and running
 						AdvertisedAddresses: []gardencorev1beta1.ShootAdvertisedAddress{{
 							Name: "test",
 							URL:  "https://test",
