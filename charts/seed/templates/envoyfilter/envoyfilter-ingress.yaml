@@ -8,4 +8,3 @@ metadata:
     {{- include "gardener-extension.labels" . | nindent 4 }}
 spec: {{- .Values.ingressEnvoyFilterSpec | toYaml | nindent 2 }}
 {{- end }}
-

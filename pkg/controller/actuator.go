@@ -70,9 +70,10 @@ const (
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
 	// TODO implement
-	ImageName        = "image-name"
-	deletionTimeout  = 2 * time.Minute
-	istioGatewayName = "kube-apiserver"
+	ImageName          = "image-name"
+	deletionTimeout    = 2 * time.Minute
+	istioGatewayName   = "kube-apiserver"
+	ingressGatewayName = "nginx-ingress-controller"
 )
 
 // Error variables for controller pkg
@@ -678,14 +679,15 @@ func (a *actuator) findDefaultIstioLabels(
 	istioLabels map[string]string,
 	err error,
 ) {
-	gwl := istionetworkv1beta1.GatewayList{}
+	gw := istionetworkv1beta1.Gateway{}
 
-	err = a.client.List(ctx, &gwl, &client.ListOptions{Namespace: v1beta1constants.GardenNamespace})
+	err = a.client.Get(ctx, client.ObjectKey{
+		Namespace: v1beta1constants.GardenNamespace,
+		Name:      ingressGatewayName,
+	}, &gw)
 	if err != nil {
 		return nil, err
 	}
-	if len(gwl.Items) == 0 {
-		return nil, errors.New("no ingress gateway found in namespace")
-	}
-	return gwl.Items[0].Spec.Selector, nil
+
+	return gw.Spec.Selector, nil
 }

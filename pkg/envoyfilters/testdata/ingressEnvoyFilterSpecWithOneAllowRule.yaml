@@ -1,4 +1,3 @@
-
 configPatches:
 - applyTo: NETWORK_FILTER
   match:
