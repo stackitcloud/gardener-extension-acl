@@ -130,18 +130,18 @@ configPatches:
                   permissions:
                   - any: true
                   principals:
-                    - or_ids:
+                    - and_ids:
                         ids:
                           - not_id:
                               header:
                                 name: reversed-vpn
                                 string_match:
-                                  contains: shoot--projectname--shootname1
+                                  contains: .shoot--projectname--shootname1.
                           - not_id:
                               header:
                                 name: reversed-vpn
                                 string_match:
-                                  contains: shoot--projectname--shootname2
+                                  contains: .shoot--projectname--shootname2.
               # this is the shoot-specific policy, matching on both the header
               # AND the provided list of allowed IP ranges
               shoot--projectname--shootname1:
@@ -164,7 +164,7 @@ configPatches:
                     - header:
                         name: reversed-vpn
                         string_match:
-                          contains: shoot--projectname--shootname
+                          contains: .shoot--projectname--shootname.
               # one more policy for each shoot that has the extension enabled
               shoot-projectname-shootname2:
                 ...
