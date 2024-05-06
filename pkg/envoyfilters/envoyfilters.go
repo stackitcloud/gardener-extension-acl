@@ -201,7 +201,7 @@ func CreateVPNConfigPatchFromRule(
 
 	policies := map[string]interface{}{}
 
-	policies[rbacName+"-inverse"] = createInversedVPNPolicy(mappings)
+	policies[rbacName+"-inverse"] = createInverseVPNPolicy(mappings)
 
 	for i := range mappings {
 		mapping := &mappings[i]
@@ -372,7 +372,7 @@ func createVPNPolicyForShoot(rule *ACLRule, alwaysAllowedCIDRs []string, technic
 	}
 }
 
-func createInversedVPNPolicy(mappings []ACLMapping) map[string]interface{} {
+func createInverseVPNPolicy(mappings []ACLMapping) map[string]interface{} {
 	notHeaderPrincipals := []map[string]interface{}{}
 
 	for i := range mappings {
@@ -394,7 +394,7 @@ func createInversedVPNPolicy(mappings []ACLMapping) map[string]interface{} {
 		},
 		"principals": []map[string]interface{}{
 			{
-				"or_ids": map[string]interface{}{
+				"and_ids": map[string]interface{}{
 					"ids": notHeaderPrincipals,
 				},
 			},

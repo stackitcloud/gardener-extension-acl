@@ -17,7 +17,7 @@ configPatches:
                   permissions:
                   - any: true
                   principals:
-                    - or_ids:
+                    - and_ids:
                         ids:
                           - not_id:
                               header:
