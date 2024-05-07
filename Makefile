@@ -32,7 +32,7 @@ endif
 # Tools                                 #
 #########################################
 
-TOOLS_DIR := $(HACK_DIR)/tools
+TOOLS_DIR := hack/tools
 include $(GARDENER_HACK_DIR)/tools.mk
 include $(HACK_DIR)/tools.mk
 
