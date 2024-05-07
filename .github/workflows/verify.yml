@@ -34,5 +34,4 @@ jobs:
       run: |
         git config --global user.email "ci@gardener.cloud"
         git config --global user.name "ci"
-    - run: make init
     - run: make verify-extended

@@ -32,7 +32,7 @@ endif
 # Tools                                 #
 #########################################
 
-TOOLS_DIR := $(HACK_DIR)/tools
+TOOLS_DIR := hack/tools
 include $(GARDENER_HACK_DIR)/tools.mk
 include $(HACK_DIR)/tools.mk
 
@@ -87,8 +87,6 @@ images: $(KO)
 tidy:
 	@GO111MODULE=on go mod tidy
 
-# run `make init` to perform an initial go mod cache sync which is required for other make targets
-init: tidy
 # needed so that check-generate.sh can call make revendor
 revendor: tidy
 
