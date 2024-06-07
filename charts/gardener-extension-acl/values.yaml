@@ -3,7 +3,10 @@ imagePullPolicy: IfNotPresent
 
 replicaCount: 2
 
-resources: {}
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
 
 vpa:
   enabled: true
