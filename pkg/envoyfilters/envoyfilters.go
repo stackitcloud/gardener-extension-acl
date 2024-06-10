@@ -102,6 +102,32 @@ func BuildVPNEnvoyFilterSpecForHelmChart(
 	}, nil
 }
 
+// BuildVPNEnvoyFilterSpecForHelmChart assembles a single EnvoyFilter for all
+// shoots on the seed, due to the fact that we can't create one EnvoyFilter per
+// shoot - this doesn't work because all the VPN traffic flows through the same
+// filter.
+//
+// We use the technical ID of the shoot for the VPN rule, which is de facto the
+// same as the seed namespace of the shoot. (Gardener uses the seedNamespace
+// value in the botanist vpnshoot task.)
+func BuildLegacyVPNEnvoyFilterSpecForHelmChart(
+	mappings []ACLMapping, alwaysAllowedCIDRs []string, istioLabels map[string]string,
+) (map[string]interface{}, error) {
+	vpnConfigPatch, err := CreateLegacyVPNConfigPatchFromRule(mappings, alwaysAllowedCIDRs)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"workloadSelector": map[string]interface{}{
+			"labels": istioLabels,
+		},
+		"configPatches": []map[string]interface{}{
+			vpnConfigPatch,
+		},
+	}, nil
+}
+
 // CreateAPIConfigPatchFromRule combines an ACLRule, the first entry  of the
 // hosts list and the alwaysAllowedCIDRs into a network filter patch that can be
 // applied to the `GATEWAY` network filter chain matching the host.
@@ -249,6 +275,52 @@ func CreateVPNConfigPatchFromRule(rule *ACLRule,
 	}, nil
 }
 
+// CreateVPNConfigPatchFromRule combines a list of ACLMappings and the
+// alwaysAllowedCIDRs into a HTTP filter patch that can be applied to the
+// `GATEWAY` HTTP filter chain for the VPN.
+func CreateLegacyVPNConfigPatchFromRule(
+	mappings []ACLMapping, alwaysAllowedCIDRs []string,
+) (map[string]interface{}, error) {
+	rbacName := "acl-vpn"
+
+	policies := map[string]interface{}{}
+
+	policies[rbacName+"-inverse"] = createInverseVPNPolicy(mappings)
+
+	for i := range mappings {
+		mapping := &mappings[i]
+		policies[mapping.ShootName] = createVPNPolicyForShoot(
+			&mapping.Rule,
+			append(alwaysAllowedCIDRs, mapping.ShootSpecificCIDRs...),
+			mapping.ShootName,
+		)
+	}
+
+	return map[string]interface{}{
+		"applyTo": "HTTP_FILTER",
+		"match": map[string]interface{}{
+			"context": "GATEWAY",
+			"listener": map[string]interface{}{
+				"name": "0.0.0.0_8132",
+			},
+		},
+		"patch": map[string]interface{}{
+			"operation": "INSERT_FIRST",
+			"value": map[string]interface{}{
+				"name": rbacName,
+				"typed_config": map[string]interface{}{
+					"@type":       "type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC",
+					"stat_prefix": "envoyrbac",
+					"rules": map[string]interface{}{
+						"action":   "ALLOW",
+						"policies": policies,
+					},
+				},
+			},
+		},
+	}, nil
+}
+
 // CreateInternalFilterPatchFromRule combines an ACLRule, the
 // alwaysAllowedCIDRs, and the shootSpecificCIDRs into a filter patch.
 func CreateInternalFilterPatchFromRule(
@@ -342,6 +414,82 @@ func typedConfigToPatch(rbacName, ruleAction, filterType string, principals []ma
 						{"any": true},
 					},
 					"principals": principals,
+				},
+			},
+		},
+	}
+}
+
+func createVPNPolicyForShoot(rule *ACLRule, alwaysAllowedCIDRs []string, technicalShootID string) map[string]interface{} {
+	// In the case of VPN, we need to nest the principal rules in a EnvoyFilter
+	// "and_ids" structure, because we add an additional principal matching on
+	// the "reversed-vpn" header, which needs to be ANDed with the other rules.
+	// Principals are concatenated using an OR rule, so matching one of them sufficies...
+	oredPrincipals := ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs)
+
+	// ...but only if the VPN header is also set, therefore combine via AND rule
+	return map[string]interface{}{
+		"permissions": []map[string]interface{}{
+			{"any": true},
+		},
+		"principals": []map[string]interface{}{
+			{
+				"and_ids": map[string]interface{}{
+					"ids": []map[string]interface{}{
+						{
+							"or_ids": map[string]interface{}{
+								"ids": oredPrincipals,
+							},
+						},
+						{
+							"header": map[string]interface{}{
+								"name": "reversed-vpn",
+								"string_match": map[string]interface{}{
+									// The actual header value will look something like
+									// `outbound|1194||vpn-seed-server.<technical-ID>.svc.cluster.local`.
+									// Include dots in the contains matcher as anchors, to always match the entire technical shoot ID.
+									// Otherwise, if there was one cluster named `foo` and one named `foo-bar` (in the same project),
+									// `foo` would effectively inherit the ACL of `foo-bar`.
+									"contains": "." + technicalShootID + ".",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createInverseVPNPolicy(mappings []ACLMapping) map[string]interface{} {
+	notHeaderPrincipals := []map[string]interface{}{}
+
+	for i := range mappings {
+		notHeaderPrincipals = append(notHeaderPrincipals, map[string]interface{}{
+			"not_id": map[string]interface{}{
+				"header": map[string]interface{}{
+					"name": "reversed-vpn",
+					"string_match": map[string]interface{}{
+						// The actual header value will look something like
+						// `outbound|1194||vpn-seed-server.<technical-ID>.svc.cluster.local`.
+						// Include dots in the contains matcher as anchors, to always match the entire technical shoot ID.
+						// Otherwise, if there was one cluster named `foo` and one named `foo-bar` (in the same project),
+						// `foo` would effectively inherit the ACL of `foo-bar`.
+						"contains": "." + mappings[i].ShootName + ".",
+					},
+				},
+			},
+		})
+	}
+
+	return map[string]interface{}{
+		"permissions": []map[string]interface{}{
+			{"any": true},
+		},
+		"principals": []map[string]interface{}{
+			{
+				"and_ids": map[string]interface{}{
+					"ids": notHeaderPrincipals,
 				},
 			},
 		},

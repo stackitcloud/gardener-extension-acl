@@ -44,6 +44,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/stackitcloud/gardener-extension-acl/charts"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
@@ -196,6 +197,17 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
+	if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, istioNamespace, istioLabels); err != nil {
+		return err
+	}
+
+	if extState.IstioNamespace != nil && *extState.IstioNamespace != istioNamespace {
+		// we need to cleanup the old vpn object if the istioNamespace changed
+		if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, *extState.IstioNamespace, nil); err != nil {
+			return err
+		}
+	}
+
 	extState.IstioNamespace = &istioNamespace
 
 	return a.updateStatus(ctx, ex, extState)
@@ -290,6 +302,60 @@ func (a *actuator) Restore(ctx context.Context, log logr.Logger, ex *extensionsv
 func (a *actuator) Migrate(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
 	return a.Delete(ctx, log, ex)
 }
+
+func (a *actuator) reconcileVPNEnvoyFilter(
+	ctx context.Context,
+	alwaysAllowedCIDRs []string,
+	istioNamespace string,
+	istioLabels map[string]string,
+) error {
+	aclMappings, istioLabelsFromExt, err := a.getAllShootsWithACLExtension(ctx, istioNamespace)
+	if err != nil {
+		return err
+	}
+
+	// build EnvoyFilter object as map[string]interface{}
+	// because the actual EnvoyFilter struct is a pain to type
+	name := "acl-vpn"
+
+	// build EnvoyFilter object as map[string]interface{}
+	// because the actual EnvoyFilter struct is a pain to type
+	envoyFilter := &unstructured.Unstructured{}
+	envoyFilter.SetGroupVersionKind(istionetworkv1alpha3.SchemeGroupVersion.WithKind("EnvoyFilter"))
+	envoyFilter.SetNamespace(istioNamespace)
+	envoyFilter.SetName(name)
+
+	if len(aclMappings) == 0 {
+		// no shoot in this namespace with the ACL extension, so we can delete the config
+		err = a.client.Delete(ctx, envoyFilter)
+		return client.IgnoreNotFound(err)
+	}
+	if istioLabels == nil {
+		istioLabels = istioLabelsFromExt
+	}
+
+	vpnEnvoyFilterSpec, err := envoyfilters.BuildLegacyVPNEnvoyFilterSpecForHelmChart(
+		aclMappings, alwaysAllowedCIDRs, istioLabels,
+	)
+	if err != nil {
+		return err
+	}
+
+	err = a.client.Get(ctx, client.ObjectKeyFromObject(envoyFilter), envoyFilter)
+	if client.IgnoreNotFound(err) != nil {
+		return err
+	}
+
+	envoyFilter.Object["spec"] = vpnEnvoyFilterSpec
+
+	if apierrors.IsNotFound(err) {
+		return a.client.Create(ctx, envoyFilter)
+	}
+
+	return a.client.Update(ctx, envoyFilter)
+}
+
+
 
 func (a *actuator) createSeedResources(
 	ctx context.Context,
@@ -459,6 +525,119 @@ func (a *actuator) triggerWebhook(ctx context.Context, shootName, istioNamespace
 	// --> migration code end
 
 	return a.client.Patch(ctx, envoyFilter, client.RawPatch(types.MergePatchType, []byte("{}")))
+}
+
+
+// getAllShootsWithACLExtension returns a list of all shoots that have the ACL
+// extension enabled, together with their rule.
+func (a *actuator) getAllShootsWithACLExtension(
+	ctx context.Context, istioNamespace string,
+) ([]envoyfilters.ACLMapping, map[string]string, error) {
+	extensions := &extensionsv1alpha1.ExtensionList{}
+	err := a.client.List(ctx, extensions)
+	if err != client.IgnoreNotFound(err) {
+		return nil, nil, err
+	}
+
+	if len(extensions.Items) < 1 {
+		return nil, nil, ErrNoExtensionsFound
+	}
+
+	mappings := []envoyfilters.ACLMapping{}
+
+	var istioLabels map[string]string
+
+	for i := range extensions.Items {
+		ex := &extensions.Items[i]
+		if ex.Spec.Type != Type {
+			continue
+		}
+
+		var shootIstioNamespace string
+		var shootIstioLabels map[string]string
+
+		shootIstioNamespace, shootIstioLabels, err = a.findIstioNamespaceForExtension(ctx, &extensions.Items[i])
+		if client.IgnoreNotFound(err) != nil {
+			return nil, nil, err
+		}
+		// If we don't find a Gateway object to get the Istio Namespace from, we
+		// try the extension status as a fallback. If both aren't available, we
+		// ignore the Shoot's ACL rules entirely in this pass. This can only
+		// occur when the ACL extension for the Shoot in question itself has
+		// never been reconciled before.
+		if apierrors.IsNotFound(err) {
+			extState, err := getExtensionState(ex)
+			if err != nil {
+				return nil, nil, err
+			}
+			if extState.IstioNamespace == nil {
+				continue
+			}
+
+			shootIstioNamespace = *extState.IstioNamespace
+		}
+
+		if istioNamespace != shootIstioNamespace {
+			continue
+		}
+
+		if istioLabels == nil {
+			istioLabels = shootIstioLabels
+		}
+
+		extSpec := &extensionspec.ExtensionSpec{}
+		if ex.Spec.ProviderConfig != nil && ex.Spec.ProviderConfig.Raw != nil {
+			if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
+				return nil, nil, err
+			}
+		}
+
+		cluster, err := controller.GetCluster(ctx, a.client, ex.GetNamespace())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		var shootSpecificCIDRs []string
+
+		// Gardener supports workerless Shoots. These don't have an associated
+		// Infrastructure object and don't need Node- or Pod-specific CIDRs to be
+		// allowed. Therefore, skip these steps for workerless Shoots.
+		if !v1beta1helper.IsWorkerless(cluster.Shoot) {
+			infra := &extensionsv1alpha1.Infrastructure{}
+			namespacedName := types.NamespacedName{
+				Namespace: ex.GetNamespace(),
+				Name:      cluster.Shoot.Name,
+			}
+
+			if err := a.client.Get(ctx, namespacedName, infra); err != nil {
+				return nil, nil, err
+			}
+
+			shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
+			providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
+			if err != nil {
+				return nil, nil, err
+			}
+			shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
+		}
+
+		name := "acl-vpn-"+ex.Namespace
+		envoyFilter := &unstructured.Unstructured{}
+		envoyFilter.SetGroupVersionKind(istionetworkv1alpha3.SchemeGroupVersion.WithKind("EnvoyFilter"))
+		envoyFilter.SetNamespace(istioNamespace)
+		envoyFilter.SetName(name)
+		fmt.Println("Check envoyfilter " + name)
+		err = a.client.Get(ctx, client.ObjectKeyFromObject(envoyFilter), envoyFilter)
+		if apierrors.IsNotFound(err) {
+			fmt.Println("Didn't find envoyfilter. Add Mapping")
+			mappings = append(mappings, envoyfilters.ACLMapping{
+				ShootName:          ex.Namespace,
+				Rule:               *extSpec.Rule,
+				ShootSpecificCIDRs: shootSpecificCIDRs,
+			})
+		}
+	}
+	return mappings, istioLabels, nil
 }
 
 // findIstioNamespaceForExtension finds the Istio namespace by the Istio Gateway
