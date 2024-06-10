@@ -192,13 +192,18 @@ func CreateIngressConfigPatchFromRule(
 	}
 }
 
-// CreateVPNConfigPatchFromRule combines a list of ACLMappings and the
-// alwaysAllowedCIDRs into a HTTP filter patch that can be applied to the
+// CreateVPNConfigPatchFromRule creates an HTTP filter patch that can be applied to the
 // `GATEWAY` HTTP filter chain for the VPN.
 func CreateVPNConfigPatchFromRule(rule *ACLRule,
 	shootID string, alwaysAllowedCIDRs []string,
 ) (map[string]interface{}, error) {
 	rbacName := "acl-vpn"
+	headerMatcher :=  map[string]interface{}{
+		"name": "reversed-vpn",
+		"string_match": map[string]interface{}{
+			"exact": "outbound|1194||vpn-seed-server.shoot--" + shootID + ".svc.cluster.local",
+		},
+	}
 	return map[string]interface{}{
 		"applyTo": "HTTP_FILTER",
 		"match": map[string]interface{}{
@@ -219,12 +224,7 @@ func CreateVPNConfigPatchFromRule(rule *ACLRule,
 							shootID + "-inverse": map[string]interface{}{
 								"permissions": []map[string]interface{}{{
 									"not_rule": map[string]interface{}{
-										"header": map[string]interface{}{
-											"name": "reversed-vpn",
-											"string_match": map[string]interface{}{
-												"exact": "outbound|1194||vpn-seed-server.shoot--" + shootID + ".svc.cluster.local",
-											},
-										},
+										"header": headerMatcher,
 									},
 								}},
 								"principals": []map[string]interface{}{{
@@ -236,12 +236,7 @@ func CreateVPNConfigPatchFromRule(rule *ACLRule,
 							},
 							shootID: map[string]interface{}{
 								"permissions": []map[string]interface{}{{
-									"header": map[string]interface{}{
-										"name": "reversed-vpn",
-										"string_match": map[string]interface{}{
-											"exact": "outbound|1194||vpn-seed-server.shoot--" + shootID + ".svc.cluster.local",
-										},
-									},
+									"header": headerMatcher,
 								}},
 								"principals": ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs),
 							},
