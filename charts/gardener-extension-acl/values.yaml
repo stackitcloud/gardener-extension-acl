@@ -36,8 +36,6 @@ disableWebhooks: []
 
 additionalAllowedCidrs: []
 
-deleteLegacyVPNFilter: true
-
 # imageVectorOverwrite: |
 #   images:
 #   - name: example
