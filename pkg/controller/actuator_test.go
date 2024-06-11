@@ -51,7 +51,7 @@ var _ = Describe("actuator test", func() {
 	})
 
 	Describe("reconciliation of an ACL extension object", func() {
-		It("should create an acl-vpn EnvoyFilter object with the correct contents", func() {
+		It("should create a legacy acl-vpn EnvoyFilter object with the correct contents", func() {
 			extSpec := extensionspec.ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"1.2.3.4/24"},
@@ -70,7 +70,7 @@ var _ = Describe("actuator test", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "acl-vpn", Namespace: istioNamespace1}, envoyFilter)).To(Succeed())
 			Expect(envoyFilter.Spec.MarshalJSON()).To(ContainSubstring("1.2.3.4"))
 		})
-		It("should create managed resource for acl-api-shoot EnvoyFilter object", func() {
+		It("should create managed resource containing acl-api-shoot and acl-vpn-shoot EnvoyFilter object", func() {
 			extSpec := extensionspec.ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
 					Cidrs:  []string{"1.2.3.4/24"},
@@ -90,6 +90,8 @@ var _ = Describe("actuator test", func() {
 			secret := &corev1.Secret{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
 			Expect(secret.Data["seed"]).To(ContainSubstring("1.2.3.4"))
+			Expect(secret.Data["seed"]).To(ContainSubstring("acl-api-" + shootNamespace1))
+			Expect(secret.Data["seed"]).To(ContainSubstring("acl-vpn-" + shootNamespace1))
 		})
 
 		It("should record the last seen istio namespace in the status of the extension object", func() {
@@ -197,7 +199,7 @@ var _ = Describe("actuator test", func() {
 			deleteNamespace(shootNamespace2)
 		})
 
-		It("should create an acl-vpn EnvoyFilter object with the correct contents (from both extensions)", func() {
+		It("should create a legacy acl-vpn EnvoyFilter object with the correct contents (from both extensions)", func() {
 			// arrange
 			extSpec1 := extensionspec.ExtensionSpec{
 				Rule: &envoyfilters.ACLRule{
@@ -318,6 +320,7 @@ var _ = Describe("actuator test", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
 			Expect(secret.Data["seed"]).To(ContainSubstring("1.2.3.4"))
 			Expect(secret.Data["seed"]).To(ContainSubstring(istioNamespace1))
+			Expect(secret.Data["seed"]).To(ContainSubstring("acl-vpn-" + shootNamespace1))
 
 			// check legacy envoyfilter
 			envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
@@ -358,6 +361,7 @@ var _ = Describe("actuator test", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
 			Expect(secret.Data["seed"]).To(ContainSubstring(istioNamespace2))
+			Expect(secret.Data["seed"]).To(ContainSubstring("acl-vpn-" + shootNamespace1))
 
 			// check legacy envoyfilter
 			envoyFilter = &istionetworkingClientGo.EnvoyFilter{}

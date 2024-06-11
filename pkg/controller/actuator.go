@@ -379,7 +379,7 @@ func (a *actuator) createSeedResources(
 	}
 
 	vpnEnvoyFilterSpec, err := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
-		cluster, spec.Rule, append(alwaysAllowedCIDRs, shootSpecificCIRDs...), istioLabels,
+		cluster, spec.Rule, alwaysAllowedCIDRs, istioLabels,
 	)
 	if err != nil {
 		return err

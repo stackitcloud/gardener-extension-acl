@@ -75,14 +75,7 @@ func BuildIngressEnvoyFilterSpecForHelmChart(
 	return nil
 }
 
-// BuildVPNEnvoyFilterSpecForHelmChart assembles a single EnvoyFilter for all
-// shoots on the seed, due to the fact that we can't create one EnvoyFilter per
-// shoot - this doesn't work because all the VPN traffic flows through the same
-// filter.
-//
-// We use the technical ID of the shoot for the VPN rule, which is de facto the
-// same as the seed namespace of the shoot. (Gardener uses the seedNamespace
-// value in the botanist vpnshoot task.)
+// BuildVPNEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for VPN.
 func BuildVPNEnvoyFilterSpecForHelmChart(
 	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
 ) (map[string]interface{}, error) {
