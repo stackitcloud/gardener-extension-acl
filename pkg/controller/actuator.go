@@ -38,13 +38,13 @@ import (
 	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/stackitcloud/gardener-extension-acl/charts"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
@@ -355,8 +355,6 @@ func (a *actuator) reconcileVPNEnvoyFilter(
 	return a.client.Update(ctx, envoyFilter)
 }
 
-
-
 func (a *actuator) createSeedResources(
 	ctx context.Context,
 	log logr.Logger,
@@ -527,7 +525,6 @@ func (a *actuator) triggerWebhook(ctx context.Context, shootName, istioNamespace
 	return a.client.Patch(ctx, envoyFilter, client.RawPatch(types.MergePatchType, []byte("{}")))
 }
 
-
 // getAllShootsWithACLExtension returns a list of all shoots that have the ACL
 // extension enabled, together with their rule.
 func (a *actuator) getAllShootsWithACLExtension(
@@ -621,13 +618,10 @@ func (a *actuator) getAllShootsWithACLExtension(
 			shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
 		}
 
-		name := "acl-vpn-"+ex.Namespace
-		envoyFilter := &unstructured.Unstructured{}
-		envoyFilter.SetGroupVersionKind(istionetworkv1alpha3.SchemeGroupVersion.WithKind("EnvoyFilter"))
-		envoyFilter.SetNamespace(istioNamespace)
-		envoyFilter.SetName(name)
+		envoyFilter := &istionetworkv1alpha3.EnvoyFilter{}
+		name := "acl-vpn-" + ex.Namespace
 		fmt.Println("Check envoyfilter " + name)
-		err = a.client.Get(ctx, client.ObjectKeyFromObject(envoyFilter), envoyFilter)
+		err = a.client.Get(ctx, types.NamespacedName{Name: name, Namespace: istioNamespace}, envoyFilter)
 		if apierrors.IsNotFound(err) {
 			fmt.Println("Didn't find envoyfilter. Add Mapping")
 			mappings = append(mappings, envoyfilters.ACLMapping{

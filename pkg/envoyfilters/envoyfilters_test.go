@@ -98,6 +98,27 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 		})
 	})
 
+	Describe("BuildLegacyVPNEnvoyFilterSpecForHelmChart", func() {
+		When("there is one shoot with a rule", func() {
+			It("Should create a envoyFilter spec matching the expected one", func() {
+				mappings := []ACLMapping{
+					{
+						ShootName: "shoot--projectname--shootname",
+						Rule:      *createRule("ALLOW", "remote_ip", "0.0.0.0/0"),
+					},
+				}
+				labels := map[string]string{
+					"app":   "istio-ingressgateway",
+					"istio": "ingressgateway",
+				}
+				result, err := BuildLegacyVPNEnvoyFilterSpecForHelmChart(mappings, alwaysAllowedCIDRs, labels)
+
+				Expect(err).ToNot(HaveOccurred())
+				checkIfMapEqualsYAML(result, "legacyVPNEnvoyFilterSpecWithOneAllowRule.yaml")
+			})
+		})
+	})
+
 	Describe("CreateInternalFilterPatchFromRule", func() {
 		When("there is an allow rule", func() {
 			It("Should create a filter spec matching the expected one, including the always allowed CIDRs", func() {

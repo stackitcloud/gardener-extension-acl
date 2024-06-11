@@ -102,7 +102,7 @@ func BuildVPNEnvoyFilterSpecForHelmChart(
 	}, nil
 }
 
-// BuildVPNEnvoyFilterSpecForHelmChart assembles a single EnvoyFilter for all
+// BuildLegacyVPNEnvoyFilterSpecForHelmChart assembles a single EnvoyFilter for all
 // shoots on the seed, due to the fact that we can't create one EnvoyFilter per
 // shoot - this doesn't work because all the VPN traffic flows through the same
 // filter.
@@ -224,7 +224,7 @@ func CreateVPNConfigPatchFromRule(rule *ACLRule,
 	shootID string, alwaysAllowedCIDRs []string,
 ) (map[string]interface{}, error) {
 	rbacName := "acl-vpn"
-	headerMatcher :=  map[string]interface{}{
+	headerMatcher := map[string]interface{}{
 		"name": "reversed-vpn",
 		"string_match": map[string]interface{}{
 			"exact": "outbound|1194||vpn-seed-server.shoot--" + shootID + ".svc.cluster.local",
@@ -275,7 +275,7 @@ func CreateVPNConfigPatchFromRule(rule *ACLRule,
 	}, nil
 }
 
-// CreateVPNConfigPatchFromRule combines a list of ACLMappings and the
+// CreateLegacyVPNConfigPatchFromRule combines a list of ACLMappings and the
 // alwaysAllowedCIDRs into a HTTP filter patch that can be applied to the
 // `GATEWAY` HTTP filter chain for the VPN.
 func CreateLegacyVPNConfigPatchFromRule(
