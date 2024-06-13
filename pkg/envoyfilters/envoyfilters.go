@@ -75,7 +75,27 @@ func BuildIngressEnvoyFilterSpecForHelmChart(
 	return nil
 }
 
-// BuildVPNEnvoyFilterSpecForHelmChart assembles a single EnvoyFilter for all
+// BuildVPNEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for VPN.
+func BuildVPNEnvoyFilterSpecForHelmChart(
+	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
+) (map[string]interface{}, error) {
+	shootID := helper.ComputeShortShootID(cluster.Shoot)
+	vpnConfigPatch, err := CreateVPNConfigPatchFromRule(rule, shootID, alwaysAllowedCIDRs)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"workloadSelector": map[string]interface{}{
+			"labels": istioLabels,
+		},
+		"configPatches": []map[string]interface{}{
+			vpnConfigPatch,
+		},
+	}, nil
+}
+
+// BuildLegacyVPNEnvoyFilterSpecForHelmChart assembles a single EnvoyFilter for all
 // shoots on the seed, due to the fact that we can't create one EnvoyFilter per
 // shoot - this doesn't work because all the VPN traffic flows through the same
 // filter.
@@ -83,10 +103,10 @@ func BuildIngressEnvoyFilterSpecForHelmChart(
 // We use the technical ID of the shoot for the VPN rule, which is de facto the
 // same as the seed namespace of the shoot. (Gardener uses the seedNamespace
 // value in the botanist vpnshoot task.)
-func BuildVPNEnvoyFilterSpecForHelmChart(
+func BuildLegacyVPNEnvoyFilterSpecForHelmChart(
 	mappings []ACLMapping, alwaysAllowedCIDRs []string, istioLabels map[string]string,
 ) (map[string]interface{}, error) {
-	vpnConfigPatch, err := CreateVPNConfigPatchFromRule(mappings, alwaysAllowedCIDRs)
+	vpnConfigPatch, err := CreateLegacyVPNConfigPatchFromRule(mappings, alwaysAllowedCIDRs)
 	if err != nil {
 		return nil, err
 	}
@@ -191,10 +211,67 @@ func CreateIngressConfigPatchFromRule(
 	}
 }
 
-// CreateVPNConfigPatchFromRule combines a list of ACLMappings and the
+// CreateVPNConfigPatchFromRule creates an HTTP filter patch that can be applied to the
+// `GATEWAY` HTTP filter chain for the VPN.
+func CreateVPNConfigPatchFromRule(rule *ACLRule,
+	shootID string, alwaysAllowedCIDRs []string,
+) (map[string]interface{}, error) {
+	rbacName := "acl-vpn"
+	headerMatcher := map[string]interface{}{
+		"name": "reversed-vpn",
+		"string_match": map[string]interface{}{
+			"exact": "outbound|1194||vpn-seed-server.shoot--" + shootID + ".svc.cluster.local",
+		},
+	}
+	return map[string]interface{}{
+		"applyTo": "HTTP_FILTER",
+		"match": map[string]interface{}{
+			"context": "GATEWAY",
+			"listener": map[string]interface{}{
+				"name": "0.0.0.0_8132",
+			},
+		},
+		"patch": map[string]interface{}{
+			"operation": "INSERT_FIRST",
+			"value": map[string]interface{}{
+				"name": rbacName,
+				"typed_config": map[string]interface{}{
+					"@type": "type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC",
+					"rules": map[string]interface{}{
+						"action": "ALLOW",
+						"policies": map[string]interface{}{
+							shootID + "-inverse": map[string]interface{}{
+								"permissions": []map[string]interface{}{{
+									"not_rule": map[string]interface{}{
+										"header": headerMatcher,
+									},
+								}},
+								"principals": []map[string]interface{}{{
+									"remote_ip": map[string]interface{}{
+										"address_prefix": "0.0.0.0",
+										"prefix_len":     0,
+									},
+								}},
+							},
+							shootID: map[string]interface{}{
+								"permissions": []map[string]interface{}{{
+									"header": headerMatcher,
+								}},
+								"principals": ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs),
+							},
+						},
+					},
+					"stat_prefix": "envoyrbac",
+				},
+			},
+		},
+	}, nil
+}
+
+// CreateLegacyVPNConfigPatchFromRule combines a list of ACLMappings and the
 // alwaysAllowedCIDRs into a HTTP filter patch that can be applied to the
 // `GATEWAY` HTTP filter chain for the VPN.
-func CreateVPNConfigPatchFromRule(
+func CreateLegacyVPNConfigPatchFromRule(
 	mappings []ACLMapping, alwaysAllowedCIDRs []string,
 ) (map[string]interface{}, error) {
 	rbacName := "acl-vpn"

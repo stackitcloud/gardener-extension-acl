@@ -17,9 +17,7 @@ package controller
 
 import (
 	"context"
-	"crypto/sha256"
 	"embed"
-	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -336,7 +334,7 @@ func (a *actuator) reconcileVPNEnvoyFilter(
 		istioLabels = istioLabelsFromExt
 	}
 
-	vpnEnvoyFilterSpec, err := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
+	vpnEnvoyFilterSpec, err := envoyfilters.BuildLegacyVPNEnvoyFilterSpecForHelmChart(
 		aclMappings, alwaysAllowedCIDRs, istioLabels,
 	)
 	if err != nil {
@@ -380,10 +378,18 @@ func (a *actuator) createSeedResources(
 		return err
 	}
 
+	vpnEnvoyFilterSpec, err := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
+		cluster, spec.Rule, alwaysAllowedCIDRs, istioLabels,
+	)
+	if err != nil {
+		return err
+	}
+
 	cfg := map[string]interface{}{
 		"shootName":          cluster.Shoot.Status.TechnicalID,
 		"targetNamespace":    istioNamespace,
 		"apiEnvoyFilterSpec": apiEnvoyFilterSpec,
+		"vpnEnvoyFilterSpec": vpnEnvoyFilterSpec,
 	}
 
 	defaultLabels, err := a.findDefaultIstioLabels(ctx)
@@ -612,25 +618,20 @@ func (a *actuator) getAllShootsWithACLExtension(
 			shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
 		}
 
-		mappings = append(mappings, envoyfilters.ACLMapping{
-			ShootName:          ex.Namespace,
-			Rule:               *extSpec.Rule,
-			ShootSpecificCIDRs: shootSpecificCIDRs,
-		})
+		envoyFilter := &istionetworkv1alpha3.EnvoyFilter{}
+		name := "acl-vpn-" + ex.Namespace
+		err = a.client.Get(ctx, types.NamespacedName{Name: name, Namespace: istioNamespace}, envoyFilter)
+		if apierrors.IsNotFound(err) {
+			mappings = append(mappings, envoyfilters.ACLMapping{
+				ShootName:          ex.Namespace,
+				Rule:               *extSpec.Rule,
+				ShootSpecificCIDRs: shootSpecificCIDRs,
+			})
+		} else if err != nil {
+			return nil, nil, err
+		}
 	}
 	return mappings, istioLabels, nil
-}
-
-// HashData returns a 16 char hash for the given object.
-func HashData(data interface{}) (string, error) {
-	var jsonSpec []byte
-	var err error
-	if jsonSpec, err = json.Marshal(data); err != nil {
-		return "", err
-	}
-
-	bytes := sha256.Sum256(jsonSpec)
-	return strings.ToLower(base32.StdEncoding.EncodeToString(bytes[:]))[:16], nil
 }
 
 // findIstioNamespaceForExtension finds the Istio namespace by the Istio Gateway

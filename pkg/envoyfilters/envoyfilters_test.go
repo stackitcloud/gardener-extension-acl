@@ -85,6 +85,22 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 	Describe("BuildVPNEnvoyFilterSpecForHelmChart", func() {
 		When("there is one shoot with a rule", func() {
 			It("Should create a envoyFilter spec matching the expected one", func() {
+				rule := createRule("ALLOW", "remote_ip", "10.180.0.0/16")
+				labels := map[string]string{
+					"app":   "istio-ingressgateway",
+					"istio": "ingressgateway",
+				}
+				result, err := BuildVPNEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+
+				Expect(err).ToNot(HaveOccurred())
+				checkIfMapEqualsYAML(result, "vpnEnvoyFilterSpecWithOneAllowRule.yaml")
+			})
+		})
+	})
+
+	Describe("BuildLegacyVPNEnvoyFilterSpecForHelmChart", func() {
+		When("there is one shoot with a rule", func() {
+			It("Should create a envoyFilter spec matching the expected one", func() {
 				mappings := []ACLMapping{
 					{
 						ShootName: "shoot--projectname--shootname",
@@ -95,10 +111,10 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 					"app":   "istio-ingressgateway",
 					"istio": "ingressgateway",
 				}
-				result, err := BuildVPNEnvoyFilterSpecForHelmChart(mappings, alwaysAllowedCIDRs, labels)
+				result, err := BuildLegacyVPNEnvoyFilterSpecForHelmChart(mappings, alwaysAllowedCIDRs, labels)
 
 				Expect(err).ToNot(HaveOccurred())
-				checkIfMapEqualsYAML(result, "vpnEnvoyFilterSpecWithOneAllowRule.yaml")
+				checkIfMapEqualsYAML(result, "legacyVPNEnvoyFilterSpecWithOneAllowRule.yaml")
 			})
 		})
 	})
