@@ -620,15 +620,15 @@ func (a *actuator) getAllShootsWithACLExtension(
 
 		envoyFilter := &istionetworkv1alpha3.EnvoyFilter{}
 		name := "acl-vpn-" + ex.Namespace
-		fmt.Println("Check envoyfilter " + name)
 		err = a.client.Get(ctx, types.NamespacedName{Name: name, Namespace: istioNamespace}, envoyFilter)
 		if apierrors.IsNotFound(err) {
-			fmt.Println("Didn't find envoyfilter. Add Mapping")
 			mappings = append(mappings, envoyfilters.ACLMapping{
 				ShootName:          ex.Namespace,
 				Rule:               *extSpec.Rule,
 				ShootSpecificCIDRs: shootSpecificCIDRs,
 			})
+		} else if err != nil {
+			return nil, nil, err
 		}
 	}
 	return mappings, istioLabels, nil

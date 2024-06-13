@@ -246,6 +246,110 @@ var _ = Describe("actuator test", func() {
 			))
 		})
 
+		It("should migrate from a legacy acl-vpn EnvoyFilter to shoot specific EnvoyFilters", func() {
+			By("should create a legacy acl-vpn EnvoyFilter and a ManagedResource containing shoot specific EnvoyFilters")
+
+			extSpec1 := extensionspec.ExtensionSpec{
+				Rule: &envoyfilters.ACLRule{
+					Cidrs:  []string{"1.2.3.4/24"},
+					Action: "ALLOW",
+					Type:   "remote_ip",
+				},
+			}
+			extSpecJSON1, err := json.Marshal(extSpec1)
+			Expect(err).To(BeNil())
+			ext1 := createNewExtension(shootNamespace1, extSpecJSON1)
+			Expect(ext1).To(Not(BeNil()))
+
+			extSpec2 := extensionspec.ExtensionSpec{
+				Rule: &envoyfilters.ACLRule{
+					Cidrs:  []string{"5.6.7.8/24"},
+					Action: "ALLOW",
+					Type:   "remote_ip",
+				},
+			}
+			extSpecJSON2, err := json.Marshal(extSpec2)
+			Expect(err).To(BeNil())
+			ext2 := createNewExtension(shootNamespace2, extSpecJSON2)
+			Expect(ext2).To(Not(BeNil()))
+
+			Expect(a.Reconcile(ctx, logger, ext1)).To(Succeed())
+			Expect(a.Reconcile(ctx, logger, ext2)).To(Succeed())
+
+			envoyFilter := &istionetworkingClientGo.EnvoyFilter{}
+			Expect(k8sClient.Get(
+				ctx, types.NamespacedName{
+					Name:      "acl-vpn",
+					Namespace: istioNamespace1,
+				},
+				envoyFilter,
+			)).To(Succeed())
+
+			Expect(envoyFilter.Spec.MarshalJSON()).To(And(
+				ContainSubstring("1.2.3.4"),
+				ContainSubstring("5.6.7.8"),
+			))
+
+			mr := &v1alpha1.ManagedResource{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
+			secret := &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
+			Expect(secret.Data["seed"]).To(ContainSubstring("acl-vpn-" + shootNamespace1))
+
+			mr = &v1alpha1.ManagedResource{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace2}, mr)).To(Succeed())
+			secret = &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace2}, secret)).To(Succeed())
+			Expect(secret.Data["seed"]).To(ContainSubstring("acl-vpn-" + shootNamespace2))
+
+			By("should delete shoot specific rules after reconcile")
+
+			shootEnvoyFilter1 := &istionetworkingClientGo.EnvoyFilter{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "acl-vpn-" + shootNamespace1,
+					Namespace: istioNamespace1,
+				},
+			}
+			Expect(k8sClient.Create(ctx, shootEnvoyFilter1)).To(Succeed())
+
+			Expect(a.Reconcile(ctx, logger, ext1)).To(Succeed())
+			envoyFilter = &istionetworkingClientGo.EnvoyFilter{}
+			Expect(k8sClient.Get(
+				ctx, types.NamespacedName{
+					Name:      "acl-vpn",
+					Namespace: istioNamespace1,
+				},
+				envoyFilter,
+			)).To(Succeed())
+
+			Expect(envoyFilter.Spec.MarshalJSON()).To(And(
+				Not(ContainSubstring("1.2.3.4")),
+				ContainSubstring("5.6.7.8"),
+			))
+
+			By("should delete legacy envoy filter after all shoot specific filters are present")
+
+			shootEnvoyFilter2 := &istionetworkingClientGo.EnvoyFilter{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "acl-vpn-" + shootNamespace2,
+					Namespace: istioNamespace1,
+				},
+			}
+			Expect(k8sClient.Create(ctx, shootEnvoyFilter2)).To(Succeed())
+
+			Expect(a.Reconcile(ctx, logger, ext1)).To(Succeed())
+
+			envoyFilter = &istionetworkingClientGo.EnvoyFilter{}
+			err = k8sClient.Get(
+				ctx, types.NamespacedName{
+					Name:      "acl-vpn",
+					Namespace: istioNamespace1,
+				},
+				envoyFilter,
+			)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+
 		It("should not fail when the Gateway resource can't be found for an extension other than the one being reconciled (e.g. for hibernated clusters)", func() {
 			// arrange
 			extSpec1 := extensionspec.ExtensionSpec{
