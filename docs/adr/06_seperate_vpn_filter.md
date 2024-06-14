@@ -17,13 +17,13 @@ The resulting filter chain in envoy looks like this:
     "@type": "type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC",
     "rules": {
     "policies": {
-      "shoot-1": {
+      "shoot--1": {
       "permissions": [
         {
         "header": {
           "name": "reversed-vpn",
           "string_match": {
-          "exact": "outbound|1194||vpn-seed-server.shoot--shoot-1.svc.cluster.local"
+          "contains": ".shoot--shoot--1."
           }
         }
         }
@@ -38,14 +38,14 @@ The resulting filter chain in envoy looks like this:
 ...
       ]
       },
-      "shoot-1-inverse": {
+      "shoot--1-inverse": {
       "permissions": [
         {
         "not_rule": {
           "header": {
           "name": "reversed-vpn",
           "string_match": {
-            "exact": "outbound|1194||vpn-seed-server.shoot--shoot-1.svc.cluster.local"
+            "contains": ".shoot--shoot--1."
           }
           }
         }
@@ -70,13 +70,13 @@ The resulting filter chain in envoy looks like this:
     "@type": "type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC",
     "rules": {
     "policies": {
-      "shoot-2": {
+      "shoot--2": {
       "permissions": [
         {
         "header": {
           "name": "reversed-vpn",
           "string_match": {
-          "exact": "outbound|1194||vpn-seed-server.shoot--shoot-2.svc.cluster.local"
+          "contains": ".shoot--shoot--2."
           }
         }
         }
@@ -91,14 +91,14 @@ The resulting filter chain in envoy looks like this:
 ...
       ]
       },
-      "shoot-2-inverse": {
+      "shoot--2-inverse": {
       "permissions": [
         {
         "not_rule": {
           "header": {
           "name": "reversed-vpn",
           "string_match": {
-            "exact": "outbound|1194||vpn-seed-server.shoot--shoot-2.svc.cluster.local"
+            "contains": ".shoot--shoot--2."
           }
           }
         }
