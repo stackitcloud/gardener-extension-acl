@@ -19,7 +19,7 @@ configPatches:
                     header:
                       name: reversed-vpn
                       string_match:
-                        exact: outbound|1194||vpn-seed-server.shoot--bar--foo.svc.cluster.local
+                        contains: .shoot--bar--foo.
                 principals:
                 - remote_ip:
                     address_prefix: 0.0.0.0
@@ -29,7 +29,7 @@ configPatches:
                 - header:
                     name: reversed-vpn
                     string_match:
-                      exact: outbound|1194||vpn-seed-server.shoot--bar--foo.svc.cluster.local
+                      contains: .shoot--bar--foo.
                 principals:
                 - remote_ip:
                     address_prefix: 10.180.0.0

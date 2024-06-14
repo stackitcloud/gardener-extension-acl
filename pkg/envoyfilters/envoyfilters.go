@@ -79,8 +79,7 @@ func BuildIngressEnvoyFilterSpecForHelmChart(
 func BuildVPNEnvoyFilterSpecForHelmChart(
 	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
 ) (map[string]interface{}, error) {
-	shootID := helper.ComputeShortShootID(cluster.Shoot)
-	vpnConfigPatch, err := CreateVPNConfigPatchFromRule(rule, shootID, alwaysAllowedCIDRs)
+	vpnConfigPatch, err := CreateVPNConfigPatchFromRule(rule, helper.ComputeShortShootID(cluster.Shoot), cluster.Shoot.Status.TechnicalID, alwaysAllowedCIDRs)
 	if err != nil {
 		return nil, err
 	}
@@ -214,13 +213,20 @@ func CreateIngressConfigPatchFromRule(
 // CreateVPNConfigPatchFromRule creates an HTTP filter patch that can be applied to the
 // `GATEWAY` HTTP filter chain for the VPN.
 func CreateVPNConfigPatchFromRule(rule *ACLRule,
-	shootID string, alwaysAllowedCIDRs []string,
+	shortShootID, technicalShootID string, alwaysAllowedCIDRs []string,
 ) (map[string]interface{}, error) {
 	rbacName := "acl-vpn"
 	headerMatcher := map[string]interface{}{
 		"name": "reversed-vpn",
 		"string_match": map[string]interface{}{
-			"exact": "outbound|1194||vpn-seed-server.shoot--" + shootID + ".svc.cluster.local",
+			// The actual header value will look something like
+			// `outbound|1194||vpn-seed-server.<technical-ID>.svc.cluster.local`.
+			// Include dots in the contains matcher as anchors, to always match the entire technical shoot ID.
+			// Otherwise, if there was one cluster named `foo` and one named `foo-bar` (in the same project),
+			// `foo` would effectively inherit the ACL of `foo-bar`.
+			// We don't match with the full header value to allow service names and ports to change while still making sure
+			// we catch all traffic targeting this shoot.
+			"contains": "." + technicalShootID + ".",
 		},
 	}
 	return map[string]interface{}{
@@ -240,7 +246,7 @@ func CreateVPNConfigPatchFromRule(rule *ACLRule,
 					"rules": map[string]interface{}{
 						"action": "ALLOW",
 						"policies": map[string]interface{}{
-							shootID + "-inverse": map[string]interface{}{
+							shortShootID + "-inverse": map[string]interface{}{
 								"permissions": []map[string]interface{}{{
 									"not_rule": map[string]interface{}{
 										"header": headerMatcher,
@@ -253,7 +259,7 @@ func CreateVPNConfigPatchFromRule(rule *ACLRule,
 									},
 								}},
 							},
-							shootID: map[string]interface{}{
+							shortShootID: map[string]interface{}{
 								"permissions": []map[string]interface{}{{
 									"header": headerMatcher,
 								}},
