@@ -85,18 +85,11 @@ images: $(KO)
 
 .PHONY: tidy
 tidy:
-	@GO111MODULE=on go mod tidy
-
-# needed so that check-generate.sh can call make revendor
-revendor: tidy
+	@go mod tidy
 
 .PHONY: clean
 clean:
 	@bash $(GARDENER_HACK_DIR)/clean.sh ./cmd/... ./pkg/...
-
-.PHONY: check-generate
-check-generate:
-	@bash $(GARDENER_HACK_DIR)/check-generate.sh $(REPO_ROOT)
 
 .PHONY: check
 check: $(GOIMPORTS) $(GOLANGCI_LINT) $(HELM)
@@ -126,8 +119,20 @@ test-cov-clean:
 .PHONY: verify
 verify: check format test
 
+.PHONY: verify-tidy
+verify-tidy: tidy ## Verify go module files are up to date.
+	@if !(git diff --quiet HEAD -- go.mod go.sum); then \
+		echo "go module files are out of date, please run 'make tidy'"; exit 1; \
+	fi
+
+.PHONY: verify-generate
+verify-generate: clean generate ## Verify generated files are up to date.
+	@if !(git diff --quiet HEAD); then \
+		echo "generated files are out of date, please run 'make generate'"; exit 1; \
+	fi
+
 .PHONY: verify-extended
-verify-extended: check-generate check format test
+verify-extended: verify-tidy verify-generate check format test
 
 #####################################################################
 # Rules for local environment                                       #

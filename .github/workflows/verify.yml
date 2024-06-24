@@ -17,8 +17,4 @@ jobs:
     - uses: actions/setup-go@v4
       with:
         go-version-file: go.mod
-    - name: Configure git
-      run: |
-        git config --global user.email "ci@gardener.cloud"
-        git config --global user.name "ci"
     - run: make verify-extended
