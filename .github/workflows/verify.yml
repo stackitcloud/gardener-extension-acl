@@ -1,37 +1,20 @@
 name: verify
 
 on:
-  pull_request:
-    paths-ignore:
-    - "**.md"
   push:
     branches:
     - '*'
     paths-ignore:
     - "**.md"
+  pull_request:
 
 jobs:
   verify:
     runs-on: ubuntu-latest
 
-    # update-codegen requires the workspace to be placed in GOPATH.
-    # Set up env var, working directory, and check out at the correct path in GOPATH.
-    env:
-      GOPATH: /home/runner/work/gardener-extension-shoot-flux/gardener-extension-acl/go
-    defaults:
-      run:
-        working-directory: go/src/github.com/stackitcloud/gardener-extension-acl
-
     steps:
     - uses: actions/checkout@v4
-      with:
-        path: go/src/github.com/stackitcloud/gardener-extension-acl
     - uses: actions/setup-go@v4
       with:
-        go-version-file: go/src/github.com/stackitcloud/gardener-extension-acl/go.mod
-        cache-dependency-path: go/src/github.com/stackitcloud/gardener-extension-acl/go.sum
-    - name: Configure git
-      run: |
-        git config --global user.email "ci@gardener.cloud"
-        git config --global user.name "ci"
+        go-version-file: go.mod
     - run: make verify-extended
