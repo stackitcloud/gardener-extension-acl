@@ -5,13 +5,9 @@ import (
 
 	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
 	"github.com/gardener/gardener/pkg/apis/core"
-	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
-	mockclient "github.com/gardener/gardener/pkg/mock/controller-runtime/client"
-	mockmanager "github.com/gardener/gardener/pkg/mock/controller-runtime/manager"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
-	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -26,26 +22,13 @@ var _ = Describe("Shoot validator", func() {
 		var (
 			shootValidator extensionswebhook.Validator
 
-			ctrl  *gomock.Controller
-			mgr   *mockmanager.MockManager
-			c     *mockclient.MockClient
 			shoot *core.Shoot
 
-			ctx = context.TODO()
+			ctx = context.Background()
 		)
 
 		BeforeEach(func() {
-			ctrl = gomock.NewController(GinkgoT())
-
-			scheme := runtime.NewScheme()
-			Expect(gardencorev1beta1.AddToScheme(scheme)).To(Succeed())
-
-			c = mockclient.NewMockClient(ctrl)
-			mgr = mockmanager.NewMockManager(ctrl)
-
-			mgr.EXPECT().GetClient().Return(c)
-
-			shootValidator = validator.NewShootValidator(mgr)
+			shootValidator = validator.NewShootValidator()
 			validator.DefaultAddOptions.MaxAllowedCIDRs = 5
 
 			shoot = &core.Shoot{
@@ -74,7 +57,7 @@ var _ = Describe("Shoot validator", func() {
 				err := shootValidator.Validate(ctx, shoot, nil)
 				Expect(err).To(PointTo(MatchFields(IgnoreExtras, Fields{
 					"Type":  Equal(field.ErrorTypeTooMany),
-					"Field": Equal("spec.extensions.providerConfig.rule.cidrs"),
+					"Field": Equal("spec.extensions[0].providerConfig.rule.cidrs"),
 				})))
 			})
 		})
@@ -86,7 +69,7 @@ var _ = Describe("Shoot validator", func() {
 				err := shootValidator.Validate(ctx, newShoot, shoot)
 				Expect(err).To(PointTo(MatchFields(IgnoreExtras, Fields{
 					"Type":  Equal(field.ErrorTypeTooMany),
-					"Field": Equal("spec.extensions.providerConfig.rule.cidrs"),
+					"Field": Equal("spec.extensions[0].providerConfig.rule.cidrs"),
 				})))
 			})
 
