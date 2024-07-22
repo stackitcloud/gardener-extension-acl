@@ -43,7 +43,7 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 		Short:         "ACL Extension Controller",
 		SilenceErrors: true,
 
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := options.optionAggregator.Complete(); err != nil {
 				return fmt.Errorf("error completing options: %s", err)
 			}

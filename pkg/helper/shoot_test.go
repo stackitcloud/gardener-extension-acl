@@ -9,7 +9,8 @@ import (
 )
 
 var _ = Describe("helper", func() {
-	DescribeTable("#ComputeShortShootID", func(prefix, shootName, projectName, technicalID string, matcher gomegatypes.GomegaMatcher) {
+	//nolint: revive // the projectName is part of the technical ID
+	DescribeTable("#ComputeShortShootID", func(shootName, projectName, technicalID string, matcher gomegatypes.GomegaMatcher) {
 		var (
 			shoot = &gardencorev1beta1.Shoot{
 				ObjectMeta: metav1.ObjectMeta{
@@ -23,13 +24,11 @@ var _ = Describe("helper", func() {
 		Expect(ComputeShortShootID(shoot)).To(matcher)
 	},
 		Entry("short shoot ID calculation (historic stored technical ID with a single dash)",
-			"t",
 			"fooShoot",
 			"barProject",
 			"shoot-barProject--fooShoot",
 			Equal("barProject--fooShoot")),
 		Entry("short shoot ID (current stored technical ID with two dashes)",
-			"t",
 			"fooShoot",
 			"barProject",
 			"shoot--barProject--fooShoot",
