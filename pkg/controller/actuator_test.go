@@ -663,7 +663,8 @@ func getNewActuator() *actuator {
 		client: k8sClient,
 		config: cfg,
 		extensionConfig: config.Config{
-			ChartPath: "../../charts",
+			ChartPath:              "../../charts",
+			MigrateLegacyVPNFilter: true,
 		},
 	}
 }
