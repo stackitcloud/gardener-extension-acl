@@ -23,4 +23,6 @@ type Config struct {
 	AdditionalAllowedCIDRs []string
 	// MaxAllowedCIDRs is the maximum number of allowed CIDRs per cluster
 	MaxAllowedCIDRs int
+	// MigrateLegacyVPNFilter
+	MigrateLegacyVPNFilter bool
 }

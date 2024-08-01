@@ -127,3 +127,5 @@ Once the new VPN EnvoyFilter is created for all shoots, the legacy VPN EnvoyFilt
 As the creation of the new EnvoyFilter by the GardenerResourceManager takes some time, two shoot reconciliations are needed before the shoot-specific component is fully removed from the legacy filter.
 Throughout this process, the VPN endpoint remains protected by envoy filter rules.
 Between the first and second reconciliation, the rules are duplicated in the envoy configuration, but this should not pose any issues.
+
+The migration is enabled by default. It can be disabled by setting `providerConfig.values.migrateLegacyVPNFilter: false` in the `ControllerDeployment`. 
