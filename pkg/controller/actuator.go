@@ -197,14 +197,16 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, istioNamespace, istioLabels); err != nil {
-		return err
-	}
-
-	if extState.IstioNamespace != nil && *extState.IstioNamespace != istioNamespace {
-		// we need to cleanup the old vpn object if the istioNamespace changed
-		if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, *extState.IstioNamespace, nil); err != nil {
+	if a.extensionConfig.MigrateLegacyVPNFilter {
+		if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, istioNamespace, istioLabels); err != nil {
 			return err
+		}
+
+		if extState.IstioNamespace != nil && *extState.IstioNamespace != istioNamespace {
+			// we need to cleanup the old vpn object if the istioNamespace changed
+			if err := a.reconcileVPNEnvoyFilter(ctx, alwaysAllowedCIDRs, *extState.IstioNamespace, nil); err != nil {
+				return err
+			}
 		}
 	}
 
