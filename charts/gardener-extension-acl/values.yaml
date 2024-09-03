@@ -32,7 +32,6 @@ webhookConfig:
 disableWebhooks: []
 
 additionalAllowedCidrs: []
-migrateLegacyVPNFilter: true
 
 # imageVectorOverwrite: |
 #   images:

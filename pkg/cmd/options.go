@@ -42,7 +42,6 @@ type ExtensionOptions struct {
 	HealthCheckSyncPeriod  time.Duration
 	ChartPath              string
 	AdditionalAllowedCIDRs []string
-	MigrateLegacyVPNFilter bool
 }
 
 // AddFlags implements Flagger.AddFlags.
@@ -55,7 +54,6 @@ func (o *ExtensionOptions) AddFlags(fs *pflag.FlagSet) {
 		nil,
 		"List of IPs that will be added to the list of allowed CIDRs, e.g. '192.168.1.40/32,10.250.0.0/16'",
 	)
-	fs.BoolVar(&o.MigrateLegacyVPNFilter, "migrate-legacy-vpn-filter", true, "Migrate shared legacy vpn filter to shoot specific filters.")
 }
 
 // Complete implements Completer.Complete.
@@ -74,7 +72,6 @@ func (o *ExtensionOptions) Apply(config *controllerconfig.Config) {
 	// TODO pass controller options from extensionoptions to config param
 	config.ChartPath = o.ChartPath
 	config.AdditionalAllowedCIDRs = o.AdditionalAllowedCIDRs
-	config.MigrateLegacyVPNFilter = o.MigrateLegacyVPNFilter
 }
 
 // ApplyHealthCheckConfig applies the ExtensionOptions to the passed HealthCheckConfig.
