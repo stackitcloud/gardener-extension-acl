@@ -94,32 +94,6 @@ func BuildVPNEnvoyFilterSpecForHelmChart(
 	}, nil
 }
 
-// BuildLegacyVPNEnvoyFilterSpecForHelmChart assembles a single EnvoyFilter for all
-// shoots on the seed, due to the fact that we can't create one EnvoyFilter per
-// shoot - this doesn't work because all the VPN traffic flows through the same
-// filter.
-//
-// We use the technical ID of the shoot for the VPN rule, which is de facto the
-// same as the seed namespace of the shoot. (Gardener uses the seedNamespace
-// value in the botanist vpnshoot task.)
-func BuildLegacyVPNEnvoyFilterSpecForHelmChart(
-	mappings []ACLMapping, alwaysAllowedCIDRs []string, istioLabels map[string]string,
-) (map[string]interface{}, error) {
-	vpnConfigPatch, err := CreateLegacyVPNConfigPatchFromRule(mappings, alwaysAllowedCIDRs)
-	if err != nil {
-		return nil, err
-	}
-
-	return map[string]interface{}{
-		"workloadSelector": map[string]interface{}{
-			"labels": istioLabels,
-		},
-		"configPatches": []map[string]interface{}{
-			vpnConfigPatch,
-		},
-	}, nil
-}
-
 // CreateAPIConfigPatchFromRule combines an ACLRule, the first entry  of the
 // hosts list and the alwaysAllowedCIDRs into a network filter patch that can be
 // applied to the `GATEWAY` network filter chain matching the host.
