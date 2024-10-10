@@ -120,10 +120,3 @@ The resulting filter chain in envoy looks like this:
 ...
 ]
 ```
-
-During the migration from the legacy shared EnvoyFilter to individual EnvoyFilters, we check during a reconciliation of a shoot if the new VPN EnvoyFilter is present.
-In such instances, the shoot-specific component of this shoot is removed from the legacy filter.
-Once the new VPN EnvoyFilter is created for all shoots, the legacy VPN EnvoyFilter will be deleted.
-As the creation of the new EnvoyFilter by the GardenerResourceManager takes some time, two shoot reconciliations are needed before the shoot-specific component is fully removed from the legacy filter.
-Throughout this process, the VPN endpoint remains protected by envoy filter rules.
-Between the first and second reconciliation, the rules are duplicated in the envoy configuration, but this should not pose any issues.
