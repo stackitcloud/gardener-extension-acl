@@ -15,14 +15,6 @@ var (
 	ErrNoHostsGiven = errors.New("no hosts were given, at least one host is needed")
 )
 
-// ACLMapping maps a an ACL rule to a specific shoot and also contains the
-// shoot-specific CIDRs.
-type ACLMapping struct {
-	ShootName          string   `json:"shootName"`
-	Rule               ACLRule  `json:"rule"`
-	ShootSpecificCIDRs []string `json:"ShootSpecificCIDRs"`
-}
-
 // ACLRule contains a single ACL rule, consisting of a list of CIDRs, an action
 // and a rule type.
 type ACLRule struct {

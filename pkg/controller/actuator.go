@@ -54,14 +54,10 @@ import (
 )
 
 const (
-	// ActuatorName is only used for the logger instance
-	ActuatorName = "acl-actuator"
 	// ResourceNameSeed is name of the managedResource object
 	ResourceNameSeed = "acl-seed"
 	// ChartNameSeed name of the helm chart
 	ChartNameSeed = "seed"
-	// IngressNamespace is the namespace of the istio
-	IngressNamespace = "istio-ingress"
 	// HashAnnotationName name of annotation for triggering the envoyfilter webhook
 	// DEPRECATED: Remove after annotation has been removed from all EnvoyFilters
 	HashAnnotationName = "acl-ext-rule-hash"
@@ -80,7 +76,6 @@ var (
 	ErrSpecRule              = errors.New("rule must be present")
 	ErrSpecType              = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
 	ErrSpecCIDR              = errors.New("CIDRs must not be empty")
-	ErrNoExtensionsFound     = errors.New("could not list any extensions")
 	ErrNoAdvertisedAddresses = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
 )
 
