@@ -2,7 +2,7 @@ module github.com/stackitcloud/gardener-extension-acl
 
 go 1.22.0
 
-toolchain go1.22.5
+toolchain go1.22.8
 
 replace k8s.io/client-go => k8s.io/client-go v0.29.6
 
