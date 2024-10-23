@@ -4,12 +4,12 @@ go 1.22.0
 
 toolchain go1.22.5
 
-replace k8s.io/client-go => k8s.io/client-go v0.29.6
+replace k8s.io/client-go => k8s.io/client-go v0.29.10
 
 require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
 	github.com/gardener/gardener v1.99.4
-	github.com/gardener/gardener-extension-provider-openstack v1.30.1-0.20221215131400-b390fb780945
+	github.com/gardener/gardener-extension-provider-openstack v1.30.3
 	github.com/go-logr/logr v1.4.2
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo/v2 v2.19.0
@@ -23,14 +23,14 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	istio.io/api v1.22.2
 	istio.io/client-go v1.22.0
-	k8s.io/api v0.29.6
-	k8s.io/apiextensions-apiserver v0.29.6
-	k8s.io/apimachinery v0.29.6
+	k8s.io/api v0.29.10
+	k8s.io/apiextensions-apiserver v0.29.10
+	k8s.io/apimachinery v0.29.10
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
-	k8s.io/code-generator v0.29.6
-	k8s.io/component-base v0.29.6
+	k8s.io/code-generator v0.29.10
+	k8s.io/component-base v0.29.10
 	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
-	sigs.k8s.io/controller-runtime v0.17.5
+	sigs.k8s.io/controller-runtime v0.17.6
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20231015215740-bf15e44028f9
 )
 
