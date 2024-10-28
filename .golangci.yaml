@@ -2,9 +2,6 @@ run:
   concurrency: 4
   deadline: 10m
 
-  skip-files:
-  - "zz_generated\\..*\\.go$"
-
 linters:
   enable:
   - revive
@@ -36,6 +33,8 @@ issues:
   - linters:
     - staticcheck
     text: "SA1019:" # Excludes messages where deprecated variables are used
+  exclude-files:
+  - "zz_generated\\..*\\.go$"
 
 linters-settings:
   revive:
