@@ -99,7 +99,7 @@ func (o *Options) run(ctx context.Context) error {
 
 	o.controllerOptions.Completed().Apply(&controller.DefaultAddOptions.ControllerOptions)
 	o.healthOptions.Completed().Apply(&healthcheck.DefaultAddOptions.Controller)
-	o.reconcileOptions.Completed().Apply(&controller.DefaultAddOptions.IgnoreOperationAnnotation)
+	o.reconcileOptions.Completed().Apply(&controller.DefaultAddOptions.IgnoreOperationAnnotation, &controller.DefaultAddOptions.ExtensionClass)
 
 	if err := o.controllerSwitches.Completed().AddToManager(ctx, mgr); err != nil {
 		return fmt.Errorf("could not add controllers to manager: %s", err)
