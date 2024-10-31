@@ -14,6 +14,10 @@
   automergeStrategy: 'squash',
   // required for automerging patch updates
   separateMinorPatch: true,
+  additionalReviewers: [
+    'robinschneider',
+    'timebertt',
+  ],
   customManagers: [
     {
       // Update `_VERSION` and `_version` variables in Makefiles and scripts.
