@@ -1,98 +1,111 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
-    ":semanticCommitsDisabled",
-    "customManagers:githubActionsVersions"
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    ':semanticCommitsDisabled',
+    'customManagers:githubActionsVersions',
   ],
-  "labels": ["dependencies"],
-  "postUpdateOptions": ["gomodTidy"],
-  "automergeStrategy": "squash",
-  // required for automerging patch updates
-  "separateMinorPatch": true,
-  "customManagers": [
-    {
-      // Update `_VERSION` and `_version` variables in Makefiles and scripts.
-      // Inspired by `regexManagers:dockerfileVersions` preset.
-      "customType": "regex",
-      "fileMatch": ["Makefile$", "\\.mk$", "\\.sh$"],
-      "matchStrings": [
-        "# renovate: datasource=(?<datasource>[a-z-.]+?) depName=(?<depName>[^\\s]+?)(?: (lookupName|packageName)=(?<packageName>[^\\s]+?))?(?: versioning=(?<versioning>[^\\s]+?))?(?: extractVersion=(?<extractVersion>[^\\s]+?))?(?: registryUrl=(?<registryUrl>[^\\s]+?))?\\s.+?_(VERSION|version) *[?:]?= *\"?(?<currentValue>.+?)\"?\\s"
-      ]
-    }
+  labels: [
+    'dependencies',
   ],
-  "packageRules": [
+  postUpdateOptions: [
+    'gomodTidy',
+  ],
+  automergeStrategy: 'squash',
+  separateMinorPatch: true,
+  customManagers: [
     {
-      // automerge patch updates
-      "matchUpdateTypes": ["patch"],
-      "automerge": true
-    },
-    {
-      // bump k8s, controller-runtime and gardener/gardener go dependencies together
-      "groupName": "k8s packages",
-      "groupSlug": "k8s-go",
-      "matchDatasources": ["go"],
-      "matchPackagePrefixes": [
-        // from "group:kubernetes"
-        "k8s.io/api",
-        "k8s.io/apiextensions-apiserver",
-        "k8s.io/apimachinery",
-        "k8s.io/apiserver",
-        "k8s.io/cli-runtime",
-        "k8s.io/client-go",
-        "k8s.io/cloud-provider",
-        "k8s.io/cluster-bootstrap",
-        "k8s.io/code-generator",
-        "k8s.io/component-base",
-        "k8s.io/controller-manager",
-        "k8s.io/cri-api",
-        "k8s.io/csi-translation-lib",
-        "k8s.io/kube-aggregator",
-        "k8s.io/kube-controller-manager",
-        "k8s.io/kube-proxy",
-        "k8s.io/kube-scheduler",
-        "k8s.io/kubectl",
-        "k8s.io/kubelet",
-        "k8s.io/legacy-cloud-providers",
-        "k8s.io/metrics",
-        "k8s.io/mount-utils",
-        "k8s.io/pod-security-admission",
-        "k8s.io/sample-apiserver",
-        "k8s.io/sample-cli-plugin",
-        "k8s.io/sample-controller",
-        // added packages
-        "sigs.k8s.io/controller-runtime",
-        "github.com/gardener/gardener"
-      ]
-    },
-    {
-      // automerge k8s.io/utils updates
-      "matchDatasources": ["go"],
-      "matchPackageNames": ["k8s.io/utils"],
-      "matchUpdateTypes": ["digest"],
-      "automerge": true
-    },
-    {
-      // setup-envtest is not tagged, don't create a PR for every commit in controller-runtime
-      "matchDatasources": ["go"],
-      "matchPackageNames": [
-        "sigs.k8s.io/controller-runtime/tools/setup-envtest"
+      customType: 'regex',
+      fileMatch: [
+        'Makefile$',
+        '\\.mk$',
+        '\\.sh$',
       ],
-      "enabled": false
-    },
-    {
-      // jsonpatch has to be kept in sync with k8s and controller-runtime dependencies
-      "matchDatasources": ["go"],
-      "matchPackagePrefixes": ["gomodules.xyz/jsonpatch"],
-      "enabled": false
-    },
-    {
-      // the istio go dependencies should be kept in sync with the gardener/gardener version
-      "matchPackagePrefixes": [
-        "istio.io/api",
-        "istio.io/client-go"
+      matchStrings: [
+        '# renovate: datasource=(?<datasource>[a-z-.]+?) depName=(?<depName>[^\\s]+?)(?: (lookupName|packageName)=(?<packageName>[^\\s]+?))?(?: versioning=(?<versioning>[^\\s]+?))?(?: extractVersion=(?<extractVersion>[^\\s]+?))?(?: registryUrl=(?<registryUrl>[^\\s]+?))?\\s.+?_(VERSION|version) *[?:]?= *"?(?<currentValue>.+?)"?\\s',
       ],
-      "enabled": false
-    }
-  ]
+    },
+  ],
+  packageRules: [
+    {
+      matchUpdateTypes: [
+        'patch',
+      ],
+      automerge: true,
+    },
+    {
+      groupName: 'k8s packages',
+      groupSlug: 'k8s-go',
+      matchDatasources: [
+        'go',
+      ],
+      matchPackageNames: [
+        'k8s.io/api{/,}**',
+        'k8s.io/apiextensions-apiserver{/,}**',
+        'k8s.io/apimachinery{/,}**',
+        'k8s.io/apiserver{/,}**',
+        'k8s.io/cli-runtime{/,}**',
+        'k8s.io/client-go{/,}**',
+        'k8s.io/cloud-provider{/,}**',
+        'k8s.io/cluster-bootstrap{/,}**',
+        'k8s.io/code-generator{/,}**',
+        'k8s.io/component-base{/,}**',
+        'k8s.io/controller-manager{/,}**',
+        'k8s.io/cri-api{/,}**',
+        'k8s.io/csi-translation-lib{/,}**',
+        'k8s.io/kube-aggregator{/,}**',
+        'k8s.io/kube-controller-manager{/,}**',
+        'k8s.io/kube-proxy{/,}**',
+        'k8s.io/kube-scheduler{/,}**',
+        'k8s.io/kubectl{/,}**',
+        'k8s.io/kubelet{/,}**',
+        'k8s.io/legacy-cloud-providers{/,}**',
+        'k8s.io/metrics{/,}**',
+        'k8s.io/mount-utils{/,}**',
+        'k8s.io/pod-security-admission{/,}**',
+        'k8s.io/sample-apiserver{/,}**',
+        'k8s.io/sample-cli-plugin{/,}**',
+        'k8s.io/sample-controller{/,}**',
+        'sigs.k8s.io/controller-runtime{/,}**',
+        'github.com/gardener/gardener{/,}**',
+      ],
+    },
+    {
+      matchDatasources: [
+        'go',
+      ],
+      matchPackageNames: [
+        'k8s.io/utils',
+      ],
+      matchUpdateTypes: [
+        'digest',
+      ],
+      automerge: true,
+    },
+    {
+      matchDatasources: [
+        'go',
+      ],
+      matchPackageNames: [
+        'sigs.k8s.io/controller-runtime/tools/setup-envtest',
+      ],
+      enabled: false,
+    },
+    {
+      matchDatasources: [
+        'go',
+      ],
+      enabled: false,
+      matchPackageNames: [
+        'gomodules.xyz/jsonpatch{/,}**',
+      ],
+    },
+    {
+      enabled: false,
+      matchPackageNames: [
+        'istio.io/api{/,}**',
+        'istio.io/client-go{/,}**',
+      ],
+    },
+  ],
 }
