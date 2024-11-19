@@ -4,12 +4,12 @@ go 1.22.4
 
 toolchain go1.22.8
 
-replace k8s.io/client-go => k8s.io/client-go v0.29.6
+replace k8s.io/client-go => k8s.io/client-go v0.29.7
 
 require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
 	github.com/gardener/gardener v1.101.3
-	github.com/gardener/gardener-extension-provider-openstack v1.30.1-0.20221215131400-b390fb780945
+	github.com/gardener/gardener-extension-provider-openstack v1.41.2
 	github.com/go-logr/logr v1.4.2
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo/v2 v2.19.0
@@ -46,7 +46,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
-	github.com/evanphx/json-patch/v5 v5.8.0 // indirect
+	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/fluent/fluent-operator/v2 v2.9.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
