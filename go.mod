@@ -4,8 +4,6 @@ go 1.22.4
 
 toolchain go1.22.8
 
-replace k8s.io/client-go => k8s.io/client-go v0.29.7
-
 require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
 	github.com/gardener/gardener v1.101.3
@@ -26,7 +24,7 @@ require (
 	k8s.io/api v0.29.7
 	k8s.io/apiextensions-apiserver v0.29.7
 	k8s.io/apimachinery v0.29.7
-	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
+	k8s.io/client-go v0.29.7
 	k8s.io/code-generator v0.29.7
 	k8s.io/component-base v0.29.7
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
