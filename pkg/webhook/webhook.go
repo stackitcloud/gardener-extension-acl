@@ -34,7 +34,7 @@ const (
 // admission requests for EnvoyFilters.
 type EnvoyFilterWebhook struct {
 	Client                 client.Client
-	Decoder                *admission.Decoder
+	Decoder                admission.Decoder
 	AdditionalAllowedCIDRs []string
 }
 
