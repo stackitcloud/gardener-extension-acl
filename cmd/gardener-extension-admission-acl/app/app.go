@@ -16,7 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	componentbaseconfig "k8s.io/component-base/config/v1alpha1"
+	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 	"k8s.io/component-base/version"
 	"k8s.io/component-base/version/verflag"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -89,7 +89,7 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			}
 			validator.DefaultAddOptions.MaxAllowedCIDRs = admissionOptions.Completed().MaxAllowedCIDRs
 
-			util.ApplyClientConnectionConfigurationToRESTConfig(&componentbaseconfig.ClientConnectionConfiguration{
+			util.ApplyClientConnectionConfigurationToRESTConfig(&componentbaseconfigv1alpha1.ClientConnectionConfiguration{
 				QPS:   100.0,
 				Burst: 130,
 			}, restOpts.Completed().Config)
