@@ -25,7 +25,7 @@ import (
 	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	corev1 "k8s.io/api/core/v1"
-	componentbaseconfig "k8s.io/component-base/config"
+	componentbaseconfig "k8s.io/component-base/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
