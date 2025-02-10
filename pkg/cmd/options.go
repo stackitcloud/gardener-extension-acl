@@ -18,7 +18,7 @@ package cmd
 import (
 	"time"
 
-	extensionsconfig "github.com/gardener/gardener/extensions/pkg/apis/config"
+	extensionsconfig "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
 	extensionscmdcontroller "github.com/gardener/gardener/extensions/pkg/controller/cmd"
 	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
 	extensionscmdwebhook "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
