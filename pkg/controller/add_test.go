@@ -59,7 +59,6 @@ var _ = Describe("infrastructurePredicate", func() {
 
 	Describe("#Update", func() {
 		It("should return true if EgressCIDRs changed", func() {
-
 			newInfra := infra.DeepCopy()
 			newInfra.Status.EgressCIDRs = append(newInfra.Status.EgressCIDRs, "42.43.44.45/32")
 
