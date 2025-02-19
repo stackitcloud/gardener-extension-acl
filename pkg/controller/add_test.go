@@ -15,10 +15,12 @@
 package controller
 
 import (
+	"slices"
+
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -34,7 +36,7 @@ var _ = Describe("infrastructurePredicate", func() {
 
 		infra = &extensionsv1alpha1.Infrastructure{
 			Status: extensionsv1alpha1.InfrastructureStatus{
-				EgressCIDRs: []string{"52.53.54.55/32"},
+				EgressCIDRs: []string{"52.53.54.55/32", "152.153.154.155/32"},
 			},
 		}
 	})
@@ -71,11 +73,18 @@ var _ = Describe("infrastructurePredicate", func() {
 			Expect(p.Update(event.TypedUpdateEvent[*extensionsv1alpha1.Infrastructure]{ObjectNew: newInfra, ObjectOld: infra})).To(BeFalse())
 		})
 
-		It("should return true if any other status field changed", func() {
+		It("should return false if EgressCIDRs contain the same values in different order", func() {
 			newInfra := infra.DeepCopy()
-			newInfra.Status.NodesCIDR = ptr.To("100.212.123.18/27")
+			slices.Reverse(newInfra.Status.EgressCIDRs)
 
-			Expect(p.Update(event.TypedUpdateEvent[*extensionsv1alpha1.Infrastructure]{ObjectNew: newInfra, ObjectOld: infra})).To(BeTrue())
+			Expect(p.Update(event.TypedUpdateEvent[*extensionsv1alpha1.Infrastructure]{ObjectNew: newInfra, ObjectOld: infra})).To(BeFalse())
+		})
+
+		It("should return false if any other status field changed", func() {
+			newInfra := infra.DeepCopy()
+			newInfra.Status.LastOperation = &gardencorev1beta1.LastOperation{Progress: 42}
+
+			Expect(p.Update(event.TypedUpdateEvent[*extensionsv1alpha1.Infrastructure]{ObjectNew: newInfra, ObjectOld: infra})).To(BeFalse())
 		})
 	})
 })

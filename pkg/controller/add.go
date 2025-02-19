@@ -17,11 +17,11 @@ package controller
 
 import (
 	"context"
+	"slices"
 
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -81,8 +81,13 @@ func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts *Add
 func infrastructurePredicate() predicate.TypedFuncs[*extensionsv1alpha1.Infrastructure] {
 	return predicate.TypedFuncs[*extensionsv1alpha1.Infrastructure]{
 		UpdateFunc: func(e event.TypedUpdateEvent[*extensionsv1alpha1.Infrastructure]) bool {
-			// We want to reconcile if the status of the Infrastructure changed
-			return !apiequality.Semantic.DeepEqual(e.ObjectOld.Status, e.ObjectNew.Status)
+			// We want to reconcile if the EgressCIDRs of the Infrastructure changed
+			oldEgressCIDRs := slices.Clone(e.ObjectOld.Status.EgressCIDRs)
+			newEgressCIDRs := slices.Clone(e.ObjectNew.Status.EgressCIDRs)
+			slices.Sort(oldEgressCIDRs)
+			slices.Sort(newEgressCIDRs)
+
+			return !slices.Equal(oldEgressCIDRs, newEgressCIDRs)
 		},
 		CreateFunc: func(_ event.TypedCreateEvent[*extensionsv1alpha1.Infrastructure]) bool {
 			return false
