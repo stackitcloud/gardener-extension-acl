@@ -18,7 +18,7 @@ package healthcheck
 import (
 	"context"
 
-	extensionsconfig "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
+	extensionsconfigv1alpha1 "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
 	"github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
 	"github.com/gardener/gardener/extensions/pkg/controller/healthcheck/general"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
@@ -34,7 +34,7 @@ import (
 var (
 	// DefaultAddOptions contains the default options for the healthchecks.
 	DefaultAddOptions = healthcheck.DefaultAddArgs{
-		HealthCheckConfig: extensionsconfig.HealthCheckConfig{SyncPeriod: metav1.Duration{}},
+		HealthCheckConfig: extensionsconfigv1alpha1.HealthCheckConfig{SyncPeriod: metav1.Duration{}},
 	}
 )
 

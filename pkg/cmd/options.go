@@ -18,7 +18,7 @@ package cmd
 import (
 	"time"
 
-	extensionsconfig "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
+	extensionsconfigv1alpha1 "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
 	extensionscmdcontroller "github.com/gardener/gardener/extensions/pkg/controller/cmd"
 	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
 	extensionscmdwebhook "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
@@ -75,7 +75,7 @@ func (o *ExtensionOptions) Apply(config *controllerconfig.Config) {
 }
 
 // ApplyHealthCheckConfig applies the ExtensionOptions to the passed HealthCheckConfig.
-func (o *ExtensionOptions) ApplyHealthCheckConfig(config *extensionsconfig.HealthCheckConfig) {
+func (o *ExtensionOptions) ApplyHealthCheckConfig(config *extensionsconfigv1alpha1.HealthCheckConfig) {
 	config.SyncPeriod.Duration = o.HealthCheckSyncPeriod
 }
 

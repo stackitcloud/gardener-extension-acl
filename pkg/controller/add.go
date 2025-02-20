@@ -17,11 +17,19 @@ package controller
 
 import (
 	"context"
+	"slices"
 
+	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 )
@@ -66,5 +74,48 @@ func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts *Add
 		Predicates:        extension.DefaultPredicates(ctx, mgr, DefaultAddOptions.IgnoreOperationAnnotation),
 		Type:              Type,
 		ExtensionClass:    opts.ExtensionClass,
+		WatchBuilder:      watchInfrastructure(mgr),
+	})
+}
+
+func infrastructurePredicate() predicate.TypedFuncs[*extensionsv1alpha1.Infrastructure] {
+	return predicate.TypedFuncs[*extensionsv1alpha1.Infrastructure]{
+		UpdateFunc: func(e event.TypedUpdateEvent[*extensionsv1alpha1.Infrastructure]) bool {
+			// We want to reconcile if the EgressCIDRs of the Infrastructure changed
+			oldEgressCIDRs := slices.Clone(e.ObjectOld.Status.EgressCIDRs)
+			newEgressCIDRs := slices.Clone(e.ObjectNew.Status.EgressCIDRs)
+			slices.Sort(oldEgressCIDRs)
+			slices.Sort(newEgressCIDRs)
+
+			return !slices.Equal(oldEgressCIDRs, newEgressCIDRs)
+		},
+		CreateFunc: func(_ event.TypedCreateEvent[*extensionsv1alpha1.Infrastructure]) bool {
+			return false
+		},
+		DeleteFunc: func(_ event.TypedDeleteEvent[*extensionsv1alpha1.Infrastructure]) bool {
+			return false
+		},
+		GenericFunc: func(_ event.TypedGenericEvent[*extensionsv1alpha1.Infrastructure]) bool {
+			return false
+		},
+	}
+}
+
+// watchInfrastructure watches for Infrastructure changes and triggers the Extension reconciliation.
+func watchInfrastructure(mgr manager.Manager) extensionscontroller.WatchBuilder {
+	// Map Infrastructure changes to the Extension
+	mapFunc := func(_ context.Context, infrastructure *extensionsv1alpha1.Infrastructure) []reconcile.Request {
+		return []reconcile.Request{{NamespacedName: types.NamespacedName{
+			Name:      Type,
+			Namespace: infrastructure.Namespace,
+		}}}
+	}
+
+	// Watch for Infrastructure changes outside shoot reconciliation
+	return extensionscontroller.NewWatchBuilder(func(ctrl controller.Controller) error {
+		return ctrl.Watch(source.Kind(mgr.GetCache(), &extensionsv1alpha1.Infrastructure{},
+			handler.TypedEnqueueRequestsFromMapFunc(mapFunc),
+			infrastructurePredicate(),
+		))
 	})
 }
