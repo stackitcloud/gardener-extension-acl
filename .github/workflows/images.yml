@@ -30,3 +30,4 @@ jobs:
       with:
         go-version-file: go.mod
     - run: make images PUSH=true
+    - run: make helm-charts PUSH=true
