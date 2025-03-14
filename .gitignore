@@ -5,6 +5,8 @@
 **/dev
 /bin
 /hack/tools/bin
+images.txt
+artifacts
 
 *.coverprofile
 *.html
