@@ -82,6 +82,8 @@ spec:
         resources:
 {{ toYaml .Values.global.resources | nindent 10 }}
 {{- end }}
+        securityContext:
+          allowPrivilegeEscalation: false
         volumeMounts:
         {{- if .Values.global.kubeconfig }}
         - name: gardener-extension-admission-acl-kubeconfig
