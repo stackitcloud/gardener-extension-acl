@@ -10,7 +10,8 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/tidwall/gjson"
+	"google.golang.org/protobuf/types/known/structpb"
+
 	"gomodules.xyz/jsonpatch/v2"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -49,13 +50,12 @@ func (e *EnvoyFilterWebhook) Handle(ctx context.Context, req admission.Request) 
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	return e.createAdmissionResponse(ctx, filter, string(req.Object.Raw))
+	return e.createAdmissionResponse(ctx, filter)
 }
 
 func (e *EnvoyFilterWebhook) createAdmissionResponse(
 	ctx context.Context,
 	filter *istionetworkingClientGo.EnvoyFilter,
-	originalObjectJSON string,
 ) admission.Response {
 	// filter out envoyfilters that are not managed by this webhook
 	if !strings.HasPrefix(filter.Name, v1beta1constants.TechnicalIDPrefix) {
@@ -118,19 +118,39 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 		shootSpecificCIRDs = append(shootSpecificCIRDs, providerSpecificCIRDs...)
 	}
 
-	originalFilter := gjson.Get(originalObjectJSON, `spec.configPatches.0.patch.value.filters.#(name="envoy.filters.network.tcp_proxy")`)
-	originalFilterMap := map[string]interface{}{}
-	if err := json.Unmarshal([]byte(originalFilter.Raw), &originalFilterMap); err != nil {
-		return admission.Errored(http.StatusInternalServerError, err)
+	var originalFilter *structpb.Struct
+	for _, configpatch := range filter.Spec.ConfigPatches {
+		patch := configpatch.Patch.Value
+		filters, ok := patch.Fields["filters"]
+		if !ok {
+			continue
+		}
+		filterList := filters.GetListValue()
+		if filterList == nil {
+			continue
+		}
+		for _, v := range filterList.GetValues() {
+			structVal := v.GetStructValue()
+			if structVal == nil {
+				continue
+			}
+			name, ok := structVal.Fields["name"]
+			if !ok {
+				continue
+			}
+			if name.GetStringValue() == "envoy.filters.network.tcp_proxy" {
+				originalFilter = structVal
+				break
+			}
+		}
 	}
-
-	filterPatch, err := envoyfilters.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
-	if err != nil {
-		return admission.Errored(http.StatusInternalServerError, err)
+	if originalFilter == nil {
+		return admission.Errored(http.StatusBadRequest, fmt.Errorf("filter with name \"envoy.filters.network.tcp_proxy\" not present in EnvoyFilter %s/%s", filter.Namespace, filter.Name))
 	}
+	filterPatch := envoyfilters.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
 
 	// make sure the original filter is the last
-	filterPatches := []map[string]interface{}{filterPatch, originalFilterMap}
+	filterPatches := []map[string]interface{}{filterPatch.AsMap(), originalFilter.AsMap()}
 
 	return buildAdmissionResponseWithFilterPatches(filterPatches)
 }
