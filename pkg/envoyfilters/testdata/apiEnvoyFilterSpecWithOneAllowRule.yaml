@@ -12,7 +12,6 @@ configPatches:
       typed_config:
         '@type': type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC
         rules:
-          action: ALLOW
           policies:
             acl-api:
               permissions:
