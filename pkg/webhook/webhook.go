@@ -10,9 +10,8 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	v1beta1helper "github.com/gardener/gardener/pkg/apis/core/v1beta1/helper"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"google.golang.org/protobuf/types/known/structpb"
-
 	"gomodules.xyz/jsonpatch/v2"
+	"google.golang.org/protobuf/types/known/structpb"
 	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/types"
