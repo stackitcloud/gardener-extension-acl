@@ -89,9 +89,9 @@ var _ = Describe("webhook unit test", func() {
 	Describe("createAdmissionResponse", func() {
 		When("the name of the EnvoyFilter doesn't start with 'shoot-'", func() {
 			It("issues no patch for the EnvoyFilter", func() {
-				df, dfJSON := getEnvoyFilterFromFile("non-shoot-envoyfilter")
+				df := getEnvoyFilterFromFile("non-shoot-envoyfilter")
 
-				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
+				ar := e.createAdmissionResponse(context.Background(), df)
 
 				Expect(ar.Allowed).To(BeTrue())
 				Expect(ar.Result.Message).To(ContainSubstring("not an EnvoyFilter managed by this webhook"))
@@ -102,9 +102,9 @@ var _ = Describe("webhook unit test", func() {
 		When("there is no extension", func() {
 			When("the shoot uses the legacy technical ID format 'shoot-'", func() {
 				It("issues no patch for the EnvoyFilter", func() {
-					df, dfJSON := getEnvoyFilterFromFile("shoot-foo-bar")
+					df := getEnvoyFilterFromFile("shoot-foo-bar")
 
-					ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
+					ar := e.createAdmissionResponse(context.Background(), df)
 
 					Expect(ar.Allowed).To(BeTrue())
 					Expect(ar.Result.Message).To(ContainSubstring("not enabled for shoot"))
@@ -114,9 +114,9 @@ var _ = Describe("webhook unit test", func() {
 
 			When("the shoot uses the current technical ID format 'shoot--'", func() {
 				It("issues no patch for the EnvoyFilter", func() {
-					df, dfJSON := getEnvoyFilterFromFile(namespace)
+					df := getEnvoyFilterFromFile(namespace)
 
-					ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
+					ar := e.createAdmissionResponse(context.Background(), df)
 
 					Expect(ar.Allowed).To(BeTrue())
 					Expect(ar.Result.Message).To(ContainSubstring("not enabled for shoot"))
@@ -140,9 +140,9 @@ var _ = Describe("webhook unit test", func() {
 			})
 
 			It("patches this rule into the filters object", func() {
-				df, dfJSON := getEnvoyFilterFromFile(namespace)
+				df := getEnvoyFilterFromFile(namespace)
 
-				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
+				ar := e.createAdmissionResponse(context.Background(), df)
 
 				Expect(ar.Allowed).To(BeTrue())
 
@@ -204,9 +204,9 @@ var _ = Describe("webhook unit test", func() {
 			})
 
 			It("patches this rule into the filters object, including CIDRs for Seed|Shoot nodes and pods", func() {
-				df, dfJSON := getEnvoyFilterFromFile(namespace)
+				df := getEnvoyFilterFromFile(namespace)
 
-				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
+				ar := e.createAdmissionResponse(context.Background(), df)
 
 				Expect(ar.Allowed).To(BeTrue())
 
@@ -318,9 +318,9 @@ var _ = Describe("webhook unit test", func() {
 			})
 
 			It("patches this rule into the filters object, including CIDRs for Seed|Shoot nodes and pods and also the OpenStack router IP", func() {
-				df, dfJSON := getEnvoyFilterFromFile(namespace)
+				df := getEnvoyFilterFromFile(namespace)
 
-				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
+				ar := e.createAdmissionResponse(context.Background(), df)
 
 				Expect(ar.Allowed).To(BeTrue())
 
@@ -425,9 +425,9 @@ var _ = Describe("webhook unit test", func() {
 			})
 
 			It("patches only the rule into the filters object, and no CIDRs for Seed|Shoot nodes and pods", func() {
-				df, dfJSON := getEnvoyFilterFromFile(namespace)
+				df := getEnvoyFilterFromFile(namespace)
 
-				ar := e.createAdmissionResponse(context.Background(), df, dfJSON)
+				ar := e.createAdmissionResponse(context.Background(), df)
 
 				Expect(ar.Allowed).To(BeTrue())
 
@@ -561,7 +561,7 @@ func addRuleToSpec(extSpec *extensionspec.ExtensionSpec, action, ruleType, cidr 
 // getEnvoyFilterFromFile takes the technical shoot ID as a parameter to render
 // into the JSON tempate file. Returns both the JSON representation as string
 // and the struct type.
-func getEnvoyFilterFromFile(technicalID string) (filter *istionetworkingClientGo.EnvoyFilter, filterAsString string) {
+func getEnvoyFilterFromFile(technicalID string) (filter *istionetworkingClientGo.EnvoyFilter) {
 	filterSpecJSON, err := os.ReadFile(path.Join("./testdata", "defaultEnvoyFilter.json"))
 	Expect(err).ShouldNot(HaveOccurred())
 
@@ -571,5 +571,5 @@ func getEnvoyFilterFromFile(technicalID string) (filter *istionetworkingClientGo
 
 	Expect(json.Unmarshal([]byte(templatedFilterSpec), filter)).To(Succeed())
 
-	return filter, templatedFilterSpec
+	return filter
 }
