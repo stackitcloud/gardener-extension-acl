@@ -276,12 +276,9 @@ func (a *actuator) createSeedResources(
 		return err
 	}
 
-	vpnEnvoyFilterSpec, err := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
+	vpnEnvoyFilterSpec := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
 		cluster, spec.Rule, alwaysAllowedCIDRs, istioLabels,
 	)
-	if err != nil {
-		return err
-	}
 
 	cfg := map[string]interface{}{
 		"shootName":          cluster.Shoot.Status.TechnicalID,
