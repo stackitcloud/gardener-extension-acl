@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	envoy_corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	envoyconfig_rbacv3 "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
+	envoy_rbacv3 "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	envoy_routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	envoyhttp_rbacv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/rbac/v3"
-	envoynetwork_rbacv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/rbac/v3"
-	matcherv3 "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
+	envoy_httprbacv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/rbac/v3"
+	envoy_networkrbacv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/rbac/v3"
+	envoy_matcherv3 "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -38,12 +38,12 @@ type ACLRule struct {
 	Type string `json:"type"`
 }
 
-func (r *ACLRule) actionProto() envoyconfig_rbacv3.RBAC_Action {
+func (r *ACLRule) actionProto() envoy_rbacv3.RBAC_Action {
 	switch r.Action {
 	case "DENY":
-		return envoyconfig_rbacv3.RBAC_DENY
+		return envoy_rbacv3.RBAC_DENY
 	case "ALLOW":
-		return envoyconfig_rbacv3.RBAC_ALLOW
+		return envoy_rbacv3.RBAC_ALLOW
 	default:
 		panic("unknown action")
 	}
@@ -164,19 +164,19 @@ func ingressConfigPatchFromRule(
 	rbacName := "acl-ingress"
 	ingressSuffix := "-" + shootID + "." + seedIngressDomain
 
-	rbacFilter := &envoynetwork_rbacv3.RBAC{
+	rbacFilter := &envoy_networkrbacv3.RBAC{
 		StatPrefix: "envoyrbac",
-		Rules: &envoyconfig_rbacv3.RBAC{
-			Action: envoyconfig_rbacv3.RBAC_ALLOW,
-			Policies: map[string]*envoyconfig_rbacv3.Policy{
+		Rules: &envoy_rbacv3.RBAC{
+			Action: envoy_rbacv3.RBAC_ALLOW,
+			Policies: map[string]*envoy_rbacv3.Policy{
 				shootID + "-inverse": {
-					Permissions: []*envoyconfig_rbacv3.Permission{
+					Permissions: []*envoy_rbacv3.Permission{
 						{
-							Rule: &envoyconfig_rbacv3.Permission_NotRule{
-								NotRule: &envoyconfig_rbacv3.Permission{
-									Rule: &envoyconfig_rbacv3.Permission_RequestedServerName{
-										RequestedServerName: &matcherv3.StringMatcher{
-											MatchPattern: &matcherv3.StringMatcher_Suffix{
+							Rule: &envoy_rbacv3.Permission_NotRule{
+								NotRule: &envoy_rbacv3.Permission{
+									Rule: &envoy_rbacv3.Permission_RequestedServerName{
+										RequestedServerName: &envoy_matcherv3.StringMatcher{
+											MatchPattern: &envoy_matcherv3.StringMatcher_Suffix{
 												Suffix: ingressSuffix,
 											},
 										},
@@ -185,9 +185,9 @@ func ingressConfigPatchFromRule(
 							},
 						},
 					},
-					Principals: []*envoyconfig_rbacv3.Principal{
+					Principals: []*envoy_rbacv3.Principal{
 						{
-							Identifier: &envoyconfig_rbacv3.Principal_RemoteIp{
+							Identifier: &envoy_rbacv3.Principal_RemoteIp{
 								RemoteIp: &envoy_corev3.CidrRange{
 									AddressPrefix: "0.0.0.0",
 									PrefixLen:     wrapperspb.UInt32(0),
@@ -197,11 +197,11 @@ func ingressConfigPatchFromRule(
 					},
 				},
 				shootID: {
-					Permissions: []*envoyconfig_rbacv3.Permission{
+					Permissions: []*envoy_rbacv3.Permission{
 						{
-							Rule: &envoyconfig_rbacv3.Permission_RequestedServerName{
-								RequestedServerName: &matcherv3.StringMatcher{
-									MatchPattern: &matcherv3.StringMatcher_Suffix{
+							Rule: &envoy_rbacv3.Permission_RequestedServerName{
+								RequestedServerName: &envoy_matcherv3.StringMatcher{
+									MatchPattern: &envoy_matcherv3.StringMatcher_Suffix{
 										Suffix: ingressSuffix,
 									},
 								},
@@ -250,8 +250,8 @@ func vpnConfigPatchFromRule(rule *ACLRule,
 	headerMatcher := envoy_routev3.HeaderMatcher{
 		Name: "reversed-vpn",
 		HeaderMatchSpecifier: &envoy_routev3.HeaderMatcher_StringMatch{
-			StringMatch: &matcherv3.StringMatcher{
-				MatchPattern: &matcherv3.StringMatcher_Contains{
+			StringMatch: &envoy_matcherv3.StringMatcher{
+				MatchPattern: &envoy_matcherv3.StringMatcher_Contains{
 					// The actual header value will look something like
 					// `outbound|1194||vpn-seed-server.<technical-ID>.svc.cluster.local`.
 					// Include dots in the contains matcher as anchors, to always match the entire technical shoot ID.
@@ -265,26 +265,26 @@ func vpnConfigPatchFromRule(rule *ACLRule,
 		},
 	}
 
-	rbacFilter := &envoyhttp_rbacv3.RBAC{
+	rbacFilter := &envoy_httprbacv3.RBAC{
 		RulesStatPrefix: "envoyrbac",
-		Rules: &envoyconfig_rbacv3.RBAC{
-			Action: envoyconfig_rbacv3.RBAC_ALLOW,
-			Policies: map[string]*envoyconfig_rbacv3.Policy{
+		Rules: &envoy_rbacv3.RBAC{
+			Action: envoy_rbacv3.RBAC_ALLOW,
+			Policies: map[string]*envoy_rbacv3.Policy{
 				shortShootID + "-inverse": {
-					Permissions: []*envoyconfig_rbacv3.Permission{
+					Permissions: []*envoy_rbacv3.Permission{
 						{
-							Rule: &envoyconfig_rbacv3.Permission_NotRule{
-								NotRule: &envoyconfig_rbacv3.Permission{
-									Rule: &envoyconfig_rbacv3.Permission_Header{
+							Rule: &envoy_rbacv3.Permission_NotRule{
+								NotRule: &envoy_rbacv3.Permission{
+									Rule: &envoy_rbacv3.Permission_Header{
 										Header: &headerMatcher,
 									},
 								},
 							},
 						},
 					},
-					Principals: []*envoyconfig_rbacv3.Principal{
+					Principals: []*envoy_rbacv3.Principal{
 						{
-							Identifier: &envoyconfig_rbacv3.Principal_RemoteIp{
+							Identifier: &envoy_rbacv3.Principal_RemoteIp{
 								RemoteIp: &envoy_corev3.CidrRange{
 									AddressPrefix: "0.0.0.0",
 									PrefixLen:     wrapperspb.UInt32(0),
@@ -294,9 +294,9 @@ func vpnConfigPatchFromRule(rule *ACLRule,
 					},
 				},
 				shortShootID: {
-					Permissions: []*envoyconfig_rbacv3.Permission{
+					Permissions: []*envoy_rbacv3.Permission{
 						{
-							Rule: &envoyconfig_rbacv3.Permission_Header{
+							Rule: &envoy_rbacv3.Permission_Header{
 								Header: &headerMatcher,
 							},
 						},
@@ -358,8 +358,8 @@ func CreateInternalFilterPatchFromRule(
 // into a list of envoy principals. The function checks for the rule action: If
 // the action is "ALLOW", the alwaysAllowedCIDRs are appended to the principals
 // to guarantee the downstream flow for these CIDRs is not blocked.
-func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []*envoyconfig_rbacv3.Principal {
-	principals := []*envoyconfig_rbacv3.Principal{}
+func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []*envoy_rbacv3.Principal {
+	principals := []*envoy_rbacv3.Principal{}
 
 	for _, cidr := range rule.Cidrs {
 		prefix, length, err := getPrefixAndPrefixLength(cidr)
@@ -370,14 +370,14 @@ func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []*envoyco
 			AddressPrefix: prefix,
 			PrefixLen:     wrapperspb.UInt32(uint32(length)),
 		}
-		p := new(envoyconfig_rbacv3.Principal)
+		p := new(envoy_rbacv3.Principal)
 		switch strings.ToLower(rule.Type) {
 		case "source_ip":
-			p.Identifier = &envoyconfig_rbacv3.Principal_SourceIp{SourceIp: &cidrRange}
+			p.Identifier = &envoy_rbacv3.Principal_SourceIp{SourceIp: &cidrRange}
 		case "remote_ip":
-			p.Identifier = &envoyconfig_rbacv3.Principal_RemoteIp{RemoteIp: &cidrRange}
+			p.Identifier = &envoy_rbacv3.Principal_RemoteIp{RemoteIp: &cidrRange}
 		case "direct_remote_ip":
-			p.Identifier = &envoyconfig_rbacv3.Principal_DirectRemoteIp{DirectRemoteIp: &cidrRange}
+			p.Identifier = &envoy_rbacv3.Principal_DirectRemoteIp{DirectRemoteIp: &cidrRange}
 		default:
 			continue
 		}
@@ -393,8 +393,8 @@ func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []*envoyco
 			if err != nil {
 				continue
 			}
-			principals = append(principals, &envoyconfig_rbacv3.Principal{
-				Identifier: &envoyconfig_rbacv3.Principal_RemoteIp{
+			principals = append(principals, &envoy_rbacv3.Principal{
+				Identifier: &envoy_rbacv3.Principal_RemoteIp{
 					RemoteIp: &envoy_corev3.CidrRange{
 						AddressPrefix: prefix,
 						PrefixLen:     wrapperspb.UInt32(uint32(length)),
@@ -420,7 +420,7 @@ func getPrefixAndPrefixLength(cidr string) (prefix string, prefixLen int, err er
 }
 
 func principalsToPatch(
-	rbacName string, ruleAction envoyconfig_rbacv3.RBAC_Action, principals []*envoyconfig_rbacv3.Principal,
+	rbacName string, ruleAction envoy_rbacv3.RBAC_Action, principals []*envoy_rbacv3.Principal,
 ) *istio_networkingv1alpha3.EnvoyFilter_Patch {
 	rbacFilter := newRBACFilter(rbacName, ruleAction, principals)
 	typedConfig, err := protoMessageToTypedConfig(rbacFilter)
@@ -438,16 +438,16 @@ func principalsToPatch(
 	}
 }
 
-func newRBACFilter(rbacName string, ruleAction envoyconfig_rbacv3.RBAC_Action, principals []*envoyconfig_rbacv3.Principal) *envoynetwork_rbacv3.RBAC {
-	return &envoynetwork_rbacv3.RBAC{
+func newRBACFilter(rbacName string, ruleAction envoy_rbacv3.RBAC_Action, principals []*envoy_rbacv3.Principal) *envoy_networkrbacv3.RBAC {
+	return &envoy_networkrbacv3.RBAC{
 		StatPrefix: "envoyrbac",
-		Rules: &envoyconfig_rbacv3.RBAC{
+		Rules: &envoy_rbacv3.RBAC{
 			Action: ruleAction,
-			Policies: map[string]*envoyconfig_rbacv3.Policy{
+			Policies: map[string]*envoy_rbacv3.Policy{
 				rbacName: {
-					Permissions: []*envoyconfig_rbacv3.Permission{
+					Permissions: []*envoy_rbacv3.Permission{
 						{
-							Rule: &envoyconfig_rbacv3.Permission_Any{
+							Rule: &envoy_rbacv3.Permission_Any{
 								Any: true,
 							},
 						},
