@@ -8,11 +8,11 @@ GARDENER_HACK_DIR           := $(shell go list -mod=mod -m -f "{{.Dir}}" github.
 EXTENSION_PREFIX            := gardener-extension
 NAME                        := acl
 ADMISSION_NAME              := admission-acl
-REPO                        := ghcr.io/stackitcloud
+export REPO                 := ghcr.io/stackitcloud
 REPO_ROOT                   := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 HACK_DIR                    := $(REPO_ROOT)/hack
 VERSION                     := $(shell git describe --tag --always --dirty)
-TAG                         := $(VERSION)
+export TAG                  := $(VERSION)
 LEADER_ELECTION             := false
 IGNORE_OPERATION_ANNOTATION := false
 
@@ -72,12 +72,23 @@ start-admission:
 # Rules related to binary build, Docker image build and release #
 #################################################################
 
-PUSH ?= false
+export PUSH ?= false
 
 .PHONY: images
 images: $(KO)
-	KO_DOCKER_REPO=$(REPO)/$(EXTENSION_PREFIX)-$(NAME) $(KO) build --image-label org.opencontainers.image.source="https://github.com/stackitcloud/gardener-extension-acl" --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-acl
-	KO_DOCKER_REPO=$(REPO)/$(EXTENSION_PREFIX)-$(ADMISSION_NAME) $(KO) build --image-label org.opencontainers.image.source="https://github.com/stackitcloud/gardener-extension-acl" --sbom none -t $(TAG) --bare --platform linux/amd64,linux/arm64 --push=$(PUSH) ./cmd/gardener-extension-admission-acl
+	KO_DOCKER_REPO=$(REPO) $(KO) build --push=$(PUSH) \
+		--image-label org.opencontainers.image.source="https://github.com/stackitcloud/gardener-extension-acl" \
+		--sbom none -t $(TAG) --base-import-paths \
+		--platform linux/amd64,linux/arm64 \
+		./cmd/gardener-extension-acl ./cmd/gardener-extension-admission-acl \
+		| tee images.txt
+
+.PHONY: artifacts-only
+artifacts-only: $(HELM) $(YQ)
+	hack/push-artifacts.sh
+
+.PHONY: artifacts
+artifacts: images artifacts-only
 
 #####################################################################
 # Rules for verification, formatting, linting, testing and cleaning #
@@ -132,7 +143,7 @@ verify-generate: clean generate ## Verify generated files are up to date.
 	fi
 
 .PHONY: verify-extended
-verify-extended: verify-tidy verify-generate check format test
+verify-extended: verify-tidy verify-generate check format test artifacts
 
 #####################################################################
 # Rules for local environment                                       #
