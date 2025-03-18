@@ -154,19 +154,19 @@ var _ = Describe("webhook unit test", func() {
 							"rules": map[string]interface{}{
 								"policies": map[string]interface{}{
 									"acl-internal": map[string]interface{}{
-										"permissions": []map[string]interface{}{
+										"permissions": buildInterfaceSlice([]map[string]interface{}{
 											{
 												"any": true,
 											},
-										},
-										"principals": []map[string]interface{}{
+										}),
+										"principals": buildInterfaceSlice([]map[string]interface{}{
 											{
 												"source_ip": map[string]interface{}{
 													"address_prefix": "0.0.0.0",
-													"prefix_len":     0,
+													"prefix_len":     float64(0),
 												},
 											},
-										},
+										}),
 									},
 								},
 								"action": "DENY",
@@ -218,46 +218,45 @@ var _ = Describe("webhook unit test", func() {
 							"rules": map[string]interface{}{
 								"policies": map[string]interface{}{
 									"acl-internal": map[string]interface{}{
-										"permissions": []map[string]interface{}{
+										"permissions": buildInterfaceSlice([]map[string]interface{}{
 											{
 												"any": true,
 											},
-										},
-										"principals": []map[string]interface{}{
+										}),
+										"principals": buildInterfaceSlice([]map[string]any{
 											{
 												"source_ip": map[string]interface{}{
 													"address_prefix": "0.0.0.0",
-													"prefix_len":     0,
+													"prefix_len":     float64(0),
 												},
 											},
 											{
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "100.250.0.0",
-													"prefix_len":     16,
+													"prefix_len":     float64(16),
 												},
 											},
 											{
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "10.96.0.0",
-													"prefix_len":     11,
+													"prefix_len":     float64(11),
 												},
 											},
 											{
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "10.250.0.0",
-													"prefix_len":     16,
+													"prefix_len":     float64(16),
 												},
 											},
 											{
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "100.96.0.0",
-													"prefix_len":     11,
+													"prefix_len":     float64(11),
 												},
 											},
-										},
+										}),
 									},
 								},
-								"action": "ALLOW",
 							},
 							"@type": "type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC",
 						},
@@ -332,52 +331,51 @@ var _ = Describe("webhook unit test", func() {
 							"rules": map[string]interface{}{
 								"policies": map[string]interface{}{
 									"acl-internal": map[string]interface{}{
-										"permissions": []map[string]interface{}{
+										"permissions": buildInterfaceSlice([]map[string]interface{}{
 											{
 												"any": true,
 											},
-										},
-										"principals": []map[string]interface{}{
+										}),
+										"principals": buildInterfaceSlice([]map[string]any{
 											{
 												"source_ip": map[string]interface{}{
 													"address_prefix": "0.0.0.0",
-													"prefix_len":     0,
+													"prefix_len":     float64(0),
 												},
 											},
 											{
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "100.250.0.0",
-													"prefix_len":     16,
+													"prefix_len":     float64(16),
 												},
 											},
 											{
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "10.96.0.0",
-													"prefix_len":     11,
+													"prefix_len":     float64(11),
 												},
 											},
 											{
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "10.250.0.0",
-													"prefix_len":     16,
+													"prefix_len":     float64(16),
 												},
 											},
 											{
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "100.96.0.0",
-													"prefix_len":     11,
+													"prefix_len":     float64(11),
 												},
 											},
 											{
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "10.9.8.7",
-													"prefix_len":     32,
+													"prefix_len":     float64(32),
 												},
 											},
-										},
+										}),
 									},
 								},
-								"action": "ALLOW",
 							},
 							"@type": "type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC",
 						},
@@ -439,34 +437,34 @@ var _ = Describe("webhook unit test", func() {
 							"rules": map[string]interface{}{
 								"policies": map[string]interface{}{
 									"acl-internal": map[string]interface{}{
-										"permissions": []map[string]interface{}{
+										"permissions": buildInterfaceSlice([]map[string]interface{}{
 											{
 												"any": true,
 											},
-										},
-										"principals": []map[string]interface{}{
+										}),
+										"principals": buildInterfaceSlice([]map[string]any{
 											{
 												"source_ip": map[string]interface{}{
 													"address_prefix": "0.0.0.0",
-													"prefix_len":     0,
+													"prefix_len":     float64(0),
 												},
 											},
 											{
+
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "100.250.0.0",
-													"prefix_len":     16,
+													"prefix_len":     float64(16),
 												},
 											},
 											{
 												"remote_ip": map[string]interface{}{
 													"address_prefix": "10.96.0.0",
-													"prefix_len":     11,
+													"prefix_len":     float64(11),
 												},
 											},
-										},
+										}),
 									},
 								},
-								"action": "ALLOW",
 							},
 							"@type": "type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC",
 						},
@@ -572,4 +570,12 @@ func getEnvoyFilterFromFile(technicalID string) (filter *istionetworkingClientGo
 	Expect(json.Unmarshal([]byte(templatedFilterSpec), filter)).To(Succeed())
 
 	return filter
+}
+
+// buildInterfaceSlice can be used to create a slice of interface which is not possible when using literals.
+func buildInterfaceSlice(maps []map[string]any) (ret []any) {
+	for _, m := range maps {
+		ret = append(ret, m)
+	}
+	return
 }
