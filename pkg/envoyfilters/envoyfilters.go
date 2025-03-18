@@ -164,49 +164,52 @@ func ingressConfigPatchFromRule(
 	rbacName := "acl-ingress"
 	ingressSuffix := "-" + shootID + "." + seedIngressDomain
 
-	rbacFilter := &envoyconfig_rbacv3.RBAC{
-		Action: envoyconfig_rbacv3.RBAC_ALLOW,
-		Policies: map[string]*envoyconfig_rbacv3.Policy{
-			shootID + "-inverse": {
-				Permissions: []*envoyconfig_rbacv3.Permission{
-					{
-						Rule: &envoyconfig_rbacv3.Permission_NotRule{
-							NotRule: &envoyconfig_rbacv3.Permission{
-								Rule: &envoyconfig_rbacv3.Permission_RequestedServerName{
-									RequestedServerName: &matcherv3.StringMatcher{
-										MatchPattern: &matcherv3.StringMatcher_Suffix{
-											Suffix: ingressSuffix,
+	rbacFilter := &envoynetwork_rbacv3.RBAC{
+		StatPrefix: "envoyrbac",
+		Rules: &envoyconfig_rbacv3.RBAC{
+			Action: envoyconfig_rbacv3.RBAC_ALLOW,
+			Policies: map[string]*envoyconfig_rbacv3.Policy{
+				shootID + "-inverse": {
+					Permissions: []*envoyconfig_rbacv3.Permission{
+						{
+							Rule: &envoyconfig_rbacv3.Permission_NotRule{
+								NotRule: &envoyconfig_rbacv3.Permission{
+									Rule: &envoyconfig_rbacv3.Permission_RequestedServerName{
+										RequestedServerName: &matcherv3.StringMatcher{
+											MatchPattern: &matcherv3.StringMatcher_Suffix{
+												Suffix: ingressSuffix,
+											},
 										},
 									},
 								},
 							},
 						},
 					},
-				},
-				Principals: []*envoyconfig_rbacv3.Principal{
-					{
-						Identifier: &envoyconfig_rbacv3.Principal_RemoteIp{
-							RemoteIp: &envoy_corev3.CidrRange{
-								AddressPrefix: "0.0.0.0",
-								PrefixLen:     wrapperspb.UInt32(0),
-							},
-						},
-					},
-				},
-			},
-			shootID: {
-				Permissions: []*envoyconfig_rbacv3.Permission{
-					{
-						Rule: &envoyconfig_rbacv3.Permission_RequestedServerName{
-							RequestedServerName: &matcherv3.StringMatcher{
-								MatchPattern: &matcherv3.StringMatcher_Suffix{
-									Suffix: ingressSuffix,
+					Principals: []*envoyconfig_rbacv3.Principal{
+						{
+							Identifier: &envoyconfig_rbacv3.Principal_RemoteIp{
+								RemoteIp: &envoy_corev3.CidrRange{
+									AddressPrefix: "0.0.0.0",
+									PrefixLen:     wrapperspb.UInt32(0),
 								},
 							},
 						},
 					},
 				},
-				Principals: ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs),
+				shootID: {
+					Permissions: []*envoyconfig_rbacv3.Permission{
+						{
+							Rule: &envoyconfig_rbacv3.Permission_RequestedServerName{
+								RequestedServerName: &matcherv3.StringMatcher{
+									MatchPattern: &matcherv3.StringMatcher_Suffix{
+										Suffix: ingressSuffix,
+									},
+								},
+							},
+						},
+					},
+					Principals: ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs),
+				},
 			},
 		},
 	}
@@ -457,7 +460,9 @@ func newRBACFilter(rbacName string, ruleAction envoyconfig_rbacv3.RBAC_Action, p
 }
 
 func protoMessageToTypedConfig(m proto.Message) (*structpb.Struct, error) {
-	raw, err := protojson.Marshal(m)
+	raw, err := protojson.MarshalOptions{
+		UseProtoNames: true,
+	}.Marshal(m)
 	if err != nil {
 		return nil, err
 	}
