@@ -371,7 +371,7 @@ func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []*envoyco
 			PrefixLen:     wrapperspb.UInt32(uint32(length)),
 		}
 		p := new(envoyconfig_rbacv3.Principal)
-		switch rule.Type {
+		switch strings.ToLower(rule.Type) {
 		case "source_ip":
 			p.Identifier = &envoyconfig_rbacv3.Principal_SourceIp{SourceIp: &cidrRange}
 		case "remote_ip":
