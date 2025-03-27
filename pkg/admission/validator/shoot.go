@@ -11,8 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 )
 
 // NewShootValidator returns a new instance of a shootValidator.
@@ -64,7 +64,7 @@ func (s *shootValidator) validateShoot(_ context.Context, shoot *core.Shoot) err
 
 func (s *shootValidator) findExtension(shoot *core.Shoot) (*core.Extension, int) {
 	for i, ext := range shoot.Spec.Extensions {
-		if ext.Type == webhook.ExtensionName {
+		if ext.Type == controller.Type {
 			return &shoot.Spec.Extensions[i], i
 		}
 	}
