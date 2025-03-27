@@ -8,7 +8,6 @@ import (
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	istionetworkingClientGo "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -336,7 +335,6 @@ var _ = Describe("actuator test", func() {
 
 var _ = Describe("actuator unit test", func() {
 	var (
-		a              *actuator
 		namespace      string
 		istioNamespace string
 	)
@@ -355,43 +353,10 @@ var _ = Describe("actuator unit test", func() {
 		createNewIstioDeployment(istioNamespace, istioNamespaceSelector)
 		createNewCluster(namespace)
 		createNewInfrastructure(namespace)
-
-		a = getNewActuator()
 	})
 
 	AfterEach(func() {
 		deleteNamespace(namespace)
-	})
-
-	// TODO: test case can be removed together with the migration code in the
-	// triggerWebhook() function, the test only checks that the deprecated hash
-	// annotation is properly removed
-	Describe("triggerWebhook", func() {
-		When("the envoyfilter has a hash annotation", func() {
-			It("Should remove the hash annotation", func() {
-				envoyFilter := &istionetworkingClientGo.EnvoyFilter{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      namespace,
-						Namespace: istioNamespace,
-						Annotations: map[string]string{
-							"acl-ext-rule-hash": "should-be-removed",
-						},
-					},
-				}
-				Expect(k8sClient.Create(ctx, envoyFilter)).To(Succeed())
-
-				Expect(a.triggerWebhook(ctx, namespace, istioNamespace)).To(Succeed())
-				Expect(k8sClient.Get(
-					ctx, types.NamespacedName{
-						Name:      envoyFilter.Name,
-						Namespace: envoyFilter.Namespace,
-					},
-					envoyFilter,
-				)).To(Succeed())
-
-				Expect(envoyFilter.Annotations).ToNot(HaveKey("acl-ext-rule-hash"))
-			})
-		})
 	})
 
 	Describe("ValidateExtensionSpec", func() {
