@@ -34,13 +34,10 @@ import (
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -133,10 +130,6 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	extState, err := getExtensionState(ex)
 	if err != nil {
-		return err
-	}
-
-	if err := a.triggerWebhook(ctx, ex.GetNamespace(), istioNamespace); err != nil {
 		return err
 	}
 
@@ -242,33 +235,7 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	namespace := ex.GetNamespace()
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
-	if err := a.deleteSeedResources(ctx, log, namespace); err != nil {
-		return err
-	}
-
-	var istioNamespace string
-
-	istioNamespace, _, err := a.findIstioNamespaceForExtension(ctx, ex)
-	if client.IgnoreNotFound(err) != nil {
-		return err
-	}
-	if apierrors.IsNotFound(err) {
-		exState, err := getExtensionState(ex)
-		if err != nil {
-			return err
-		}
-		if exState.IstioNamespace == nil {
-			// we have never reconciled this cluster completely, therefore no
-			// cleanup needs to be performed
-			return nil
-		}
-
-		// the cluster has no Gateway object, but we can get the information
-		// from the extension state
-		istioNamespace = *exState.IstioNamespace
-	}
-
-	return a.triggerWebhook(ctx, namespace, istioNamespace)
+	return a.deleteSeedResources(ctx, log, namespace)
 }
 
 // ForceDelete implements Network.Actuator.
@@ -420,40 +387,6 @@ func getExtensionState(ex *extensionsv1alpha1.Extension) (*ExtensionState, error
 	}
 
 	return extState, nil
-}
-
-// triggerWebhook allows us to "reconcile" the existing EnvoyFilter which we
-// need to modify using a mutating webhook. This is achieved by sending an empty
-// patch for this EnvoyFilter, which invokes the ACL webhook component. This
-// makes sure this EnvoyFilter is kept in sync with the ACL extension config
-// (e.g. when the allowed CIDRS from the extension spec or the
-// alwaysAllowedCIDRs change).
-func (a *actuator) triggerWebhook(ctx context.Context, shootName, istioNamespace string) error {
-	// get envoyfilter with the shoot's name
-	envoyFilter := &istionetworkv1alpha3.EnvoyFilter{}
-	namespacedName := types.NamespacedName{
-		Namespace: istioNamespace,
-		Name:      shootName,
-	}
-
-	if err := a.client.Get(ctx, namespacedName, envoyFilter); err != nil {
-		return client.IgnoreNotFound(err)
-	}
-
-	// TODO remove migration code: previously, hash annotations have been used
-	// to check if the rule set of an ACL extension object had changed. If that
-	// was the case, the changed hash annotation would trigger the webhook.
-	// Sending an empty patch is better, as it's 1) easier and 2) also updates
-	// the EnvoyFilter when the alwaysAllowedCIDRs changed, which wasn't
-	// correctly handled before
-	// --> migration code start
-	if _, ok := envoyFilter.Annotations[HashAnnotationName]; ok {
-		delete(envoyFilter.Annotations, HashAnnotationName)
-		return a.client.Update(ctx, envoyFilter)
-	}
-	// --> migration code end
-
-	return a.client.Patch(ctx, envoyFilter, client.RawPatch(types.MergePatchType, []byte("{}")))
 }
 
 // findIstioNamespaceForExtension finds the Istio namespace by the Istio Gateway
