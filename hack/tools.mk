@@ -13,6 +13,6 @@ TOOLS_BIN_DIR ?= $(TOOLS_DIR)/bin
 
 KO := $(TOOLS_BIN_DIR)/ko
 # renovate: datasource=github-releases depName=ko-build/ko
-KO_VERSION ?= v0.15.4
+KO_VERSION ?= v0.17.1
 $(KO): $(call tool_version_file,$(KO),$(KO_VERSION))
 	GOBIN=$(abspath $(TOOLS_BIN_DIR)) go install github.com/google/ko@$(KO_VERSION)
