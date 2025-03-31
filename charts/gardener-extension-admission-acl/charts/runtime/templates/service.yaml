@@ -6,11 +6,7 @@ metadata:
   annotations:
     networking.resources.gardener.cloud/from-all-webhook-targets-allowed-ports: '[{"protocol":"TCP","port":{{ .Values.global.webhookConfig.serverPort }}}]'
     {{- if and .Values.global.service.topologyAwareRouting.enabled (semverCompare "< 1.31-0" .Capabilities.KubeVersion.Version) }}
-    {{- if semverCompare ">= 1.27-0" .Capabilities.KubeVersion.Version }}
     service.kubernetes.io/topology-mode: "auto"
-    {{- else }}
-    service.kubernetes.io/topology-aware-hints: "auto"
-    {{- end }}
     {{- end }}
   labels:
 {{ include "labels" . | indent 4 }}
