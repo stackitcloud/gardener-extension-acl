@@ -31,17 +31,16 @@ function update_chart_values() {
   for chart in charts/*; do
     name=$(basename "$chart")
     values_file="$helm_artifacts/$name/values.yaml"
-
-    if yq -e '. | has("image")' "$values_file" >/dev/null 2>&1; then
+    if yq -e '.image | has("repository")' "$values_file" >/dev/null 2>&1; then
+      # update charts that have a ".image" map
+      yq -i "\
+        ( .image.repository = \"$(image_repo "$name")\" ) | \
+        ( .image.tag = \"$(image_tag "$name")\" )\
+      " "$values_file"
+    elif yq -e '. | has("image")' "$values_file" >/dev/null 2>&1; then
       # update charts that have a ".image" field
       yq -i "\
         ( .image = \"$(image "$name")\" )\
-      " "$values_file"
-    elif yq -e '.global | has("image")' "$values_file" >/dev/null 2>&1; then
-      # update charts that have a ".global.image" field
-      yq -i "\
-        ( .global.image.repository = \"$(image_repo "$name")\" ) | \
-        ( .global.image.tag = \"$(image_tag "$name")\" )\
       " "$values_file"
     fi
   done
