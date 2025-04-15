@@ -10,13 +10,14 @@ charts=(
   gardener-extension-admission-acl/charts/runtime
 )
 
-helm_artifacts=artifacts/charts
+repo_root="$(git rev-parse --show-toplevel)"
+helm_artifacts=$repo_root/artifacts/charts
 rm -rf "$helm_artifacts"
 mkdir -p "$helm_artifacts"
-cp -r charts/gardener-extension-* "$helm_artifacts"
+cp -r "$repo_root"/charts/gardener-extension-* "$helm_artifacts"
 
 function image() {
-  grep "$1" images.txt
+  grep "$1" "$repo_root/images.txt"
 }
 
 function image_repo() {
@@ -28,20 +29,19 @@ function image_tag() {
 }
 
 function update_chart_values() {
-  for chart in charts/*; do
-    name=$(basename "$chart")
-    values_file="$helm_artifacts/$name/values.yaml"
-
-    if yq -e '. | has("image")' "$values_file" >/dev/null 2>&1; then
+  for chart in "${charts[@]}"; do
+    name=$(echo "$chart" | cut -d '/' -f 1)
+    values_file="$helm_artifacts/$chart/values.yaml"
+    if yq -e '.image | has("repository")' "$values_file" >/dev/null 2>&1; then
+      # update charts that have a ".image" map
+      yq -i "\
+        ( .image.repository = \"$(image_repo "$name")\" ) | \
+        ( .image.tag = \"$(image_tag "$name")\" )\
+      " "$values_file"
+    elif yq -e '. | has("image")' "$values_file" >/dev/null 2>&1; then
       # update charts that have a ".image" field
       yq -i "\
         ( .image = \"$(image "$name")\" )\
-      " "$values_file"
-    elif yq -e '.global | has("image")' "$values_file" >/dev/null 2>&1; then
-      # update charts that have a ".global.image" field
-      yq -i "\
-        ( .global.image.repository = \"$(image_repo "$name")\" ) | \
-        ( .global.image.tag = \"$(image_tag "$name")\" )\
       " "$values_file"
     fi
   done
