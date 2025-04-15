@@ -326,13 +326,17 @@ func (a *actuator) createSeedResources(
 	defaultLabels, err := a.findDefaultIstioLabels(ctx)
 	if client.IgnoreNotFound(err) != nil {
 		return err
-	} else if err == nil {
-		// The `nginx-ingress-controller` Gateway object only exists in g/g@v1.89, (introduced with
-		// https://github.com/gardener/gardener/pull/9038).
-		// If it doesn't exist yet, we can't apply ACLs to shoot ingresses.
-		ingressEnvoyFilterSpec := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
-			cluster, spec.Rule, alwaysAllowedCIDRs, defaultLabels)
+	}
+	// The `nginx-ingress-controller` Gateway object only exists in g/g@v1.89, (introduced with
+	// https://github.com/gardener/gardener/pull/9038).
+	// If it doesn't exist yet, we can't apply ACLs to shoot ingresses.
+	ingressEnvoyFilterSpec, err := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
+		cluster, spec.Rule, alwaysAllowedCIDRs, defaultLabels)
+	if err != nil {
+		return err
+	}
 
+	if ingressEnvoyFilterSpec != nil {
 		cfg["ingressEnvoyFilterSpec"] = ingressEnvoyFilterSpec
 	}
 
