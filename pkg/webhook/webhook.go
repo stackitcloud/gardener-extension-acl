@@ -121,10 +121,17 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 	if originalFilter == nil {
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("filter with name \"envoy.filters.network.tcp_proxy\" not present in EnvoyFilter %s/%s", filter.Namespace, filter.Name))
 	}
-	filterPatch := envoyfilters.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
+	filterPatch, err := envoyfilters.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
+	if err != nil {
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
 
+	filterPatchMap, err := filterPatch.AsMap()
+	if err != nil {
+		return admission.Errored(http.StatusInternalServerError, err)
+	}
 	// make sure the original filter is the last
-	filterPatches := []map[string]interface{}{filterPatch.AsMap(), originalFilter.AsMap()}
+	filterPatches := []map[string]interface{}{filterPatchMap, originalFilter.AsMap()}
 
 	return buildAdmissionResponseWithFilterPatches(filterPatches)
 }
