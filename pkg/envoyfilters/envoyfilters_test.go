@@ -141,7 +141,7 @@ func createRule(action, ruleType, cidr string) *ACLRule {
 	}
 }
 
-// checkIfFilterEqualsYAML takes a map as input, and tries to compare its
+// checkIfFilterEquals takes an object as input, and tries to compare its
 // marshaled contents to the string coming from the specified testdata file.
 // Fails the test if strings differ. The file contents are unmarshaled and
 // marshaled again to guarantee the strings are comparable.
