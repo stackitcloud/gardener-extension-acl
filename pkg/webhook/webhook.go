@@ -117,7 +117,19 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 		shootSpecificCIRDs = append(shootSpecificCIRDs, providerSpecificCIRDs...)
 	}
 
-	var originalFilter *structpb.Struct
+	originalFilter := findTCPProxyFilter(filter)
+	if originalFilter == nil {
+		return admission.Errored(http.StatusBadRequest, fmt.Errorf("filter with name \"envoy.filters.network.tcp_proxy\" not present in EnvoyFilter %s/%s", filter.Namespace, filter.Name))
+	}
+	filterPatch := envoyfilters.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
+
+	// make sure the original filter is the last
+	filterPatches := []map[string]interface{}{filterPatch.AsMap(), originalFilter.AsMap()}
+
+	return buildAdmissionResponseWithFilterPatches(filterPatches)
+}
+
+func findTCPProxyFilter(filter *istionetworkingClientGo.EnvoyFilter) *structpb.Struct {
 	for _, configpatch := range filter.Spec.ConfigPatches {
 		patch := configpatch.Patch.Value
 		filters, ok := patch.Fields["filters"]
@@ -138,20 +150,11 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 				continue
 			}
 			if name.GetStringValue() == "envoy.filters.network.tcp_proxy" {
-				originalFilter = structVal
-				break
+				return structVal
 			}
 		}
 	}
-	if originalFilter == nil {
-		return admission.Errored(http.StatusBadRequest, fmt.Errorf("filter with name \"envoy.filters.network.tcp_proxy\" not present in EnvoyFilter %s/%s", filter.Namespace, filter.Name))
-	}
-	filterPatch := envoyfilters.CreateInternalFilterPatchFromRule(extSpec.Rule, alwaysAllowedCIDRs, shootSpecificCIRDs)
-
-	// make sure the original filter is the last
-	filterPatches := []map[string]interface{}{filterPatch.AsMap(), originalFilter.AsMap()}
-
-	return buildAdmissionResponseWithFilterPatches(filterPatches)
+	return nil
 }
 
 func buildAdmissionResponseWithFilterPatches(filters []map[string]interface{}) admission.Response {
