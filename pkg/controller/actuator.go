@@ -276,9 +276,12 @@ func (a *actuator) createSeedResources(
 		return err
 	}
 
-	vpnEnvoyFilterSpec := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
+	vpnEnvoyFilterSpec, err := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
 		cluster, spec.Rule, alwaysAllowedCIDRs, istioLabels,
 	)
+	if err != nil {
+		return err
+	}
 
 	cfg := map[string]interface{}{
 		"shootName":          cluster.Shoot.Status.TechnicalID,
@@ -294,10 +297,14 @@ func (a *actuator) createSeedResources(
 		// The `nginx-ingress-controller` Gateway object only exists in g/g@v1.89, (introduced with
 		// https://github.com/gardener/gardener/pull/9038).
 		// If it doesn't exist yet, we can't apply ACLs to shoot ingresses.
-		ingressEnvoyFilterSpec := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
+		ingressEnvoyFilterSpec, err := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
 			cluster, spec.Rule, alwaysAllowedCIDRs, defaultLabels)
-
-		cfg["ingressEnvoyFilterSpec"] = ingressEnvoyFilterSpec
+		if err != nil {
+			return err
+		}
+		if ingressEnvoyFilterSpec != nil {
+			cfg["ingressEnvoyFilterSpec"] = ingressEnvoyFilterSpec
+		}
 	}
 
 	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})

@@ -68,7 +68,8 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 					"app":   "istio-ingressgateway",
 					"istio": "ingressgateway",
 				}
-				ingressEnvoyFilterSpec := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+				ingressEnvoyFilterSpec, err := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+				Expect(err).NotTo(HaveOccurred())
 
 				checkIfFilterEquals(ingressEnvoyFilterSpec, "ingressEnvoyFilterSpecWithOneAllowRule.yaml")
 			})
@@ -79,7 +80,9 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 					"app":   "istio-ingressgateway",
 					"istio": "ingressgateway",
 				}
-				ingressEnvoyFilterSpec := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+				ingressEnvoyFilterSpec, err := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+
+				Expect(err).NotTo(HaveOccurred())
 				Expect(ingressEnvoyFilterSpec).To(BeNil())
 			})
 		})
@@ -93,7 +96,9 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 					"app":   "istio-ingressgateway",
 					"istio": "ingressgateway",
 				}
-				result := BuildVPNEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+				result, err := BuildVPNEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+
+				Expect(err).NotTo(HaveOccurred())
 				checkIfFilterEquals(result, "vpnEnvoyFilterSpecWithOneAllowRule.yaml")
 			})
 		})
@@ -104,7 +109,8 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 			It("Should create a filter spec matching the expected one, including the always allowed CIDRs", func() {
 				rule := createRule("ALLOW", "remote_ip", "0.0.0.0/0")
 
-				result := CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs, []string{})
+				result, err := CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs, []string{})
+				Expect(err).NotTo(HaveOccurred())
 				checkIfFilterEquals(result, "singleFiltersAllowEntry.yaml")
 			})
 		})

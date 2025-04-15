@@ -38,14 +38,14 @@ type ACLRule struct {
 	Type string `json:"type"`
 }
 
-func (r *ACLRule) actionProto() envoy_rbacv3.RBAC_Action {
+func (r *ACLRule) actionProto() (envoy_rbacv3.RBAC_Action, error) {
 	switch r.Action {
 	case "DENY":
-		return envoy_rbacv3.RBAC_DENY
+		return envoy_rbacv3.RBAC_DENY, nil
 	case "ALLOW":
-		return envoy_rbacv3.RBAC_ALLOW
+		return envoy_rbacv3.RBAC_ALLOW, nil
 	default:
-		panic("unknown action")
+		return -1, fmt.Errorf("unknown action %s", r.Action)
 	}
 }
 
@@ -57,21 +57,24 @@ type FilterPatch struct {
 }
 
 // asStructPB returns FilterPatch represented as a structpb.Struct
-func (f *FilterPatch) asStructPB() *structpb.Struct {
+func (f *FilterPatch) asStructPB() (*structpb.Struct, error) {
 	pb, err := structpb.NewStruct(map[string]any{
 		"name":         f.Name,
 		"typed_config": f.TypedConfig.AsMap(),
 	})
 	if err != nil {
-		// This state is not valid and should not be propergated
-		panic(err)
+		return nil, err
 	}
-	return pb
+	return pb, nil
 }
 
 // AsMap returns FilterPatch represented as a map[string]interface{}
-func (f *FilterPatch) AsMap() map[string]interface{} {
-	return f.asStructPB().AsMap()
+func (f *FilterPatch) AsMap() (map[string]interface{}, error) {
+	s, err := f.asStructPB()
+	if err != nil {
+		return nil, err
+	}
+	return s.AsMap(), nil
 }
 
 // BuildAPIEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for API server
@@ -97,28 +100,30 @@ func BuildAPIEnvoyFilterSpecForHelmChart(
 // endpoints using the seed ingress domain.
 func BuildIngressEnvoyFilterSpecForHelmChart(
 	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
-) *istio_networkingv1alpha3.EnvoyFilter {
+) (*istio_networkingv1alpha3.EnvoyFilter, error) {
 	seedIngressDomain := helper.GetSeedIngressDomain(cluster.Seed)
-	if seedIngressDomain != "" {
-		shootID := helper.ComputeShortShootID(cluster.Shoot)
-
-		return &istio_networkingv1alpha3.EnvoyFilter{
-			WorkloadSelector: &istio_networkingv1alpha3.WorkloadSelector{
-				Labels: istioLabels,
-			},
-			ConfigPatches: []*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
-				ingressConfigPatchFromRule(rule, seedIngressDomain, shootID, alwaysAllowedCIDRs),
-			},
-		}
+	if seedIngressDomain == "" {
+		return nil, nil
 	}
-	return nil
+	shootID := helper.ComputeShortShootID(cluster.Shoot)
+
+	configPatch, err := ingressConfigPatchFromRule(rule, seedIngressDomain, shootID, alwaysAllowedCIDRs)
+	if err != nil {
+		return nil, err
+	}
+	return &istio_networkingv1alpha3.EnvoyFilter{
+		WorkloadSelector: &istio_networkingv1alpha3.WorkloadSelector{
+			Labels: istioLabels,
+		},
+		ConfigPatches: []*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{configPatch},
+	}, nil
 }
 
 // ingressConfigPatchFromRule creates a network filter patch that can be
 // applied to the `GATEWAY` network filter chain matching the wildcard ingress domain.
 func ingressConfigPatchFromRule(
 	rule *ACLRule, seedIngressDomain, shootID string, alwaysAllowedCIDRs []string,
-) *istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch {
+) (*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch, error) {
 	rbacName := "acl-ingress"
 	ingressSuffix := "-" + shootID + "." + seedIngressDomain
 
@@ -173,12 +178,15 @@ func ingressConfigPatchFromRule(
 	}
 	typedConfig, err := protoMessageToTypedConfig(rbacFilter)
 	if err != nil {
-		// this is a error in the code itself, don't return to caller
-		panic(err)
+		return nil, err
 	}
 	filter := &FilterPatch{
 		Name:        rbacName,
 		TypedConfig: typedConfig,
+	}
+	pb, err := filter.asStructPB()
+	if err != nil {
+		return nil, err
 	}
 	return &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
 		ApplyTo: istio_networkingv1alpha3.EnvoyFilter_NETWORK_FILTER,
@@ -194,30 +202,32 @@ func ingressConfigPatchFromRule(
 		},
 		Patch: &istio_networkingv1alpha3.EnvoyFilter_Patch{
 			Operation: istio_networkingv1alpha3.EnvoyFilter_Patch_INSERT_FIRST,
-			Value:     filter.asStructPB(),
+			Value:     pb,
 		},
-	}
+	}, nil
 }
 
 // BuildVPNEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for VPN.
 func BuildVPNEnvoyFilterSpecForHelmChart(
 	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
-) *istio_networkingv1alpha3.EnvoyFilter {
+) (*istio_networkingv1alpha3.EnvoyFilter, error) {
+	patch, err := vpnConfigPatchFromRule(rule, helper.ComputeShortShootID(cluster.Shoot), cluster.Shoot.Status.TechnicalID, alwaysAllowedCIDRs)
+	if err != nil {
+		return nil, err
+	}
 	return &istio_networkingv1alpha3.EnvoyFilter{
 		WorkloadSelector: &istio_networkingv1alpha3.WorkloadSelector{
 			Labels: istioLabels,
 		},
-		ConfigPatches: []*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
-			vpnConfigPatchFromRule(rule, helper.ComputeShortShootID(cluster.Shoot), cluster.Shoot.Status.TechnicalID, alwaysAllowedCIDRs),
-		},
-	}
+		ConfigPatches: []*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{patch},
+	}, nil
 }
 
 // vpnConfigPatchFromRule creates an HTTP filter patch that can be applied to the
 // `GATEWAY` HTTP filter chain for the VPN.
 func vpnConfigPatchFromRule(rule *ACLRule,
 	shortShootID, technicalShootID string, alwaysAllowedCIDRs []string,
-) *istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch {
+) (*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch, error) {
 	rbacName := "acl-vpn"
 	headerMatcher := envoy_routev3.HeaderMatcher{
 		Name: "reversed-vpn",
@@ -280,13 +290,17 @@ func vpnConfigPatchFromRule(rule *ACLRule,
 	}
 	typedConfig, err := protoMessageToTypedConfig(rbacFilter)
 	if err != nil {
-		// this is a error in the code itself, don't return to caller
-		panic(err)
+		return nil, err
 	}
 	filterPatch := &FilterPatch{
 		Name:        rbacName,
 		TypedConfig: typedConfig,
 	}
+	pb, err := filterPatch.asStructPB()
+	if err != nil {
+		return nil, err
+	}
+
 	return &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
 		ApplyTo: istio_networkingv1alpha3.EnvoyFilter_HTTP_FILTER,
 		Match: &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectMatch{
@@ -299,9 +313,9 @@ func vpnConfigPatchFromRule(rule *ACLRule,
 		},
 		Patch: &istio_networkingv1alpha3.EnvoyFilter_Patch{
 			Operation: istio_networkingv1alpha3.EnvoyFilter_Patch_INSERT_FIRST,
-			Value:     filterPatch.asStructPB(),
+			Value:     pb,
 		},
-	}
+	}, nil
 }
 
 // CreateAPIConfigPatchFromRule combines an ACLRule, the first entry  of the
@@ -315,7 +329,14 @@ func CreateAPIConfigPatchFromRule(
 	}
 	rbacName := "acl-api"
 	principals := ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs)
-
+	action, err := rule.actionProto()
+	if err != nil {
+		return nil, err
+	}
+	patch, err := principalsToPatch(rbacName, action, principals)
+	if err != nil {
+		return nil, err
+	}
 	return &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
 		ApplyTo: istio_networkingv1alpha3.EnvoyFilter_NETWORK_FILTER,
 		Match: &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectMatch{
@@ -328,27 +349,30 @@ func CreateAPIConfigPatchFromRule(
 				},
 			},
 		},
-		Patch: principalsToPatch(rbacName, rule.actionProto(), principals),
+		Patch: patch,
 	}, nil
 }
 
 func principalsToPatch(
 	rbacName string, ruleAction envoy_rbacv3.RBAC_Action, principals []*envoy_rbacv3.Principal,
-) *istio_networkingv1alpha3.EnvoyFilter_Patch {
+) (*istio_networkingv1alpha3.EnvoyFilter_Patch, error) {
 	rbacFilter := newRBACFilter(rbacName, ruleAction, principals)
 	typedConfig, err := protoMessageToTypedConfig(rbacFilter)
 	if err != nil {
-		// this is a error in the code itself, don't return to caller
-		panic(err)
+		return nil, err
 	}
 	filter := &FilterPatch{
 		Name:        rbacName,
 		TypedConfig: typedConfig,
 	}
+	pb, err := filter.asStructPB()
+	if err != nil {
+		return nil, err
+	}
 	return &istio_networkingv1alpha3.EnvoyFilter_Patch{
 		Operation: istio_networkingv1alpha3.EnvoyFilter_Patch_INSERT_FIRST,
-		Value:     filter.asStructPB(),
-	}
+		Value:     pb,
+	}, nil
 }
 
 // CreateInternalFilterPatchFromRule combines an ACLRule, the
@@ -357,20 +381,23 @@ func CreateInternalFilterPatchFromRule(
 	rule *ACLRule,
 	alwaysAllowedCIDRs []string,
 	shootSpecificCIDRs []string,
-) *FilterPatch {
+) (*FilterPatch, error) {
 	rbacName := "acl-internal"
 	principals := ruleCIDRsToPrincipal(rule, append(alwaysAllowedCIDRs, shootSpecificCIDRs...))
-	rbacFilter := newRBACFilter(rbacName, rule.actionProto(), principals)
+	action, err := rule.actionProto()
+	if err != nil {
+		return nil, err
+	}
+	rbacFilter := newRBACFilter(rbacName, action, principals)
 	typedConfig, err := protoMessageToTypedConfig(rbacFilter)
 	if err != nil {
-		// this is a error in the code itself, don't return to caller
-		panic(err)
+		return nil, err
 	}
 
 	return &FilterPatch{
 		Name:        rbacName + "-" + strings.ToLower(rule.Type),
 		TypedConfig: typedConfig,
-	}
+	}, nil
 }
 
 // ruleCIDRsToPrincipal translates a list of strings in the form "0.0.0.0/0"
