@@ -114,48 +114,6 @@ func BuildIngressEnvoyFilterSpecForHelmChart(
 	return nil
 }
 
-// BuildVPNEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for VPN.
-func BuildVPNEnvoyFilterSpecForHelmChart(
-	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
-) *istio_networkingv1alpha3.EnvoyFilter {
-	return &istio_networkingv1alpha3.EnvoyFilter{
-		WorkloadSelector: &istio_networkingv1alpha3.WorkloadSelector{
-			Labels: istioLabels,
-		},
-		ConfigPatches: []*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
-			vpnConfigPatchFromRule(rule, helper.ComputeShortShootID(cluster.Shoot), cluster.Shoot.Status.TechnicalID, alwaysAllowedCIDRs),
-		},
-	}
-}
-
-// CreateAPIConfigPatchFromRule combines an ACLRule, the first entry  of the
-// hosts list and the alwaysAllowedCIDRs into a network filter patch that can be
-// applied to the `GATEWAY` network filter chain matching the host.
-func CreateAPIConfigPatchFromRule(
-	rule *ACLRule, hosts, alwaysAllowedCIDRs []string,
-) (*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch, error) {
-	if len(hosts) == 0 {
-		return nil, ErrNoHostsGiven
-	}
-	rbacName := "acl-api"
-	principals := ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs)
-
-	return &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
-		ApplyTo: istio_networkingv1alpha3.EnvoyFilter_NETWORK_FILTER,
-		Match: &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectMatch{
-			Context: istio_networkingv1alpha3.EnvoyFilter_GATEWAY,
-			ObjectTypes: &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectMatch_Listener{
-				Listener: &istio_networkingv1alpha3.EnvoyFilter_ListenerMatch{
-					FilterChain: &istio_networkingv1alpha3.EnvoyFilter_ListenerMatch_FilterChainMatch{
-						Sni: hosts[0],
-					},
-				},
-			},
-		},
-		Patch: principalsToPatch(rbacName, rule.actionProto(), principals),
-	}, nil
-}
-
 // ingressConfigPatchFromRule creates a network filter patch that can be
 // applied to the `GATEWAY` network filter chain matching the wildcard ingress domain.
 func ingressConfigPatchFromRule(
@@ -237,6 +195,20 @@ func ingressConfigPatchFromRule(
 		Patch: &istio_networkingv1alpha3.EnvoyFilter_Patch{
 			Operation: istio_networkingv1alpha3.EnvoyFilter_Patch_INSERT_FIRST,
 			Value:     filter.asStructPB(),
+		},
+	}
+}
+
+// BuildVPNEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for VPN.
+func BuildVPNEnvoyFilterSpecForHelmChart(
+	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
+) *istio_networkingv1alpha3.EnvoyFilter {
+	return &istio_networkingv1alpha3.EnvoyFilter{
+		WorkloadSelector: &istio_networkingv1alpha3.WorkloadSelector{
+			Labels: istioLabels,
+		},
+		ConfigPatches: []*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
+			vpnConfigPatchFromRule(rule, helper.ComputeShortShootID(cluster.Shoot), cluster.Shoot.Status.TechnicalID, alwaysAllowedCIDRs),
 		},
 	}
 }
@@ -332,6 +304,53 @@ func vpnConfigPatchFromRule(rule *ACLRule,
 	}
 }
 
+// CreateAPIConfigPatchFromRule combines an ACLRule, the first entry  of the
+// hosts list and the alwaysAllowedCIDRs into a network filter patch that can be
+// applied to the `GATEWAY` network filter chain matching the host.
+func CreateAPIConfigPatchFromRule(
+	rule *ACLRule, hosts, alwaysAllowedCIDRs []string,
+) (*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch, error) {
+	if len(hosts) == 0 {
+		return nil, ErrNoHostsGiven
+	}
+	rbacName := "acl-api"
+	principals := ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs)
+
+	return &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{
+		ApplyTo: istio_networkingv1alpha3.EnvoyFilter_NETWORK_FILTER,
+		Match: &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectMatch{
+			Context: istio_networkingv1alpha3.EnvoyFilter_GATEWAY,
+			ObjectTypes: &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectMatch_Listener{
+				Listener: &istio_networkingv1alpha3.EnvoyFilter_ListenerMatch{
+					FilterChain: &istio_networkingv1alpha3.EnvoyFilter_ListenerMatch_FilterChainMatch{
+						Sni: hosts[0],
+					},
+				},
+			},
+		},
+		Patch: principalsToPatch(rbacName, rule.actionProto(), principals),
+	}, nil
+}
+
+func principalsToPatch(
+	rbacName string, ruleAction envoy_rbacv3.RBAC_Action, principals []*envoy_rbacv3.Principal,
+) *istio_networkingv1alpha3.EnvoyFilter_Patch {
+	rbacFilter := newRBACFilter(rbacName, ruleAction, principals)
+	typedConfig, err := protoMessageToTypedConfig(rbacFilter)
+	if err != nil {
+		// this is a error in the code itself, don't return to caller
+		panic(err)
+	}
+	filter := &FilterPatch{
+		Name:        rbacName,
+		TypedConfig: typedConfig,
+	}
+	return &istio_networkingv1alpha3.EnvoyFilter_Patch{
+		Operation: istio_networkingv1alpha3.EnvoyFilter_Patch_INSERT_FIRST,
+		Value:     filter.asStructPB(),
+	}
+}
+
 // CreateInternalFilterPatchFromRule combines an ACLRule, the
 // alwaysAllowedCIDRs, and the shootSpecificCIDRs into a filter patch.
 func CreateInternalFilterPatchFromRule(
@@ -417,25 +436,6 @@ func getPrefixAndPrefixLength(cidr string) (prefix string, prefixLen int, err er
 
 	// TODO use ip here or the one from the mask?
 	return ip.String(), prefixLen, nil
-}
-
-func principalsToPatch(
-	rbacName string, ruleAction envoy_rbacv3.RBAC_Action, principals []*envoy_rbacv3.Principal,
-) *istio_networkingv1alpha3.EnvoyFilter_Patch {
-	rbacFilter := newRBACFilter(rbacName, ruleAction, principals)
-	typedConfig, err := protoMessageToTypedConfig(rbacFilter)
-	if err != nil {
-		// this is a error in the code itself, don't return to caller
-		panic(err)
-	}
-	filter := &FilterPatch{
-		Name:        rbacName,
-		TypedConfig: typedConfig,
-	}
-	return &istio_networkingv1alpha3.EnvoyFilter_Patch{
-		Operation: istio_networkingv1alpha3.EnvoyFilter_Patch_INSERT_FIRST,
-		Value:     filter.asStructPB(),
-	}
 }
 
 func newRBACFilter(rbacName string, ruleAction envoy_rbacv3.RBAC_Action, principals []*envoy_rbacv3.Principal) *envoy_networkrbacv3.RBAC {
