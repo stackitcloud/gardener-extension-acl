@@ -56,7 +56,7 @@ type FilterPatch struct {
 	TypedConfig *structpb.Struct `json:"typed_config"`
 }
 
-// AsStructPB returns FilterPatch represented as a structpb.Struct
+// asStructPB returns FilterPatch represented as a structpb.Struct
 func (f *FilterPatch) asStructPB() *structpb.Struct {
 	pb, err := structpb.NewStruct(map[string]any{
 		"name":         f.Name,
