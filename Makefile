@@ -36,8 +36,6 @@ TOOLS_DIR := hack/tools
 include $(GARDENER_HACK_DIR)/tools.mk
 include $(HACK_DIR)/tools.mk
 
-GOIMPORTSREVISER_VERSION := v3.5.6
-
 .PHONY: run
 run:
 	@LEADER_ELECTION_NAMESPACE=garden GO111MODULE=on go run \
