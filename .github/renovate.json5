@@ -21,7 +21,7 @@
   customManagers: [
     {
       // Update `_VERSION` and `_version` variables in Makefiles and scripts.
-      // Inspired by `regexManagers:dockerfileVersions` preset.
+      // Inspired by `customManagers:githubActionsVersions` preset.
       customType: 'regex',
       fileMatch: [
         'Makefile$',
@@ -29,7 +29,7 @@
         '\\.sh$',
       ],
       matchStrings: [
-        '# renovate: datasource=(?<datasource>[a-z-.]+?) depName=(?<depName>[^\\s]+?)(?: (lookupName|packageName)=(?<packageName>[^\\s]+?))?(?: versioning=(?<versioning>[^\\s]+?))?(?: extractVersion=(?<extractVersion>[^\\s]+?))?(?: registryUrl=(?<registryUrl>[^\\s]+?))?\\s.+?_(VERSION|version) *[?:]?= *"?(?<currentValue>.+?)"?\\s',
+        '# renovate: datasource=(?<datasource>[a-zA-Z0-9-._]+?) depName=(?<depName>[^\\s]+?)(?: (?:lookupName|packageName)=(?<packageName>[^\\s]+?))?(?: versioning=(?<versioning>[^\\s]+?))?(?: extractVersion=(?<extractVersion>[^\\s]+?))?(?: registryUrl=(?<registryUrl>[^\\s]+?))?\\s+[A-Za-z0-9_]+?_(VERSION|version)\\s*[?:]?=\\s*["\']?(?<currentValue>.+?)["\']?\\s',
       ],
     },
   ],
