@@ -10,7 +10,7 @@ on:
     - "**.md"
 
 jobs:
-  images:
+  artifacts:
     runs-on: ubuntu-latest
 
     permissions:
