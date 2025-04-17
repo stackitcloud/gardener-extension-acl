@@ -24,7 +24,9 @@ import (
 	"github.com/spf13/cobra"
 	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -101,6 +103,17 @@ func (o *Options) run(ctx context.Context) error {
 
 	if err := o.controllerSwitches.Completed().AddToManager(ctx, mgr); err != nil {
 		return fmt.Errorf("could not add controllers to manager: %s", err)
+	}
+
+	// TODO(Wieneo): Remove this once a couple extension versions included the migration code
+	// migration code: remove mutating webhook from cluster as it is not served by this controller anymore
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		if err := client.IgnoreNotFound(mgr.GetClient().Delete(ctx, &admissionregistrationv1.MutatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Name: ExtensionName}})); err != nil {
+			return fmt.Errorf("could not delete mutatingwebhook %s: %s", ExtensionName, err)
+		}
+		return nil
+	})); err != nil {
+		return fmt.Errorf("could not add runnable to manager: %s", err)
 	}
 
 	if err := mgr.Start(ctx); err != nil {
