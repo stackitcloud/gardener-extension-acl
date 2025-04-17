@@ -19,7 +19,6 @@ import (
 	"os"
 
 	extensionscmdcontroller "github.com/gardener/gardener/extensions/pkg/controller/cmd"
-	extensionscmdwebhook "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
 
 	extensioncmd "github.com/stackitcloud/gardener-extension-acl/pkg/cmd"
 )
@@ -36,7 +35,6 @@ type Options struct {
 	controllerOptions  *extensionscmdcontroller.ControllerOptions
 	healthOptions      *extensionscmdcontroller.ControllerOptions
 	controllerSwitches *extensionscmdcontroller.SwitchOptions
-	webhookOptions     *extensioncmd.AddToManagerOptions
 	reconcileOptions   *extensionscmdcontroller.ReconcilerOptions
 	optionAggregator   extensionscmdcontroller.OptionAggregator
 }
@@ -65,14 +63,7 @@ func NewOptions() *Options {
 			MaxConcurrentReconciles: 5,
 		},
 		controllerSwitches: extensioncmd.ControllerSwitches(),
-		webhookOptions: extensioncmd.NewAddToManagerOptions(
-			ExtensionName,
-			&extensionscmdwebhook.ServerOptions{
-				Namespace: os.Getenv("WEBHOOK_CONFIG_NAMESPACE"),
-			},
-			extensioncmd.WebhookSwitchOptions(),
-		),
-		reconcileOptions: &extensionscmdcontroller.ReconcilerOptions{},
+		reconcileOptions:   &extensionscmdcontroller.ReconcilerOptions{},
 	}
 
 	options.optionAggregator = extensionscmdcontroller.NewOptionAggregator(
@@ -83,7 +74,6 @@ func NewOptions() *Options {
 		options.extensionOptions,
 		extensionscmdcontroller.PrefixOption("healthcheck-", options.healthOptions),
 		options.controllerSwitches,
-		options.webhookOptions,
 		options.reconcileOptions,
 	)
 

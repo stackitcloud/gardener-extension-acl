@@ -21,13 +21,11 @@ import (
 	extensionsconfigv1alpha1 "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
 	extensionscmdcontroller "github.com/gardener/gardener/extensions/pkg/controller/cmd"
 	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
-	extensionscmdwebhook "github.com/gardener/gardener/extensions/pkg/webhook/cmd"
 	"github.com/spf13/pflag"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	healthcheckcontroller "github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 )
 
 const (
@@ -84,12 +82,5 @@ func ControllerSwitches() *extensionscmdcontroller.SwitchOptions {
 	return extensionscmdcontroller.NewSwitchOptions(
 		extensionscmdcontroller.Switch(controller.Type, controller.AddToManager),
 		extensionscmdcontroller.Switch(extensionshealthcheckcontroller.ControllerName, healthcheckcontroller.AddToManager),
-	)
-}
-
-// WebhookSwitchOptions are the extensionscmdwebhook.SwitchOptions for the provider webhooks.
-func WebhookSwitchOptions() *extensionscmdwebhook.SwitchOptions {
-	return extensionscmdwebhook.NewSwitchOptions(
-		extensionscmdwebhook.Switch(webhook.WebhookName, webhook.AddToManager),
 	)
 }
