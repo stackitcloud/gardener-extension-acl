@@ -5,6 +5,7 @@ metadata:
   name: {{ include "name" . }}
   namespace: {{ .Release.Namespace }}
   labels:
+    high-availability-config.resources.gardener.cloud/type: controller
 {{ include "labels" . | indent 4 }}
 spec:
   revisionHistoryLimit: 0

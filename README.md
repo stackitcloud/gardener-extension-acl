@@ -48,6 +48,8 @@ Broadly speaking, there are two different external traffic flows:
 1. Kubernetes API Listener (via SNI name)
 2. Apiserver-Proxy / Reversed-VPN Listener
 
+*Please note that this changed with [GEP-30](https://github.com/gardener/gardener/blob/master/docs/proposals/30-apiserver-proxy.md) as the dedicated Kubernetes Service Listener for the apiserver-proxy was removed.*
+
 These ways are described in more detail in the aforementioned GEP. Essentially,
 these two ways are all represented by a specific Envoy listener with filters.
 The extension needs to hook into each of these filters (and their filter chains)
@@ -66,10 +68,6 @@ require a unique way of handling them, respectively.
    achieve this by not only creating a policy for every shoot with ACL enabled,
    but also an "inverted" policy which matches all shoots that don't have ACL
    enabled. All these policies are then put in a single EnvoyFilter patch.
-
-![Listener Overview](./docs/listener-overview.svg)
-
-*Please note that the `Kubernetes Service Listener` doesn't exist anymore in current versions of Gardener.*
 
 Because of the last point, we currently see no way of allowing the user to
 define multiple rules of different action types (`ALLOW` or `DENY`). Instead, we
