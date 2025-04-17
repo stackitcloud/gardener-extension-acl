@@ -301,7 +301,7 @@ var _ = Describe("webhook unit test", func() {
 						},
 					},
 				})
-				Expect(err).To(BeNil())
+				Expect(err).NotTo(HaveOccurred())
 
 				infra.Status = extensionsv1alpha1.InfrastructureStatus{
 					DefaultStatus: extensionsv1alpha1.DefaultStatus{
@@ -414,7 +414,7 @@ var _ = Describe("webhook unit test", func() {
 					Spec: gardencorev1beta1.ShootSpec{},
 				}
 				shootJSON, err := json.Marshal(shoot)
-				Expect(err).To(BeNil())
+				Expect(err).NotTo(HaveOccurred())
 
 				cluster.Spec.Shoot = runtime.RawExtension{Raw: shootJSON}
 				Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
@@ -498,10 +498,10 @@ func getNewWebhook() *EnvoyFilterWebhook {
 
 func getNewCluster(namespace string, shoot *gardencorev1beta1.Shoot, seed *gardencorev1beta1.Seed) *extensionsv1alpha1.Cluster {
 	shootJSON, err := json.Marshal(shoot)
-	Expect(err).To(BeNil())
+	Expect(err).NotTo(HaveOccurred())
 
 	seedJSON, err := json.Marshal(seed)
-	Expect(err).To(BeNil())
+	Expect(err).NotTo(HaveOccurred())
 
 	return &extensionsv1alpha1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{

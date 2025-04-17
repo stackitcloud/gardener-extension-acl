@@ -10,6 +10,7 @@ linters:
     - nilerr
     - whitespace
     - misspell
+    - ginkgolinter
 
   settings:
     exclusions:

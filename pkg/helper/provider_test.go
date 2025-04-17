@@ -70,7 +70,7 @@ var _ = Describe("provider Unit Tests", func() {
 						},
 					},
 				})
-				Expect(err).To(BeNil())
+				Expect(err).NotTo(HaveOccurred())
 
 				infra := &extensionsv1alpha1.Infrastructure{
 					Spec: extensionsv1alpha1.InfrastructureSpec{
