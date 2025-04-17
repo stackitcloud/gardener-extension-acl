@@ -141,7 +141,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	}
 
 	hosts := make([]string, 0)
-	if cluster.Shoot.Status.AdvertisedAddresses == nil || len(cluster.Shoot.Status.AdvertisedAddresses) < 1 {
+	if len(cluster.Shoot.Status.AdvertisedAddresses) < 1 {
 		return ErrNoAdvertisedAddresses
 	}
 

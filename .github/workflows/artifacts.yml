@@ -10,7 +10,7 @@ on:
     - "**.md"
 
 jobs:
-  images:
+  artifacts:
     runs-on: ubuntu-latest
 
     permissions:
@@ -28,5 +28,5 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     - uses: actions/setup-go@v5
       with:
-        go-version-file: go.mod
+        go-version: 1.24.2
     - run: make artifacts PUSH=true

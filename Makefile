@@ -32,11 +32,14 @@ endif
 # Tools                                 #
 #########################################
 
+# Manually update golangci-lint to the latest v1 version.
+# This unblocks the go 1.24 upgrade, which will unblock the gardener/gardener update.
+# TODO(timebertt): remove this version override when bumping the gardener/gardener dependency.
+GOLANGCI_LINT_VERSION := v1.64.8
+
 TOOLS_DIR := hack/tools
 include $(GARDENER_HACK_DIR)/tools.mk
 include $(HACK_DIR)/tools.mk
-
-GOIMPORTSREVISER_VERSION := v3.5.6
 
 .PHONY: run
 run:
