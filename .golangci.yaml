@@ -11,6 +11,7 @@ linters:
     - whitespace
     - misspell
     - ginkgolinter
+    - unconvert
 
   settings:
     exclusions:
