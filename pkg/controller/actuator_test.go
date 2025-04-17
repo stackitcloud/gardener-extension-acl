@@ -60,7 +60,7 @@ var _ = Describe("actuator test", func() {
 				},
 			}
 			extSpecJSON, err := json.Marshal(extSpec)
-			Expect(err).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
 			ext := createNewExtension(shootNamespace1, extSpecJSON)
 			Expect(ext).To(Not(BeNil()))
 
@@ -85,7 +85,7 @@ var _ = Describe("actuator test", func() {
 				},
 			}
 			extSpecJSON, err := json.Marshal(extSpec)
-			Expect(err).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
 			ext := createNewExtension(shootNamespace1, extSpecJSON)
 			Expect(ext).To(Not(BeNil()))
 
@@ -127,7 +127,7 @@ var _ = Describe("actuator test", func() {
 					},
 				}
 				extSpecJSON, err := json.Marshal(extSpec)
-				Expect(err).To(BeNil())
+				Expect(err).NotTo(HaveOccurred())
 				ext := createNewExtension(shootNamespace1, extSpecJSON)
 				Expect(ext).To(Not(BeNil()))
 
@@ -152,7 +152,7 @@ var _ = Describe("actuator test", func() {
 					},
 				}
 				extSpecJSON, err := json.Marshal(extSpec)
-				Expect(err).To(BeNil())
+				Expect(err).NotTo(HaveOccurred())
 				ext := createNewExtension(shootNamespace1, extSpecJSON)
 				Expect(ext).To(Not(BeNil()))
 
@@ -190,7 +190,7 @@ var _ = Describe("actuator test", func() {
 				},
 			}
 			extSpecJSON1, err := json.Marshal(extSpec1)
-			Expect(err).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
 			ext1 := createNewExtension(shootNamespace1, extSpecJSON1)
 			Expect(ext1).To(Not(BeNil()))
 
@@ -234,7 +234,7 @@ var _ = Describe("actuator test", func() {
 				},
 			}
 			extSpecJSON, err := json.Marshal(extSpec)
-			Expect(err).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
 			ext := createNewExtension(shootNamespace1, extSpecJSON)
 			Expect(ext).To(Not(BeNil()))
 
@@ -302,7 +302,7 @@ var _ = Describe("actuator test", func() {
 				},
 			}
 			extSpecJSON, err := json.Marshal(extSpec)
-			Expect(err).To(BeNil())
+			Expect(err).NotTo(HaveOccurred())
 			ext := createNewExtension(shootNamespace1, extSpecJSON)
 			Expect(ext).To(Not(BeNil()))
 
@@ -327,7 +327,7 @@ var _ = Describe("actuator test", func() {
 			// assert
 			mr = &v1alpha1.ManagedResource{}
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)
-			Expect(err).ToNot(BeNil())
+			Expect(err).To(HaveOccurred())
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 
 		})

@@ -129,7 +129,7 @@ var _ = Describe("webhook unit test", func() {
 			extSpec := getExtensionSpec()
 
 			BeforeEach(func() {
-				addRuleToSpec(extSpec, "DENY", "source_ip", "0.0.0.0/0")
+				addRuleToSpec(extSpec, "DENY")
 				ext = getNewExtension(namespace, *extSpec)
 
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
@@ -193,7 +193,7 @@ var _ = Describe("webhook unit test", func() {
 			extSpec := getExtensionSpec()
 
 			BeforeEach(func() {
-				addRuleToSpec(extSpec, "ALLOW", "source_ip", "0.0.0.0/0")
+				addRuleToSpec(extSpec, "ALLOW")
 				ext = getNewExtension(namespace, *extSpec)
 
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
@@ -281,7 +281,7 @@ var _ = Describe("webhook unit test", func() {
 			extSpec := getExtensionSpec()
 
 			BeforeEach(func() {
-				addRuleToSpec(extSpec, "ALLOW", "source_ip", "0.0.0.0/0")
+				addRuleToSpec(extSpec, "ALLOW")
 				ext = getNewExtension(namespace, *extSpec)
 
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
@@ -301,7 +301,7 @@ var _ = Describe("webhook unit test", func() {
 						},
 					},
 				})
-				Expect(err).To(BeNil())
+				Expect(err).NotTo(HaveOccurred())
 
 				infra.Status = extensionsv1alpha1.InfrastructureStatus{
 					DefaultStatus: extensionsv1alpha1.DefaultStatus{
@@ -401,7 +401,7 @@ var _ = Describe("webhook unit test", func() {
 			extSpec := getExtensionSpec()
 
 			BeforeEach(func() {
-				addRuleToSpec(extSpec, "ALLOW", "source_ip", "0.0.0.0/0")
+				addRuleToSpec(extSpec, "ALLOW")
 				ext = getNewExtension(namespace, *extSpec)
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
 
@@ -414,7 +414,7 @@ var _ = Describe("webhook unit test", func() {
 					Spec: gardencorev1beta1.ShootSpec{},
 				}
 				shootJSON, err := json.Marshal(shoot)
-				Expect(err).To(BeNil())
+				Expect(err).NotTo(HaveOccurred())
 
 				cluster.Spec.Shoot = runtime.RawExtension{Raw: shootJSON}
 				Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
@@ -498,10 +498,10 @@ func getNewWebhook() *EnvoyFilterWebhook {
 
 func getNewCluster(namespace string, shoot *gardencorev1beta1.Shoot, seed *gardencorev1beta1.Seed) *extensionsv1alpha1.Cluster {
 	shootJSON, err := json.Marshal(shoot)
-	Expect(err).To(BeNil())
+	Expect(err).NotTo(HaveOccurred())
 
 	seedJSON, err := json.Marshal(seed)
-	Expect(err).To(BeNil())
+	Expect(err).NotTo(HaveOccurred())
 
 	return &extensionsv1alpha1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -548,13 +548,13 @@ func getExtensionSpec() *extensionspec.ExtensionSpec {
 	}
 }
 
-func addRuleToSpec(extSpec *extensionspec.ExtensionSpec, action, ruleType, cidr string) {
+func addRuleToSpec(extSpec *extensionspec.ExtensionSpec, action string) {
 	extSpec.Rule = &envoyfilters.ACLRule{
 		Cidrs: []string{
-			cidr,
+			"0.0.0.0/0",
 		},
 		Action: action,
-		Type:   ruleType,
+		Type:   "source_ip",
 	}
 }
 

@@ -69,7 +69,7 @@ func (e *EnvoyFilterWebhook) createAdmissionResponse(
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	// if an error occured or the extension is in deletion, just allow without
+	// if an error occurred or the extension is in deletion, just allow without
 	// introducing any patches
 	if err != nil || !aclExtension.DeletionTimestamp.IsZero() {
 		return admission.Allowed(fmt.Sprintf("extension %s not enabled for shoot %s or is in deletion", ExtensionName, filter.Name))

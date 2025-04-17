@@ -9,6 +9,10 @@ linters:
     - copyloopvar
     - nilerr
     - whitespace
+    - misspell
+    - ginkgolinter
+    - unconvert
+    - unparam
 
   settings:
     exclusions:
