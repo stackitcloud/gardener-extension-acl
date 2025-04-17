@@ -129,7 +129,7 @@ var _ = Describe("webhook unit test", func() {
 			extSpec := getExtensionSpec()
 
 			BeforeEach(func() {
-				addRuleToSpec(extSpec, "DENY", "source_ip", "0.0.0.0/0")
+				addRuleToSpec(extSpec, "DENY")
 				ext = getNewExtension(namespace, *extSpec)
 
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
@@ -193,7 +193,7 @@ var _ = Describe("webhook unit test", func() {
 			extSpec := getExtensionSpec()
 
 			BeforeEach(func() {
-				addRuleToSpec(extSpec, "ALLOW", "source_ip", "0.0.0.0/0")
+				addRuleToSpec(extSpec, "ALLOW")
 				ext = getNewExtension(namespace, *extSpec)
 
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
@@ -281,7 +281,7 @@ var _ = Describe("webhook unit test", func() {
 			extSpec := getExtensionSpec()
 
 			BeforeEach(func() {
-				addRuleToSpec(extSpec, "ALLOW", "source_ip", "0.0.0.0/0")
+				addRuleToSpec(extSpec, "ALLOW")
 				ext = getNewExtension(namespace, *extSpec)
 
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
@@ -401,7 +401,7 @@ var _ = Describe("webhook unit test", func() {
 			extSpec := getExtensionSpec()
 
 			BeforeEach(func() {
-				addRuleToSpec(extSpec, "ALLOW", "source_ip", "0.0.0.0/0")
+				addRuleToSpec(extSpec, "ALLOW")
 				ext = getNewExtension(namespace, *extSpec)
 				Expect(k8sClient.Create(ctx, ext)).To(Succeed())
 
@@ -548,13 +548,13 @@ func getExtensionSpec() *extensionspec.ExtensionSpec {
 	}
 }
 
-func addRuleToSpec(extSpec *extensionspec.ExtensionSpec, action, ruleType, cidr string) {
+func addRuleToSpec(extSpec *extensionspec.ExtensionSpec, action string) {
 	extSpec.Rule = &envoyfilters.ACLRule{
 		Cidrs: []string{
-			cidr,
+			"0.0.0.0/0",
 		},
 		Action: action,
-		Type:   ruleType,
+		Type:   "source_ip",
 	}
 }
 

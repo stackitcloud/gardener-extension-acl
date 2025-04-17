@@ -12,6 +12,7 @@ linters:
     - misspell
     - ginkgolinter
     - unconvert
+    - unparam
 
   settings:
     exclusions:
