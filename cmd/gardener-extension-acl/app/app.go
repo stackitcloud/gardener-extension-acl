@@ -109,15 +109,15 @@ func (o *Options) run(ctx context.Context) error {
 	// migration code: remove mutating webhook from cluster as it is not served by this controller anymore
 	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		if err := client.IgnoreNotFound(mgr.GetClient().Delete(ctx, &admissionregistrationv1.MutatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Name: ExtensionName}})); err != nil {
-			return fmt.Errorf("could not delete mutatingwebhook %s: %s", ExtensionName, err)
+			return fmt.Errorf("could not delete mutatingwebhook %s: %w", ExtensionName, err)
 		}
 		return nil
 	})); err != nil {
-		return fmt.Errorf("could not add runnable to manager: %s", err)
+		return fmt.Errorf("could not add runnable to manager: %w", err)
 	}
 
 	if err := mgr.Start(ctx); err != nil {
-		return fmt.Errorf("error running manager: %s", err)
+		return fmt.Errorf("error running manager: %w", err)
 	}
 
 	return nil
