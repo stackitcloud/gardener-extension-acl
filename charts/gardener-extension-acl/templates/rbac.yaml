@@ -133,6 +133,7 @@ rules:
   - create
   - update
   - patch
+  - delete
 - apiGroups:
   - networking.istio.io
   resources:
