@@ -28,5 +28,5 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     - uses: actions/setup-go@v5
       with:
-        go-version: 1.24.2
+        go-version: 1.24.3
     - run: make artifacts PUSH=true
