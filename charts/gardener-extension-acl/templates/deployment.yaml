@@ -60,9 +60,9 @@ spec:
         resources:
 {{ toYaml .Values.resources | trim | indent 10 }}
         {{- end }}
-        {{- if .Values.imageVectorOverwrite }}
         securityContext:
           allowPrivilegeEscalation: false
+        {{- if .Values.imageVectorOverwrite }}
         volumeMounts:
         - name: extension-imagevector-overwrite
           mountPath: /charts_overwrite/
