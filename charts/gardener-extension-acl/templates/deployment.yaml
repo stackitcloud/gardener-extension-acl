@@ -5,7 +5,7 @@ metadata:
   name: {{ include "name" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    high-availability-config.resources.gardener.cloud/type: webhook
+    high-availability-config.resources.gardener.cloud/type: controller
 {{ include "labels" . | indent 4 }}
 spec:
   revisionHistoryLimit: 0
@@ -43,10 +43,6 @@ spec:
         {{- if .Values.gardener.version }}
         - --gardener-version={{ .Values.gardener.version }}
         {{- end }}
-        - --webhook-config-namespace={{ .Release.Namespace }}
-        - --webhook-config-service-port={{ .Values.webhookConfig.servicePort }}
-        - --webhook-config-server-port={{ .Values.webhookConfig.serverPort }}
-        - --disable-webhooks={{ .Values.disableWebhooks | join "," }}
         env:
         - name: LEADER_ELECTION_NAMESPACE
           valueFrom:

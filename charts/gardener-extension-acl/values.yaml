@@ -27,12 +27,6 @@ controllers:
 
 disableControllers: []
 
-webhookConfig:
-  servicePort: 443
-  serverPort: 10250
-
-disableWebhooks: []
-
 additionalAllowedCidrs: []
 
 # imageVectorOverwrite: |
