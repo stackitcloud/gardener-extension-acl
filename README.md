@@ -43,37 +43,24 @@ Istio configures an envoy proxy using a set of
 We can hook into this mechanism and insert additional configuration, which
 further limits the access to a specific cluster.
 
-Broadly speaking, there are three different external traffic flows:
+Broadly speaking, there are two different external traffic flows:
 
 1. Kubernetes API Listener (via SNI name)
-1. Kubernetes Service Listener (internal flow)
-1. VPN Listener
+2. Apiserver-Proxy / Reversed-VPN Listener
+
+*Please note that this changed with [GEP-30](https://github.com/gardener/gardener/blob/master/docs/proposals/30-apiserver-proxy.md) as the dedicated Kubernetes Service Listener for the apiserver-proxy was removed.*
 
 These ways are described in more detail in the aforementioned GEP. Essentially,
-these three ways are all represented by a specific Envoy listener with filters.
+these two ways are all represented by a specific Envoy listener with filters.
 The extension needs to hook into each of these filters (and their filter chains)
-to implement the desired behavior. Unfortunately, all three types of access
+to implement the desired behavior. Unfortunately, all types of access
 require a unique way of handling them, respectively.
-
-![Listener Overview](./docs/listener-overview.svg)
 
 1. **SNI Access** - The most straightforward approach. Wen can deploy one
    additional `EnvoyFilter` per shoot with enabled ACL extension. It contains a
    filter patch that matches on the shoot SNI name and specifies an `ALLOW` rule
    with the provided IPs.
-1. **Internal Flow** - Gardener creates one `EnvoyFilter` per shoot that defines
-   this listener. Unfortunately, it doesn't have any criteria we could use to
-   match it with an additional `EvnoyFilter` spec on a per-shoot basis, and
-   we've tried a lot of things to make it work. On top of that, a behavior that
-   we see as [a bug in Istio](https://github.com/istio/istio/issues/41536)
-   prevents us from working with priorities here, which was the closest we got
-   to make it work. Now instead, the extension deploys a `MutatingWebhook` that
-   intercepts creations and updates of `EnvoyFilter` resources starting with
-   `shoot--` (which is their only common feature). We then insert our
-   rules. To make this work with updates to `Extension` objects, the controller
-   dealing with 1) also updates a hash annotation on these `EnvoyFilter`
-   resources every time the respective ACL extension object is updated.
-1. **VPN Access** - All VPN traffic moves through the same listener. This
+2. **Apiserver-Proxy / VPN Access** - All apiserver-proxy and VPN traffic moves through the same listener. This
    requires us to create only a single `EnvoyFilter` for VPN that contains
    **all** rules of all shoots that have the extension enabled. And, conversely,
    we need to make sure that traffic of all shoots that don't have the

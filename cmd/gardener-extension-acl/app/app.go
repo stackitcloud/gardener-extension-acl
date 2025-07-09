@@ -24,14 +24,15 @@ import (
 	"github.com/spf13/cobra"
 	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/webhook"
 )
 
 // NewControllerManagerCommand creates a new command that is used to start the service controller.
@@ -95,7 +96,6 @@ func (o *Options) run(ctx context.Context) error {
 	ctrlConfig := o.extensionOptions.Completed()
 	ctrlConfig.ApplyHealthCheckConfig(&healthcheck.DefaultAddOptions.HealthCheckConfig)
 	ctrlConfig.Apply(&controller.DefaultAddOptions.ExtensionConfig)
-	webhook.DefaultAddOptions.AllowedCIDRs = ctrlConfig.AdditionalAllowedCIDRs
 
 	o.controllerOptions.Completed().Apply(&controller.DefaultAddOptions.ControllerOptions)
 	o.healthOptions.Completed().Apply(&healthcheck.DefaultAddOptions.Controller)
@@ -105,11 +105,19 @@ func (o *Options) run(ctx context.Context) error {
 		return fmt.Errorf("could not add controllers to manager: %s", err)
 	}
 
-	if err := o.webhookOptions.Completed().AddToManager(ctx, mgr); err != nil {
-		return fmt.Errorf("could not add controllers to manager: %s", err)
+	// TODO(Wieneo): Remove this once a couple extension versions included the migration code
+	// migration code: remove mutating webhook from cluster as it is not served by this controller anymore
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		if err := client.IgnoreNotFound(mgr.GetClient().Delete(ctx, &admissionregistrationv1.MutatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Name: ExtensionName}})); err != nil {
+			return fmt.Errorf("could not delete mutatingwebhook %s: %w", ExtensionName, err)
+		}
+		return nil
+	})); err != nil {
+		return fmt.Errorf("could not add runnable to manager: %w", err)
 	}
+
 	if err := mgr.Start(ctx); err != nil {
-		return fmt.Errorf("error running manager: %s", err)
+		return fmt.Errorf("error running manager: %w", err)
 	}
 
 	return nil

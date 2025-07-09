@@ -42,11 +42,7 @@ run:
 		./cmd/$(EXTENSION_PREFIX)-$(NAME) \
 		--kubeconfig=${KUBECONFIG} \
 		--ignore-operation-annotation=$(IGNORE_OPERATION_ANNOTATION) \
-		--leader-election=$(LEADER_ELECTION) \
-		--webhook-config-mode=url \
-		--webhook-config-url="host.docker.internal:9443" \
-		--webhook-config-cert-dir=example/certs \
-		--webhook-config-server-port=9443
+		--leader-election=$(LEADER_ELECTION)
 
 .PHONY: debug
 debug:
