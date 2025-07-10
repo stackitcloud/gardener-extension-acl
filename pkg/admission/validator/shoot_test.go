@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/admission/validator"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 )
 
 var _ = Describe("Shoot validator", func() {
@@ -52,7 +53,7 @@ var _ = Describe("Shoot validator", func() {
 				Expect(shootValidator.Validate(ctx, shoot, nil)).To(Succeed())
 			})
 
-			It("should return err if to many cidrs are specified in acl extension", func() {
+			It("should return err if too many cidrs are specified in acl extension", func() {
 				shoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"ALLOW","cidrs":["1.2.3.4/24","10.250.0.0/16","208.127.57.6/32","165.1.187.201/32","165.1.187.202/32","165.1.187.203/32","165.1.187.207/32","165.1.187.208/32"],"type":"remote_ip"}}`)}
 				err := shootValidator.Validate(ctx, shoot, nil)
 				Expect(err).To(PointTo(MatchFields(IgnoreExtras, Fields{
@@ -60,10 +61,37 @@ var _ = Describe("Shoot validator", func() {
 					"Field": Equal("spec.extensions[0].providerConfig.rule.cidrs"),
 				})))
 			})
+
+			It("should return err if number of specified cidrs in acl extension is zero", func() {
+				shoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"ALLOW","cidrs":[],"type":"remote_ip"}}`)}
+				err := shootValidator.Validate(ctx, shoot, nil)
+				Expect(err).To(Equal(controller.ErrSpecCIDR))
+			})
+
+			It("should return err if invalid action is specified in acl extension", func() {
+				shoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"banana","cidrs":["1.2.3.4/24","10.250.0.0/16","208.127.57.6/32","165.1.187.201/32","165.1.187.202/32"],"type":"remote_ip"}}`)}
+				err := shootValidator.Validate(ctx, shoot, nil)
+				Expect(err).To(Equal(controller.ErrSpecAction))
+			})
+
+			It("should return err if invalid type is specified in acl extension", func() {
+				shoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"ALLOW","cidrs":["1.2.3.4/24","10.250.0.0/16","208.127.57.6/32","165.1.187.201/32","165.1.187.202/32"],"type":"potato"}}`)}
+				err := shootValidator.Validate(ctx, shoot, nil)
+				Expect(err).To(Equal(controller.ErrSpecType))
+			})
+
+			It("should return err if invalid cidr is specified in acl extension", func() {
+				shoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"ALLOW","cidrs":["tikka masala","10.250.0.0/16","208.127.57.6/32","165.1.187.201/32","165.1.187.202/32"],"type":"remote_ip"}}`)}
+				err := shootValidator.Validate(ctx, shoot, nil)
+				Expect(err).To(PointTo(MatchFields(IgnoreExtras, Fields{
+					"Type": Equal("CIDR address"),
+					"Text": Equal("tikka masala"),
+				})))
+			})
 		})
 
 		Context("Shoot update", func() {
-			It("should return err if to many cidrs are specified in acl extension", func() {
+			It("should return err if too many cidrs are specified in acl extension", func() {
 				newShoot := shoot
 				newShoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"ALLOW","cidrs":["1.2.3.4/24","10.250.0.0/16","208.127.57.6/32","165.1.187.201/32","165.1.187.202/32","165.1.187.203/32","165.1.187.207/32","165.1.187.208/32"],"type":"remote_ip"}}`)}
 				err := shootValidator.Validate(ctx, newShoot, shoot)
@@ -78,6 +106,38 @@ var _ = Describe("Shoot validator", func() {
 				newShoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"ALLOW","cidrs":["1.2.3.4/24","10.250.0.0/16","208.127.57.6/32","165.1.187.201/32","165.1.187.202/32"],"type":"remote_ip"}}`)}
 				Expect(shootValidator.Validate(ctx, newShoot, shoot)).To(Succeed())
 			})
+
+			It("should return err if number of specified cidrs in acl extension is zero", func() {
+				newShoot := shoot
+				newShoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"ALLOW","cidrs":[],"type":"remote_ip"}}`)}
+				err := shootValidator.Validate(ctx, newShoot, shoot)
+				Expect(err).To(Equal(controller.ErrSpecCIDR))
+			})
+
+			It("should return err if invalid action is specified in acl extension", func() {
+				newShoot := shoot
+				newShoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"banana","cidrs":["1.2.3.4/24","10.250.0.0/16","208.127.57.6/32","165.1.187.201/32","165.1.187.202/32"],"type":"remote_ip"}}`)}
+				err := shootValidator.Validate(ctx, newShoot, shoot)
+				Expect(err).To(Equal(controller.ErrSpecAction))
+			})
+
+			It("should return err if invalid type is specified in acl extension", func() {
+				newShoot := shoot
+				newShoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"ALLOW","cidrs":["1.2.3.4/24","10.250.0.0/16","208.127.57.6/32","165.1.187.201/32","165.1.187.202/32"],"type":"potato"}}`)}
+				err := shootValidator.Validate(ctx, newShoot, shoot)
+				Expect(err).To(Equal(controller.ErrSpecType))
+			})
+
+			It("should return err if invalid cidr is specified in acl extension", func() {
+				newShoot := shoot
+				newShoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"ALLOW","cidrs":["tikka masala","10.250.0.0/16","208.127.57.6/32","165.1.187.201/32","165.1.187.202/32"],"type":"remote_ip"}}`)}
+				err := shootValidator.Validate(ctx, newShoot, shoot)
+				Expect(err).To(PointTo(MatchFields(IgnoreExtras, Fields{
+					"Type": Equal("CIDR address"),
+					"Text": Equal("tikka masala"),
+				})))
+			})
+
 		})
 	})
 })

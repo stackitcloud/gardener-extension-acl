@@ -3,6 +3,7 @@ package validator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
@@ -55,8 +56,12 @@ func (s *shootValidator) validateShoot(_ context.Context, shoot *core.Shoot) err
 		return nil
 	}
 
-	if len(extensionSpec.Rule.Cidrs) > DefaultAddOptions.MaxAllowedCIDRs {
-		return field.TooMany(fldPath.Child("rule", "cidrs"), len(extensionSpec.Rule.Cidrs), DefaultAddOptions.MaxAllowedCIDRs)
+	if err := controller.ValidateExtensionSpec(extensionSpec, DefaultAddOptions.MaxAllowedCIDRs); err != nil {
+		// field error for too many CIDRs
+		if errors.Is(err, controller.ErrSpecTooManyCIDRs) {
+			return field.TooMany(fldPath.Child("rule", "cidrs"), len(extensionSpec.Rule.Cidrs), DefaultAddOptions.MaxAllowedCIDRs)
+		}
+		return err
 	}
 
 	return nil

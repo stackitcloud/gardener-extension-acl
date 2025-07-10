@@ -73,6 +73,7 @@ var (
 	ErrSpecRule              = errors.New("rule must be present")
 	ErrSpecType              = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
 	ErrSpecCIDR              = errors.New("CIDRs must not be empty")
+	ErrSpecTooManyCIDRs      = errors.New("number of CIDRs exceeds the maximum allowed")
 	ErrNoAdvertisedAddresses = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
 )
 
@@ -114,7 +115,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		}
 	}
 	// validate the ExtensionSpec
-	if err := ValidateExtensionSpec(extSpec); err != nil {
+	if err := ValidateExtensionSpec(extSpec, a.extensionConfig.MaxAllowedCIDRs); err != nil {
 		return err
 	}
 
@@ -190,8 +191,8 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 }
 
 // ValidateExtensionSpec checks if the ExtensionSpec exists, and if its action,
-// type and CIDRs are valid.
-func ValidateExtensionSpec(spec *extensionspec.ExtensionSpec) error {
+// type and CIDRs are valid. It also checks if the number of CIDRs does not exceed maxAllowedCIDRs.
+func ValidateExtensionSpec(spec *extensionspec.ExtensionSpec, maxAllowedCIDRs int) error {
 	rule := spec.Rule
 
 	if rule == nil {
@@ -215,6 +216,10 @@ func ValidateExtensionSpec(spec *extensionspec.ExtensionSpec) error {
 	// cidrs
 	if len(rule.Cidrs) < 1 {
 		return ErrSpecCIDR
+	}
+
+	if maxAllowedCIDRs > 0 && len(rule.Cidrs) > maxAllowedCIDRs {
+		return ErrSpecTooManyCIDRs
 	}
 
 	for ii := range rule.Cidrs {
