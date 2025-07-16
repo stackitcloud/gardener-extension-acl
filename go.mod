@@ -6,8 +6,8 @@ toolchain go1.24.5
 
 require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
-	github.com/gardener/gardener v1.117.6
-	github.com/gardener/gardener-extension-provider-openstack v1.47.0
+	github.com/gardener/gardener v1.123.1
+	github.com/gardener/gardener-extension-provider-openstack v1.48.0
 	github.com/go-logr/logr v1.4.3
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo/v2 v2.23.4
@@ -19,14 +19,14 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	istio.io/api v1.25.2
 	istio.io/client-go v1.25.1
-	k8s.io/api v0.32.7
-	k8s.io/apiextensions-apiserver v0.32.7
-	k8s.io/apimachinery v0.32.7
-	k8s.io/client-go v0.32.7
-	k8s.io/code-generator v0.32.7
-	k8s.io/component-base v0.32.7
+	k8s.io/api v0.33.3
+	k8s.io/apiextensions-apiserver v0.33.3
+	k8s.io/apimachinery v0.33.3
+	k8s.io/client-go v0.33.3
+	k8s.io/code-generator v0.33.3
+	k8s.io/component-base v0.33.3
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
-	sigs.k8s.io/controller-runtime v0.20.4
+	sigs.k8s.io/controller-runtime v0.21.0
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20231015215740-bf15e44028f9
 )
 
