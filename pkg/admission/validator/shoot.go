@@ -59,6 +59,10 @@ func (s *shootValidator) validateShoot(_ context.Context, shoot *core.Shoot) err
 		return field.TooMany(fldPath.Child("rule", "cidrs"), len(extensionSpec.Rule.Cidrs), DefaultAddOptions.MaxAllowedCIDRs)
 	}
 
+	if err := controller.ValidateExtensionSpec(extensionSpec); err != nil {
+		return err
+	}
+
 	return nil
 }
 
