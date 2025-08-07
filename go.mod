@@ -17,7 +17,6 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.7
 	golang.org/x/tools v0.34.0
-	gomodules.xyz/jsonpatch/v2 v2.5.0
 	google.golang.org/protobuf v1.36.5
 	istio.io/api v1.25.2
 	istio.io/client-go v1.25.1
@@ -121,6 +120,7 @@ require (
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
+	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241223144023-3abc09e42ca8 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
