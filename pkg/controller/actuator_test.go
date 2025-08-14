@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
@@ -335,8 +336,9 @@ var _ = Describe("actuator test", func() {
 
 var _ = Describe("actuator unit test", func() {
 	var (
-		namespace      string
-		istioNamespace string
+		namespace       string
+		istioNamespace  string
+		maxallowedCIDRs int
 	)
 
 	BeforeEach(func() {
@@ -348,6 +350,7 @@ var _ = Describe("actuator unit test", func() {
 			"app":   "istio-ingressgateway",
 			"istio": istioNamespace,
 		}
+		maxallowedCIDRs = 5
 
 		createNewGateway("kube-apiserver", namespace, istioNamespaceSelector)
 		createNewIstioDeployment(istioNamespace, istioNamespaceSelector)
@@ -363,45 +366,45 @@ var _ = Describe("actuator unit test", func() {
 		When("there is an extension resource with one valid rule", func() {
 			It("Should not return an error", func() {
 				extSpec := &extensionspec.ExtensionSpec{}
-				addRuleToSpec(extSpec, "DENY", "source_ip", "0.0.0.0/0")
+				addRuleToSpec(extSpec, "DENY", "source_ip", []string{"0.0.0.0/0"})
 
-				Expect(ValidateExtensionSpec(extSpec)).To(Succeed())
+				Expect(ValidateExtensionSpec(extSpec, maxallowedCIDRs)).To(Succeed())
 			})
 		})
 
 		When("there is an extension resource without rules", func() {
 			It("Should return an error", func() {
 				extSpec := &extensionspec.ExtensionSpec{}
-				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecRule))
+				Expect(ValidateExtensionSpec(extSpec, maxallowedCIDRs)).To(Equal(ErrSpecRule))
 			})
 		})
 
 		When("there is an extension resource with a rule with invalid rule type", func() {
 			It("Should return the correct error", func() {
 				extSpec := &extensionspec.ExtensionSpec{}
-				addRuleToSpec(extSpec, "DENY", "nonexistent", "0.0.0.0/0")
+				addRuleToSpec(extSpec, "DENY", "nonexistent", []string{"0.0.0.0/0"})
 
-				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecType))
+				Expect(ValidateExtensionSpec(extSpec, maxallowedCIDRs)).To(Equal(ErrSpecType))
 			})
 		})
 
 		When("there is an extension resource with a rule with invalid rule action", func() {
 			It("Should return the correct error", func() {
 				extSpec := &extensionspec.ExtensionSpec{}
-				addRuleToSpec(extSpec, "NONEXISTENT", "remote_ip", "0.0.0.0/0")
+				addRuleToSpec(extSpec, "NONEXISTENT", "remote_ip", []string{"0.0.0.0/0"})
 
-				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecAction))
+				Expect(ValidateExtensionSpec(extSpec, maxallowedCIDRs)).To(Equal(ErrSpecAction))
 			})
 		})
 
 		When("there is an extension resource with CIDR", func() {
 			It("Should return the correct error", func() {
 				extSpec := &extensionspec.ExtensionSpec{}
-				addRuleToSpec(extSpec, "DENY", "remote_ip", "n0n3x1st3/nt")
+				addRuleToSpec(extSpec, "DENY", "remote_ip", []string{"n0n3x1st3/nt"})
 
 				// we're not testing for a specific error, as they come from the
 				// net package here - no need for us to test these
-				Expect(ValidateExtensionSpec(extSpec)).ToNot(Succeed())
+				Expect(ValidateExtensionSpec(extSpec, maxallowedCIDRs)).ToNot(Succeed())
 			})
 		})
 
@@ -416,18 +419,32 @@ var _ = Describe("actuator unit test", func() {
 
 				// we're not testing for a specific error, as they come from the
 				// net package here - no need for us to test these
-				Expect(ValidateExtensionSpec(extSpec)).To(Equal(ErrSpecCIDR))
+				Expect(ValidateExtensionSpec(extSpec, maxallowedCIDRs)).To(Equal(ErrSpecCIDR))
 			})
 		})
 
 		When("there is an extension resource with a rule with invalid CIDR", func() {
 			It("Should return the correct error", func() {
 				extSpec := &extensionspec.ExtensionSpec{}
-				addRuleToSpec(extSpec, "DENY", "remote_ip", "n0n3x1st3/nt")
+				addRuleToSpec(extSpec, "DENY", "remote_ip", []string{"n0n3x1st3/nt"})
 
 				// we're not testing for a specific error, as they come from the
 				// net package here - no need for us to test these
-				Expect(ValidateExtensionSpec(extSpec)).ToNot(Succeed())
+				Expect(ValidateExtensionSpec(extSpec, maxallowedCIDRs)).ToNot(Succeed())
+			})
+		})
+		When("there is an extension resource with a rule with too many CIDRs", func() {
+			It("Should return the correct error", func() {
+				extSpec := &extensionspec.ExtensionSpec{}
+				var cidrs []string
+				for i := 0; i < maxallowedCIDRs+1; i++ {
+					cidrs = append(cidrs, fmt.Sprintf("10.%d.0.0/16", i))
+				}
+				addRuleToSpec(extSpec, "DENY", "remote_ip", cidrs)
+
+				// we're not testing for a specific error, as they come from the
+				// net package here - no need for us to test these
+				Expect(ValidateExtensionSpec(extSpec, maxallowedCIDRs)).To(Equal(ErrSpecTooManyCIDRs))
 			})
 		})
 	})
@@ -443,11 +460,9 @@ func getNewActuator() *actuator {
 	}
 }
 
-func addRuleToSpec(extSpec *extensionspec.ExtensionSpec, action, ruleType, cidr string) {
+func addRuleToSpec(extSpec *extensionspec.ExtensionSpec, action, ruleType string, cidr []string) {
 	extSpec.Rule = &envoyfilters.ACLRule{
-		Cidrs: []string{
-			cidr,
-		},
+		Cidrs:  cidr,
 		Action: action,
 		Type:   ruleType,
 	}
