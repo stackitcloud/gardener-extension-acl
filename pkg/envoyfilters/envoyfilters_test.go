@@ -1,6 +1,7 @@
 package envoyfilters
 
 import (
+	"encoding/json"
 	"os"
 	"path"
 
@@ -8,8 +9,10 @@ import (
 	"github.com/gardener/gardener/pkg/extensions"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"gopkg.in/yaml.v3"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/yaml"
 )
 
 var _ = Describe("EnvoyFilter Unit Tests", func() {
@@ -52,7 +55,7 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 				result, err := BuildAPIEnvoyFilterSpecForHelmChart(rule, hosts, alwaysAllowedCIDRs, labels)
 
 				Expect(err).ToNot(HaveOccurred())
-				checkIfMapEqualsYAML(result, "apiEnvoyFilterSpecWithOneAllowRule.yaml")
+				checkIfFilterEquals(result, "apiEnvoyFilterSpecWithOneAllowRule.yaml")
 			})
 		})
 	})
@@ -65,9 +68,10 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 					"app":   "istio-ingressgateway",
 					"istio": "ingressgateway",
 				}
-				ingressEnvoyFilterSpec := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+				ingressEnvoyFilterSpec, err := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+				Expect(err).NotTo(HaveOccurred())
 
-				checkIfMapEqualsYAML(ingressEnvoyFilterSpec, "ingressEnvoyFilterSpecWithOneAllowRule.yaml")
+				checkIfFilterEquals(ingressEnvoyFilterSpec, "ingressEnvoyFilterSpecWithOneAllowRule.yaml")
 			})
 			It("Should not create an envoyFilter spec when seed has no ingress", func() {
 				rule := createRule("ALLOW", "remote_ip", "10.180.0.0/16")
@@ -76,8 +80,10 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 					"app":   "istio-ingressgateway",
 					"istio": "ingressgateway",
 				}
-				ingressEnvoyFilterSpec := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
-				Expect(ingressEnvoyFilterSpec["ingressEnvoyFilterSpec"]).To(BeNil())
+				ingressEnvoyFilterSpec, err := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ingressEnvoyFilterSpec).To(BeNil())
 			})
 		})
 	})
@@ -92,8 +98,8 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 				}
 				result, err := BuildVPNEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
 
-				Expect(err).ToNot(HaveOccurred())
-				checkIfMapEqualsYAML(result, "vpnEnvoyFilterSpecWithOneAllowRule.yaml")
+				Expect(err).NotTo(HaveOccurred())
+				checkIfFilterEquals(result, "vpnEnvoyFilterSpecWithOneAllowRule.yaml")
 			})
 		})
 	})
@@ -104,9 +110,8 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 				rule := createRule("ALLOW", "remote_ip", "0.0.0.0/0")
 
 				result, err := CreateInternalFilterPatchFromRule(rule, alwaysAllowedCIDRs, []string{})
-
-				Expect(err).ToNot(HaveOccurred())
-				checkIfMapEqualsYAML(result, "singleFiltersAllowEntry.yaml")
+				Expect(err).NotTo(HaveOccurred())
+				checkIfFilterEquals(result, "singleFiltersAllowEntry.yaml")
 			})
 		})
 	})
@@ -123,7 +128,6 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 			})
 		})
 	})
-
 })
 
 //nolint:unparam // action currently only accepts ALLOW but that might change, so we leave the parameterization
@@ -137,19 +141,24 @@ func createRule(action, ruleType, cidr string) *ACLRule {
 	}
 }
 
-// checkIfMapEqualsYAML takes a map as input, and tries to compare its
+// checkIfFilterEquals takes an object as input, and tries to compare its
 // marshaled contents to the string coming from the specified testdata file.
 // Fails the test if strings differ. The file contents are unmarshaled and
 // marshaled again to guarantee the strings are comparable.
-func checkIfMapEqualsYAML(input map[string]interface{}, relTestingFilePath string) {
-	goldenYAMLByteArray, err := os.ReadFile(path.Join("./testdata", relTestingFilePath))
-	Expect(err).ToNot(HaveOccurred())
-	goldenMap := map[string]interface{}{}
-	Expect(yaml.Unmarshal(goldenYAMLByteArray, goldenMap)).To(Succeed())
-	goldenYAMLProcessedByteArray, err := yaml.Marshal(goldenMap)
+func checkIfFilterEquals(input any, relTestingFilePath string) {
+	goldenYAMLBytes, err := os.ReadFile(path.Join("./testdata", relTestingFilePath))
 	Expect(err).ToNot(HaveOccurred())
 
-	inputByteArray, err := yaml.Marshal(input)
+	goldenJSON, err := yaml.YAMLToJSON(goldenYAMLBytes)
 	Expect(err).ToNot(HaveOccurred())
-	Expect(string(inputByteArray)).To(Equal(string(goldenYAMLProcessedByteArray)))
+
+	var actual []byte
+	if m, ok := input.(proto.Message); ok {
+		actual, err = protojson.Marshal(m)
+	} else {
+		actual, err = json.Marshal(input)
+	}
+	Expect(err).ToNot(HaveOccurred())
+
+	Expect(actual).To(MatchJSON(goldenJSON))
 }
