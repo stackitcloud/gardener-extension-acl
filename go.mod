@@ -14,7 +14,7 @@ require (
 	github.com/onsi/gomega v1.38.2
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.10.1
-	github.com/spf13/pflag v1.0.9
+	github.com/spf13/pflag v1.0.10
 	golang.org/x/tools v0.36.0
 	gopkg.in/yaml.v3 v3.0.1
 	istio.io/api v1.25.2
