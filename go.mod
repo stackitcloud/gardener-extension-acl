@@ -19,12 +19,12 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	istio.io/api v1.25.2
 	istio.io/client-go v1.25.1
-	k8s.io/api v0.32.8
-	k8s.io/apiextensions-apiserver v0.32.8
-	k8s.io/apimachinery v0.32.8
-	k8s.io/client-go v0.32.8
-	k8s.io/code-generator v0.32.8
-	k8s.io/component-base v0.32.8
+	k8s.io/api v0.32.9
+	k8s.io/apiextensions-apiserver v0.32.9
+	k8s.io/apimachinery v0.32.9
+	k8s.io/client-go v0.32.9
+	k8s.io/code-generator v0.32.9
+	k8s.io/component-base v0.32.9
 	k8s.io/utils v0.0.0-20250820121507-0af2bda4dd1d
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20231015215740-bf15e44028f9
