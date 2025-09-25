@@ -7,7 +7,7 @@ toolchain go1.25.1
 require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
 	github.com/gardener/gardener v1.117.6
-	github.com/gardener/gardener-extension-provider-openstack v1.47.0
+	github.com/gardener/gardener-extension-provider-openstack v1.49.0
 	github.com/go-logr/logr v1.4.3
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo/v2 v2.25.3
