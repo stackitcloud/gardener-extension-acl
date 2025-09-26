@@ -162,12 +162,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 			return err
 		}
 
-		providerSpecificCIRDs, err := helper.GetProviderSpecificAllowedCIDRs(infra)
-		if err != nil {
-			return err
-		}
-
-		shootSpecificCIDRs = append(shootSpecificCIDRs, providerSpecificCIRDs...)
+		shootSpecificCIDRs = append(shootSpecificCIDRs, infra.Status.EgressCIDRs...)
 	}
 
 	if err := a.createSeedResources(
