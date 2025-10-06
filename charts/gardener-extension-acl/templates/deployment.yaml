@@ -61,8 +61,10 @@ spec:
           capabilities:
             drop: [ALL]
           runAsNonRoot: true
-          runAsUser: 1337
-          runAsGroup: 1337
+          runAsUser: 65532
+          runAsGroup: 65532
+          seccompProfile:
+            type: RuntimeDefault
         {{- if .Values.imageVectorOverwrite }}
         volumeMounts:
         - name: extension-imagevector-overwrite
