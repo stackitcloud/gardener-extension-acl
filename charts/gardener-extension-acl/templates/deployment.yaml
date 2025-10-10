@@ -58,6 +58,13 @@ spec:
         {{- end }}
         securityContext:
           allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          runAsNonRoot: true
+          runAsUser: 65532
+          runAsGroup: 65532
+          seccompProfile:
+            type: RuntimeDefault
         {{- if .Values.imageVectorOverwrite }}
         volumeMounts:
         - name: extension-imagevector-overwrite
