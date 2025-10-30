@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/stackitcloud/gardener-extension-admission-acl
-  tag: v1.13.0
+  tag: latest
   pullPolicy: IfNotPresent
 
 replicaCount: 1
