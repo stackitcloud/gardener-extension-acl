@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/stackitcloud/gardener-extension-acl
-  tag: v1.13.0
+  tag: latest
 imagePullPolicy: IfNotPresent
 
 replicaCount: 2
