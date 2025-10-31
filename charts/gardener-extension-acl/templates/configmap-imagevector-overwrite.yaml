@@ -6,7 +6,7 @@ metadata:
   name: {{ include "name" . }}-imagevector-overwrite
   namespace: {{ .Release.Namespace }}
   labels:
-{{ include "labels" . | indent 4 }}}
+{{ include "labels" . | indent 4 }}
 data:
   images_overwrite.yaml: |
 {{ .Values.imageVectorOverwrite | indent 4 }}
