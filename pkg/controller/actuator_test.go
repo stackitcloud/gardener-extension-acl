@@ -222,6 +222,60 @@ var _ = Describe("actuator test", func() {
 		})
 	})
 
+	Describe("reconciliation of an extension object running on a managedSeed", func() {
+		AfterEach(func() {
+			deleteShootInfo()
+		})
+
+		It("should return an empty slice of egressIPs if no shoot-info ConfigMap exists", func() {
+			cidrs, err := a.getSeedEgressIPOnManagedSeeds(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cidrs).To(BeEmpty())
+		})
+
+		It("should fail to return egressIPs if the shoot-info ConfigMap contains invalid CIDRs", func() {
+			createShootInfo([]string{"1.1.1.1", "1.1.1.2/32"})
+
+			_, err := a.getSeedEgressIPOnManagedSeeds(ctx)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should return the egressIP CIDRs of the shoot-info ConfigMap", func() {
+			c := []string{"1.1.1.1/32", "1.1.1.2/32"}
+			createShootInfo(c)
+
+			cidrs, err := a.getSeedEgressIPOnManagedSeeds(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cidrs).To(BeEquivalentTo(c))
+		})
+
+		It("should create ACLs including egressIPs of managedSeed", func() {
+			createShootInfo([]string{"1.1.1.1/32", "1.1.1.2/32"})
+
+			extSpec := extensionspec.ExtensionSpec{
+				Rule: &envoyfilters.ACLRule{
+					Cidrs:  []string{"1.2.3.4/24"},
+					Action: "ALLOW",
+					Type:   "remote_ip",
+				},
+			}
+			extSpecJSON, err := json.Marshal(extSpec)
+			Expect(err).NotTo(HaveOccurred())
+			ext := createNewExtension(shootNamespace1, extSpecJSON)
+			Expect(ext).To(Not(BeNil()))
+
+			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
+
+			mr := &v1alpha1.ManagedResource{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
+			secret := &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
+			Expect(secret.Data["seed"]).To(ContainSubstring("1.2.3.4"))
+			Expect(secret.Data["seed"]).To(ContainSubstring("1.1.1.1"))
+			Expect(secret.Data["seed"]).To(ContainSubstring("1.1.1.2"))
+		})
+	})
+
 	Describe("a shoot switching the istio namespace (e.g. when being migrated to HA)", func() {
 		It("should modify the EnvoyFilter objects accordingly", func() {
 			By("1) creating the EnvoyFilter object correctly in the ORIGINAL namespace")
