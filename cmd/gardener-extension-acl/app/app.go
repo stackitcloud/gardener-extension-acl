@@ -21,6 +21,7 @@ import (
 
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/util"
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/spf13/cobra"
 	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -28,7 +29,9 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -75,6 +78,15 @@ func (o *Options) run(ctx context.Context) error {
 				&corev1.Secret{},    // applied for ManagedResources
 				&corev1.ConfigMap{}, // applied for monitoring config
 			},
+		},
+	}
+
+	// Only cache services that are needed to check for ProxyProto usage
+	mgrOpts.Cache.ByObject = map[client.Object]cache.ByObject{
+		&corev1.Service{}: {
+			Label: labels.Set{
+				"app": v1beta1constants.DefaultIngressGatewayAppLabelValue,
+			}.AsSelector(),
 		},
 	}
 
