@@ -260,14 +260,14 @@ func (a *actuator) createSeedResources(
 	spec *extensionspec.ExtensionSpec,
 	cluster *controller.Cluster,
 	hosts []string,
-	shootSpecificCIRDs []string,
+	shootSpecificCIDRs []string,
 	alwaysAllowedCIDRs []string,
 	istioNamespace string,
 	istioLabels map[string]string,
 ) error {
 	var err error
 
-	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, shootSpecificCIRDs...)
+	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, shootSpecificCIDRs...)
 
 	apiEnvoyFilterSpec, err := envoyfilters.BuildAPIEnvoyFilterSpecForHelmChart(
 		spec.Rule, hosts, alwaysAllowedCIDRs, istioLabels,
