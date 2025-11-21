@@ -36,6 +36,7 @@ import (
 	"github.com/pkg/errors"
 	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
@@ -48,6 +49,8 @@ import (
 	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 const (
@@ -146,6 +149,16 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	var alwaysAllowedCIDRs []string
 
 	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, helper.GetSeedSpecificAllowedCIDRs(cluster.Seed)...)
+
+	// On Seeds using cilium as the kube-proxy replacement we need the egress IP
+	// of the cluster to be allowed in order for the alertmanager
+	// ApiServerNoteReachable check to work. In that case the traffic to the
+	// kubernetes API will be externally routed and not dnatted.
+	egressCIDRs, err := a.getSeedEgressIPOnManagedSeeds(ctx)
+	if err != nil {
+		return err
+	}
+	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, egressCIDRs...)
 
 	if len(a.extensionConfig.AdditionalAllowedCIDRs) >= 1 {
 		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCIDRs...)
@@ -260,14 +273,14 @@ func (a *actuator) createSeedResources(
 	spec *extensionspec.ExtensionSpec,
 	cluster *controller.Cluster,
 	hosts []string,
-	shootSpecificCIRDs []string,
+	shootSpecificCIDRs []string,
 	alwaysAllowedCIDRs []string,
 	istioNamespace string,
 	istioLabels map[string]string,
 ) error {
 	var err error
 
-	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, shootSpecificCIRDs...)
+	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, shootSpecificCIDRs...)
 
 	apiEnvoyFilterSpec, err := envoyfilters.BuildAPIEnvoyFilterSpecForHelmChart(
 		spec.Rule, hosts, alwaysAllowedCIDRs, istioLabels,
@@ -445,4 +458,37 @@ func (a *actuator) findDefaultIstioLabels(
 	}
 
 	return gw.Spec.Selector, nil
+}
+
+// getSeedEgressIPOnManagedSeeds returns the egressIP CIDRs of the ManagedSeed, if the
+// Seed is not a shoot, it will return an empty list
+func (a *actuator) getSeedEgressIPOnManagedSeeds(ctx context.Context) ([]string, error) {
+	cm := corev1.ConfigMap{}
+	if err := a.client.Get(ctx,
+		client.ObjectKey{
+			Name:      v1beta1constants.ConfigMapNameShootInfo,
+			Namespace: "kube-system",
+		},
+		&cm); err != nil {
+		if apierrors.IsNotFound(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	cidrsStr, ok := cm.Data["egressCIDRs"]
+	if !ok {
+		return nil, errors.New("unable to get egress CIDRs from shoot-info ConfigMap")
+	}
+
+	var cidrs []string
+	for _, i := range strings.Split(cidrsStr, ",") {
+		_, _, err := net.ParseCIDR(i)
+		if err != nil {
+			return nil, err
+		}
+		cidrs = append(cidrs, i)
+	}
+
+	return cidrs, nil
 }
