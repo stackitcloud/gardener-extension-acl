@@ -4,9 +4,11 @@ import (
 	"context"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	gardenercorev1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/go-logr/logr"
@@ -19,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -245,6 +248,35 @@ func createNewCluster(shootNamespace string) {
 	}
 
 	Expect(k8sClient.Create(ctx, cluster)).ShouldNot(HaveOccurred())
+}
+
+func createShootInfo(cidrs []string) {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gardenercorev1beta1constants.ConfigMapNameShootInfo,
+			Namespace: "kube-system",
+		},
+		Data: map[string]string{
+			"egressCIDRs": strings.Join(cidrs, ","),
+		},
+	}
+	Expect(k8sClient.Create(ctx, cm)).ShouldNot(HaveOccurred())
+}
+
+func deleteShootInfo() {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gardenercorev1beta1constants.ConfigMapNameShootInfo,
+			Namespace: "kube-system",
+		},
+	}
+	Expect(func() error {
+		err := k8sClient.Delete(ctx, cm)
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		return nil
+	}()).ShouldNot(HaveOccurred())
 }
 
 func deleteNamespace(name string) {
