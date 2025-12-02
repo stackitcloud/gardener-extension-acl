@@ -2,7 +2,7 @@ module github.com/stackitcloud/gardener-extension-acl
 
 go 1.24.5
 
-toolchain go1.25.4
+toolchain go1.25.5
 
 require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
