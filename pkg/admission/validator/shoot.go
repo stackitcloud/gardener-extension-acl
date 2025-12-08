@@ -47,6 +47,10 @@ func (s *shootValidator) validateShoot(_ context.Context, shoot *core.Shoot) err
 	}
 	fldPath := field.NewPath("spec", "extensions").Index(extensionIndex).Child("providerConfig")
 
+	if aclExtension.Disabled != nil && *aclExtension.Disabled {
+		return nil
+	}
+
 	extensionSpec, err := s.decodeExtensionSpec(aclExtension.ProviderConfig)
 	if err != nil {
 		return fmt.Errorf("error decoding ACL extension spec: %w", err)
