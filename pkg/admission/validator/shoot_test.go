@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/ptr"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/admission/validator"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
@@ -26,6 +27,8 @@ var _ = Describe("Shoot validator", func() {
 			shoot *core.Shoot
 
 			ctx = context.Background()
+
+			tooManyCIDRs = `{"rule":{"action":"ALLOW","cidrs":["1.2.3.4/24","10.250.0.0/16","208.127.57.6/32","165.1.187.201/32","165.1.187.202/32","165.1.187.203/32","165.1.187.207/32","165.1.187.208/32"],"type":"remote_ip"}}`
 		)
 
 		BeforeEach(func() {
@@ -54,7 +57,23 @@ var _ = Describe("Shoot validator", func() {
 			})
 
 			It("should return err if too many cidrs are specified in acl extension", func() {
-				shoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(`{"rule":{"action":"ALLOW","cidrs":["1.2.3.4/24","10.250.0.0/16","208.127.57.6/32","165.1.187.201/32","165.1.187.202/32","165.1.187.203/32","165.1.187.207/32","165.1.187.208/32"],"type":"remote_ip"}}`)}
+				shoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(tooManyCIDRs)}
+				err := shootValidator.Validate(ctx, shoot, nil)
+				Expect(err).To(PointTo(MatchFields(IgnoreExtras, Fields{
+					"Type":  Equal(field.ErrorTypeTooMany),
+					"Field": Equal("spec.extensions[0].providerConfig.rule.cidrs"),
+				})))
+			})
+
+			It("should succeed if extension is disabled despite having too many CIDRs configured", func() {
+				shoot.Spec.Extensions[0].Disabled = ptr.To(true)
+				shoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(tooManyCIDRs)}
+				Expect(shootValidator.Validate(ctx, shoot, nil)).To(Succeed())
+			})
+
+			It("should return err if extension is explicitly not disabled if too many cidrs are specified", func() {
+				shoot.Spec.Extensions[0].Disabled = ptr.To(false)
+				shoot.Spec.Extensions[0].ProviderConfig = &runtime.RawExtension{Raw: []byte(tooManyCIDRs)}
 				err := shootValidator.Validate(ctx, shoot, nil)
 				Expect(err).To(PointTo(MatchFields(IgnoreExtras, Fields{
 					"Type":  Equal(field.ErrorTypeTooMany),
