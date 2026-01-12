@@ -56,7 +56,7 @@ The extension needs to hook into each of these filters (and their filter chains)
 to implement the desired behavior. Unfortunately, all types of access
 require a unique way of handling them, respectively.
 
-1. **SNI Access** - The most straightforward approach. Wen can deploy one
+1. **SNI Access** - The most straightforward approach. We can deploy one
    additional `EnvoyFilter` per shoot with enabled ACL extension. It contains a
    filter patch that matches on the shoot SNI name and specifies an `ALLOW` rule
    with the provided IPs.
