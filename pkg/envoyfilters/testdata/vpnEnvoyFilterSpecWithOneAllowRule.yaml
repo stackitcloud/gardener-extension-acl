@@ -7,13 +7,13 @@ configPatches:
     patch:
       operation: INSERT_FIRST
       value:
-        name: acl-vpn
+        name: acl-vpn-tls-tunnel
         typed_config:
           '@type': type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
           rules:
             action: ALLOW
             policies:
-              bar--foo-inverse:
+              bar--foo-inverse-tls-tunnel:
                 permissions:
                 - not_rule:
                     header:
@@ -24,10 +24,52 @@ configPatches:
                 - remote_ip:
                     address_prefix: 0.0.0.0
                     prefix_len: 0
-              bar--foo:
+              bar--foo-tls-tunnel:
                 permissions:
                 - header:
                     name: reversed-vpn
+                    string_match:
+                      contains: .shoot--bar--foo.
+                principals:
+                - remote_ip:
+                    address_prefix: 10.180.0.0
+                    prefix_len: 16
+                - remote_ip:
+                    address_prefix: 10.250.0.0
+                    prefix_len: 16
+                - remote_ip:
+                    address_prefix: 10.96.0.0
+                    prefix_len: 11
+          stat_prefix: envoyrbac
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        name: 0.0.0.0_8443
+    patch:
+      operation: INSERT_FIRST
+      value:
+        name: acl-vpn-http-proxy
+        typed_config:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
+          rules:
+            action: ALLOW
+            policies:
+              bar--foo-inverse-http-proxy:
+                permissions:
+                - not_rule:
+                    header:
+                      name: X-Gardener-Destination
+                      string_match:
+                        contains: .shoot--bar--foo.
+                principals:
+                - remote_ip:
+                    address_prefix: 0.0.0.0
+                    prefix_len: 0
+              bar--foo-http-proxy:
+                permissions:
+                - header:
+                    name: X-Gardener-Destination
                     string_match:
                       contains: .shoot--bar--foo.
                 principals:

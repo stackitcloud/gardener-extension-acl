@@ -2,6 +2,7 @@ package envoyfilters
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 
@@ -70,20 +71,15 @@ func BuildIngressEnvoyFilterSpecForHelmChart(
 // BuildVPNEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for VPN.
 func BuildVPNEnvoyFilterSpecForHelmChart(
 	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
-) (map[string]interface{}, error) {
-	vpnConfigPatch, err := CreateVPNConfigPatchFromRule(rule, helper.ComputeShortShootID(cluster.Shoot), cluster.Shoot.Status.TechnicalID, alwaysAllowedCIDRs)
-	if err != nil {
-		return nil, err
-	}
+) map[string]interface{} {
+	vpnConfigPatches := CreateVPNConfigPatchFromRule(rule, helper.ComputeShortShootID(cluster.Shoot), cluster.Shoot.Status.TechnicalID, alwaysAllowedCIDRs)
 
 	return map[string]interface{}{
 		"workloadSelector": map[string]interface{}{
 			"labels": istioLabels,
 		},
-		"configPatches": []map[string]interface{}{
-			vpnConfigPatch,
-		},
-	}, nil
+		"configPatches": vpnConfigPatches,
+	}
 }
 
 // CreateAPIConfigPatchFromRule combines an ACLRule, the first entry  of the
@@ -176,14 +172,44 @@ func CreateIngressConfigPatchFromRule(
 	}
 }
 
+type patchOptions struct {
+	NameSuffix string
+	Header     string
+	Port       uint32
+}
+
 // CreateVPNConfigPatchFromRule creates an HTTP filter patch that can be applied to the
 // `GATEWAY` HTTP filter chain for the VPN.
 func CreateVPNConfigPatchFromRule(rule *ACLRule,
 	shortShootID, technicalShootID string, alwaysAllowedCIDRs []string,
-) (map[string]interface{}, error) {
-	rbacName := "acl-vpn"
+) []map[string]interface{} {
+	opts := []patchOptions{
+		{
+			NameSuffix: "-tls-tunnel",
+			Header:     "reversed-vpn",
+			Port:       8132,
+		},
+		{
+			NameSuffix: "-http-proxy",
+			Header:     "X-Gardener-Destination",
+			Port:       8443,
+		},
+	}
+	res := make([]map[string]interface{}, 0, len(opts))
+	for _, opt := range opts {
+		patch := createVPNConfigPatchFromRule(rule, shortShootID, technicalShootID, alwaysAllowedCIDRs, opt)
+		res = append(res, patch)
+	}
+	return res
+}
+
+func createVPNConfigPatchFromRule(rule *ACLRule,
+	shortShootID, technicalShootID string, alwaysAllowedCIDRs []string,
+	p patchOptions,
+) map[string]interface{} {
+	rbacName := "acl-vpn" + p.NameSuffix
 	headerMatcher := map[string]interface{}{
-		"name": "reversed-vpn",
+		"name": p.Header,
 		"string_match": map[string]interface{}{
 			// The actual header value will look something like
 			// `outbound|1194||vpn-seed-server.<technical-ID>.svc.cluster.local`.
@@ -200,7 +226,7 @@ func CreateVPNConfigPatchFromRule(rule *ACLRule,
 		"match": map[string]interface{}{
 			"context": "GATEWAY",
 			"listener": map[string]interface{}{
-				"name": "0.0.0.0_8132",
+				"name": fmt.Sprintf("0.0.0.0_%d", p.Port),
 			},
 		},
 		"patch": map[string]interface{}{
@@ -212,7 +238,7 @@ func CreateVPNConfigPatchFromRule(rule *ACLRule,
 					"rules": map[string]interface{}{
 						"action": "ALLOW",
 						"policies": map[string]interface{}{
-							shortShootID + "-inverse": map[string]interface{}{
+							shortShootID + "-inverse" + p.NameSuffix: map[string]interface{}{
 								"permissions": []map[string]interface{}{{
 									"not_rule": map[string]interface{}{
 										"header": headerMatcher,
@@ -225,7 +251,7 @@ func CreateVPNConfigPatchFromRule(rule *ACLRule,
 									},
 								}},
 							},
-							shortShootID: map[string]interface{}{
+							shortShootID + p.NameSuffix: map[string]interface{}{
 								"permissions": []map[string]interface{}{{
 									"header": headerMatcher,
 								}},
@@ -237,7 +263,7 @@ func CreateVPNConfigPatchFromRule(rule *ACLRule,
 				},
 			},
 		},
-	}, nil
+	}
 }
 
 // CreateInternalFilterPatchFromRule combines an ACLRule, the

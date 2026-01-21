@@ -90,9 +90,8 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 					"app":   "istio-ingressgateway",
 					"istio": "ingressgateway",
 				}
-				result, err := BuildVPNEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+				result := BuildVPNEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
 
-				Expect(err).ToNot(HaveOccurred())
 				checkIfMapEqualsYAML(result, "vpnEnvoyFilterSpecWithOneAllowRule.yaml")
 			})
 		})
@@ -123,7 +122,6 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 			})
 		})
 	})
-
 })
 
 //nolint:unparam // action currently only accepts ALLOW but that might change, so we leave the parameterization
