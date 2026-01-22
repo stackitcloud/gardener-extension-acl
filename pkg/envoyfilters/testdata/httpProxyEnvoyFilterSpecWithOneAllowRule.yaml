@@ -3,31 +3,31 @@ configPatches:
     match:
       context: GATEWAY
       listener:
-        name: 0.0.0.0_8132
+        name: 0.0.0.0_8443
     patch:
       operation: INSERT_FIRST
       value:
-        name: acl-tls-tunnel
+        name: acl-http-proxy
         typed_config:
           '@type': type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
           rules:
             action: ALLOW
             policies:
-              bar--foo-inverse-tls-tunnel:
+              bar--foo-inverse-http-proxy:
                 permissions:
                 - not_rule:
                     header:
-                      name: reversed-vpn
+                      name: X-Gardener-Destination
                       string_match:
                         contains: .shoot--bar--foo.
                 principals:
                 - remote_ip:
                     address_prefix: 0.0.0.0
                     prefix_len: 0
-              bar--foo-tls-tunnel:
+              bar--foo-http-proxy:
                 permissions:
                 - header:
-                    name: reversed-vpn
+                    name: X-Gardener-Destination
                     string_match:
                       contains: .shoot--bar--foo.
                 principals:

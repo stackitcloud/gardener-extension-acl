@@ -97,6 +97,21 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 		})
 	})
 
+	Describe("BuildHTTPProxyEnvoyFilterSpecForHelmChart", func() {
+		When("there is one shoot with a rule", func() {
+			It("Should create a envoyFilter spec matching the expected one", func() {
+				rule := createRule("ALLOW", "remote_ip", "10.180.0.0/16")
+				labels := map[string]string{
+					"app":   "istio-ingressgateway",
+					"istio": "ingressgateway",
+				}
+				result := BuildHTTPProxyEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+
+				checkIfMapEqualsYAML(result, "httpProxyEnvoyFilterSpecWithOneAllowRule.yaml")
+			})
+		})
+	})
+
 	Describe("CreateInternalFilterPatchFromRule", func() {
 		When("there is an allow rule", func() {
 			It("Should create a filter spec matching the expected one, including the always allowed CIDRs", func() {

@@ -279,12 +279,16 @@ func (a *actuator) createSeedResources(
 	vpnEnvoyFilterSpec := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
 		cluster, spec.Rule, alwaysAllowedCIDRs, istioLabels,
 	)
+	httpProxyEnvoyFilterSpec := envoyfilters.BuildHTTPProxyEnvoyFilterSpecForHelmChart(
+		cluster, spec.Rule, alwaysAllowedCIDRs, istioLabels,
+	)
 
 	cfg := map[string]interface{}{
-		"shootName":          cluster.Shoot.Status.TechnicalID,
-		"targetNamespace":    istioNamespace,
-		"apiEnvoyFilterSpec": apiEnvoyFilterSpec,
-		"vpnEnvoyFilterSpec": vpnEnvoyFilterSpec,
+		"shootName":                cluster.Shoot.Status.TechnicalID,
+		"targetNamespace":          istioNamespace,
+		"apiEnvoyFilterSpec":       apiEnvoyFilterSpec,
+		"vpnEnvoyFilterSpec":       vpnEnvoyFilterSpec,
+		"httpProxyEnvoyFilterSpec": httpProxyEnvoyFilterSpec,
 	}
 
 	defaultLabels, err := a.findDefaultIstioLabels(ctx)
