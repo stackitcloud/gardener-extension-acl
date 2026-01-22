@@ -24,6 +24,16 @@ Gardener `ExposureClasses` or deploying Highly Available Control Planes (see
 
 Please read on for more information.
 
+## Compatibility
+
+The following lists known compatibility issues of this extension controller with other Gardener features and components.
+
+| ACL Extension | Gardener | Action | Notes |
+| ------------- | -------- | ------ |  --- |
+| `<= v1.66.2` | gardenlet featureGate `UseUnifiedHTTPProxyPort` | Older versions of the ACL extension do not create the necessary Envoy filters for the new unified port `8443`. You should update to a newer version of the extension and reconcile all shoots that use it **BEFORE** enabling the feature gate. |
+
+----
+
 ## Installation
 
 Set your `KUBECONFIG` variable to the Garden cluster.
@@ -77,13 +87,6 @@ trade-off to efficiently secure Kubernetes API servers.
 See [ADR02](./docs/adr/02_envoyfilter_patching.md) for a more in-depth
 discussion of the challenges we had.
 
-## Cloud specific settings
-
-### Openstack
-
-In order for the internal VPN traffic to work, the router IP adresses from the
-shoot openstack projects have to get allowlisted in the ACL extension.
-
 ## Healthchecks
 
 Gardener provides a [Health Check Library](https://gardener.cloud/docs/gardener/extensions/healthcheck-library/)
@@ -99,12 +102,12 @@ in the extension resource itself (one per health check).
 Extensions are installed on a Gardener cluster by deploying a
 `ControllerRegistration` and a `ControllerDeployment` object to the garden
 cluster. In this repository, you find an example for both of these resources in
-the `deploy/extension/base/controller-registration.yaml` file. 
+the `deploy/extension/base/controller-registration.yaml` file.
 
 The `ProviderConfig.chart` field contains the entire Helm chart for your
 extension as a gzipped and then base64-encoded string. After you altered this
 Helm chart in the `charts/gardener-extension-acl` directory, run `make generate` to
-re-create this value. 
+re-create this value.
 
 ## Tests
 
@@ -130,7 +133,6 @@ To install the extension with 2 ways:
 
 `make extension-dev` this will also install the acl-extension into the local gardener environment but it will rebuild and redeploy if you press any key in the terminal.
 
-
 ### Local debugging
 
 This can only be done with the gardener [local-setup](https://github.com/gardener/gardener/blob/master/docs/deployment/getting_started_locally.md).
@@ -138,16 +140,19 @@ This can only be done with the gardener [local-setup](https://github.com/gardene
 After your local gardener is ready you can start the controller
 
 Install extension
+
 ```bash
 make extension-up
 ```
 
 Disable reconcile of managed resource
+
 ```bash
 kubectl annotate managedresource acl-XXXXXX resources.gardener.cloud/ignore="true"
 ```
 
 Scale down acl-extension:
+
 ```bash
 kubectl scale deployment -n extension-acl-XXXXXXX --replicas=0 gardener-extension-acl
 ```
