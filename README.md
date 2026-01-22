@@ -30,7 +30,7 @@ The following lists known compatibility issues of this extension controller with
 
 | ACL Extension | Gardener | Action | Notes |
 | ------------- | -------- | ------ |  --- |
-| `<= v1.66.2` | gardenlet featureGate `UseUnifiedHTTPProxyPort` | Older versions of the ACL extension do not create the necessary Envoy filters for the new unified port `8443`. You should update to a newer version of the extension **BEFORE** enabling the feature gate. |
+| `<= v1.66.2` | gardenlet featureGate `UseUnifiedHTTPProxyPort` | Older versions of the ACL extension do not create the necessary Envoy filters for the new unified port `8443`. You should update to a newer version of the extension and reconcile all shoots that use it **BEFORE** enabling the feature gate. |
 
 ----
 
