@@ -72,7 +72,7 @@ func BuildIngressEnvoyFilterSpecForHelmChart(
 func BuildVPNEnvoyFilterSpecForHelmChart(
 	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
 ) map[string]interface{} {
-	return buildProxyEnvoyFilterSpecForHelmChart(vpnPatchOptions{
+	return buildProxyEnvoyFilterSpecForHelmChart(httpProxyFilterOptions{
 		Rule:               rule,
 		ShortShootID:       helper.ComputeShortShootID(cluster.Shoot),
 		TechnicalShootID:   cluster.Shoot.Status.TechnicalID,
@@ -89,7 +89,7 @@ func BuildVPNEnvoyFilterSpecForHelmChart(
 func BuildHTTPProxyEnvoyFilterSpecForHelmChart(
 	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
 ) map[string]interface{} {
-	return buildProxyEnvoyFilterSpecForHelmChart(vpnPatchOptions{
+	return buildProxyEnvoyFilterSpecForHelmChart(httpProxyFilterOptions{
 		Rule:               rule,
 		ShortShootID:       helper.ComputeShortShootID(cluster.Shoot),
 		TechnicalShootID:   cluster.Shoot.Status.TechnicalID,
@@ -192,7 +192,7 @@ func CreateIngressConfigPatchFromRule(
 	}
 }
 
-type vpnPatchOptions struct {
+type httpProxyFilterOptions struct {
 	Rule                           *ACLRule
 	ShortShootID, TechnicalShootID string
 	AlwaysAllowedCIDRs             []string
@@ -203,7 +203,7 @@ type vpnPatchOptions struct {
 	Port       uint32
 }
 
-func buildProxyEnvoyFilterSpecForHelmChart(p vpnPatchOptions) map[string]interface{} {
+func buildProxyEnvoyFilterSpecForHelmChart(p httpProxyFilterOptions) map[string]interface{} {
 	rbacName := "acl" + p.NameSuffix
 	headerMatcher := map[string]interface{}{
 		"name": p.Header,
@@ -235,7 +235,7 @@ func buildProxyEnvoyFilterSpecForHelmChart(p vpnPatchOptions) map[string]interfa
 					"rules": map[string]interface{}{
 						"action": "ALLOW",
 						"policies": map[string]interface{}{
-							p.ShortShootID + "-inverse" + p.NameSuffix: map[string]interface{}{
+							p.ShortShootID + "-inverse": map[string]interface{}{
 								"permissions": []map[string]interface{}{{
 									"not_rule": map[string]interface{}{
 										"header": headerMatcher,
@@ -248,7 +248,7 @@ func buildProxyEnvoyFilterSpecForHelmChart(p vpnPatchOptions) map[string]interfa
 									},
 								}},
 							},
-							p.ShortShootID + p.NameSuffix: map[string]interface{}{
+							p.ShortShootID: map[string]interface{}{
 								"permissions": []map[string]interface{}{{
 									"header": headerMatcher,
 								}},

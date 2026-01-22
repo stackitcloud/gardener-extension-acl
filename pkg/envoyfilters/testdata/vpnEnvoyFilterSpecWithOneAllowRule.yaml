@@ -13,7 +13,7 @@ configPatches:
           rules:
             action: ALLOW
             policies:
-              bar--foo-inverse-tls-tunnel:
+              bar--foo-inverse:
                 permissions:
                 - not_rule:
                     header:
@@ -24,7 +24,7 @@ configPatches:
                 - remote_ip:
                     address_prefix: 0.0.0.0
                     prefix_len: 0
-              bar--foo-tls-tunnel:
+              bar--foo:
                 permissions:
                 - header:
                     name: reversed-vpn
