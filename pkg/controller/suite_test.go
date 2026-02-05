@@ -4,9 +4,11 @@ import (
 	"context"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	gardenercorev1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/go-logr/logr"
@@ -19,8 +21,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
@@ -159,6 +163,31 @@ func createNewGateway(name, shootNamespace string, labels map[string]string) *is
 	return gw
 }
 
+func createNewService(name, namespace string, labels map[string]string, serviceType corev1.ServiceType) {
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels:    labels,
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Type: serviceType,
+			Ports: []corev1.ServicePort{{
+				Port: 80,
+			}},
+		},
+	}
+	logr.Logger{}.Info("creating service", "name", svc.Name, "namespace", svc.Namespace, "labels", svc.Labels)
+	Expect(k8sClient.Create(ctx, svc)).ShouldNot(HaveOccurred())
+}
+
+func updateServiceStatus(name, namespace string, status corev1.ServiceStatus) {
+	svc := &corev1.Service{}
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, svc)).ShouldNot(HaveOccurred())
+	svc.Status = status
+	Expect(k8sClient.Status().Update(ctx, svc)).ShouldNot(HaveOccurred())
+}
+
 func createNewExtension(shootNamespace string, providerConfig []byte) *extensionsv1alpha1.Extension {
 	ext := &extensionsv1alpha1.Extension{
 		ObjectMeta: metav1.ObjectMeta{
@@ -245,6 +274,35 @@ func createNewCluster(shootNamespace string) {
 	}
 
 	Expect(k8sClient.Create(ctx, cluster)).ShouldNot(HaveOccurred())
+}
+
+func createShootInfo(cidrs []string) {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gardenercorev1beta1constants.ConfigMapNameShootInfo,
+			Namespace: "kube-system",
+		},
+		Data: map[string]string{
+			"egressCIDRs": strings.Join(cidrs, ","),
+		},
+	}
+	Expect(k8sClient.Create(ctx, cm)).ShouldNot(HaveOccurred())
+}
+
+func deleteShootInfo() {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gardenercorev1beta1constants.ConfigMapNameShootInfo,
+			Namespace: "kube-system",
+		},
+	}
+	Expect(func() error {
+		err := k8sClient.Delete(ctx, cm)
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		return nil
+	}()).ShouldNot(HaveOccurred())
 }
 
 func deleteNamespace(name string) {
