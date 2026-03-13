@@ -102,8 +102,8 @@ check: $(GOIMPORTS) $(GOLANGCI_LINT) $(HELM)
 	@bash $(GARDENER_HACK_DIR)/check-charts.sh ./charts
 
 .PHONY: generate
-generate: $(VGOPATH) $(HELM) $(YQ)
-	@REPO_ROOT=$(REPO_ROOT) VGOPATH=$(VGOPATH) bash $(GARDENER_HACK_DIR)/generate-controller-registration.sh acl charts/gardener-extension-acl latest deploy/extension/base/controller-registration.yaml Extension:acl
+generate: $(HELM) $(YQ)
+	@REPO_ROOT=$(REPO_ROOT) bash $(GARDENER_HACK_DIR)/generate-controller-registration.sh acl charts/gardener-extension-acl latest deploy/extension/base/controller-registration.yaml Extension:acl
 
 .PHONY: format
 format: $(GOIMPORTS) $(GOIMPORTSREVISER)
