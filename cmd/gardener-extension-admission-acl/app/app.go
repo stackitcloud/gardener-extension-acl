@@ -39,8 +39,9 @@ const Name = "gardener-extension-admission-acl"
 // NewControllerManagerCommand creates a new command for running a acl controller.
 func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 	var (
-		restOpts = &extensionscmdcontroller.RESTOptions{}
-		mgrOpts  = &extensionscmdcontroller.ManagerOptions{
+		generalOptions = &extensionscmdcontroller.GeneralOptions{}
+		restOpts       = &extensionscmdcontroller.RESTOptions{}
+		mgrOpts        = &extensionscmdcontroller.ManagerOptions{
 			LeaderElection:          true,
 			LeaderElectionID:        extensionscmdcontroller.LeaderElectionNameID(Name),
 			LeaderElectionNamespace: os.Getenv("LEADER_ELECTION_NAMESPACE"),
@@ -57,6 +58,7 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			Name,
 			"",
 			nil,
+			generalOptions,
 			webhookServerOptions,
 			webhookSwitches,
 		)
@@ -65,6 +67,7 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 		aggOption = extensionscmdcontroller.NewOptionAggregator(
 			restOpts,
 			mgrOpts,
+			generalOptions,
 			webhookOptions,
 			admissionOptions,
 		)
@@ -152,7 +155,7 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			}
 
 			log.Info("Setting up webhook server")
-			if _, err := webhookOptions.Completed().AddToManager(ctx, mgr, sourceCluster, true); err != nil {
+			if _, err := webhookOptions.Completed().AddToManager(ctx, mgr, sourceCluster); err != nil {
 				return err
 			}
 
