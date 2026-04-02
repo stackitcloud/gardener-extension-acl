@@ -6,8 +6,8 @@ toolchain go1.26.1
 
 require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
-	github.com/gardener/gardener v1.138.1
-	github.com/gardener/gardener/pkg/apis v1.138.1
+	github.com/gardener/gardener v1.138.2
+	github.com/gardener/gardener/pkg/apis v1.138.2
 	github.com/go-logr/logr v1.4.3
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo/v2 v2.28.1
@@ -76,7 +76,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/gardener/cert-management v0.19.0 // indirect
 	github.com/gardener/etcd-druid/api v0.35.1 // indirect
-	github.com/gardener/machine-controller-manager v0.61.2 // indirect
+	github.com/gardener/machine-controller-manager v0.61.3 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
