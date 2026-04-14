@@ -2,7 +2,7 @@ name: acl-internal-remote_ip
 typed_config:
   '@type': type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC
   rules:
-    action: ALLOW
+    # action: ALLOW # allow is not being marshaled by protojson as it is the default enum value (0)
     policies:
       acl-internal:
         permissions:

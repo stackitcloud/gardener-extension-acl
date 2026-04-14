@@ -11,7 +11,7 @@ configPatches:
         typed_config:
           '@type': type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
           rules:
-            action: ALLOW
+            # action: ALLOW # allow is not being marshaled by protojson as it is the default enum value (0)
             policies:
               acl-vpn-inverse:
                   permissions:
@@ -45,7 +45,7 @@ configPatches:
                         name: reversed-vpn
                         string_match:
                           contains: .shoot--projectname--shootname.
-          stat_prefix: envoyrbac
+          rules_stat_prefix: envoyrbac
 workloadSelector:
   labels:
     app: istio-ingressgateway
