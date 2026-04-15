@@ -11,7 +11,7 @@ configPatches:
         typed_config:
           '@type': type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
           rules:
-            action: ALLOW
+            # action: ALLOW # allow is not being marshaled by protojson as it is the default enum value (0)
             policies:
               bar--foo-inverse:
                 permissions:
@@ -40,7 +40,7 @@ configPatches:
                 - remote_ip:
                     address_prefix: 10.96.0.0
                     prefix_len: 11
-          stat_prefix: envoyrbac
+          rules_stat_prefix: envoyrbac
 workloadSelector:
   labels:
     app: istio-ingressgateway
