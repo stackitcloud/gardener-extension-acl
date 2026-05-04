@@ -31,12 +31,10 @@ import (
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 )
 
-var (
-	// DefaultAddOptions contains the default options for the healthchecks.
-	DefaultAddOptions = healthcheck.DefaultAddArgs{
-		HealthCheckConfig: extensionsconfigv1alpha1.HealthCheckConfig{SyncPeriod: metav1.Duration{}},
-	}
-)
+// DefaultAddOptions contains the default options for the healthchecks.
+var DefaultAddOptions = healthcheck.DefaultAddArgs{
+	HealthCheckConfig: extensionsconfigv1alpha1.HealthCheckConfig{SyncPeriod: metav1.Duration{}},
+}
 
 // RegisterHealthChecks registers health checks for each extension resource
 // HealthChecks are grouped by extension (e.g worker), extension.type (e.g aws) and  Health Check Type (e.g SystemComponentsHealthy)

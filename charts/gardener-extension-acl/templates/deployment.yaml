@@ -22,9 +22,12 @@ spec:
       labels:
         networking.gardener.cloud/to-dns: allowed
         networking.gardener.cloud/to-runtime-apiserver: allowed
+        networking.resources.gardener.cloud/to-garden-virtual-garden-kube-apiserver-tcp-443: allowed
 {{ include "labels" . | indent 8 }}
     spec:
-      priorityClassName: gardener-system-900
+      {{- if .Values.gardener.runtimeCluster.priorityClassName }}
+      priorityClassName: {{ .Values.gardener.runtimeCluster.priorityClassName }}
+      {{- end }}
       serviceAccountName: {{ include "name" . }}
       containers:
       - name: {{ include "name" . }}
@@ -43,7 +46,16 @@ spec:
         {{- if .Values.gardener.version }}
         - --gardener-version={{ .Values.gardener.version }}
         {{- end }}
+        {{- if .Values.gardener.runtimeCluster.enabled }}
+        - --extension-classes=garden
+        {{- else }}
+        - --extension-classes=shoot
+        {{- end }}
         env:
+        {{- if .Values.gardener.runtimeCluster.enabled }}
+        - name: GARDEN_KUBECONFIG
+          value: /var/run/secrets/gardener.cloud/shoot/generic-kubeconfig/kubeconfig
+        {{- end }}
         - name: LEADER_ELECTION_NAMESPACE
           valueFrom:
             fieldRef:
@@ -65,16 +77,33 @@ spec:
           runAsGroup: 65532
           seccompProfile:
             type: RuntimeDefault
-        {{- if .Values.imageVectorOverwrite }}
         volumeMounts:
+        {{- if .Values.gardener.runtimeCluster.enabled }}
+        - name: kubeconfig
+          mountPath: /var/run/secrets/gardener.cloud/shoot/generic-kubeconfig
+          readOnly: true
+        {{- end }}
+        {{- if .Values.imageVectorOverwrite }}
         - name: extension-imagevector-overwrite
           mountPath: /charts_overwrite/
           readOnly: true
         {{- end }}
-      {{- if .Values.imageVectorOverwrite }}
       volumes:
+      {{- if .Values.imageVectorOverwrite }}
       - name: extension-imagevector-overwrite
         configMap:
           name: {{ include "name" . }}-imagevector-overwrite
           defaultMode: 420
+      {{- end }}
+      {{- if .Values.gardener.runtimeCluster.enabled }}
+      - name: kubeconfig
+        projected:
+          defaultMode: 420
+          sources:
+          - secret:
+              items:
+              - key: kubeconfig
+                path: kubeconfig
+              name: garden-kubeconfig
+              optional: false
       {{- end }}

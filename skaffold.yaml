@@ -5,17 +5,30 @@ metadata:
   name: extension
 build:
   artifacts:
-    - image: ghcr.io/stackitcloud/gardener-extension-acl
-      ko:
-        main: ./cmd/gardener-extension-acl
-    - image: ghcr.io/stackitcloud/gardener-extension-admission-acl
-      ko:
-        main: ./cmd/gardener-extension-admission-acl
-resourceSelector:
-  allow:
-    # instruct skaffold to inject the built image reference into the image field in our ControllerDeployment
-    - groupKind: ControllerDeployment.core.gardener.cloud
-      image: [".*"]
+  - image: acl
+    ko:
+      main: ./cmd/gardener-extension-acl/
+  - image: acl-admission
+    ko:
+      main: ./cmd/gardener-extension-admission-acl/
+  - image: charts/acl
+    custom:
+      buildCommand: |
+        bash ${GARDENER_DEV_DIR}/push-helm.sh ./charts/gardener-extension-acl/ .image
+    requires:
+    - image: acl
+      alias: IMG
+  - image: charts/acl-admission-runtime
+    custom:
+      buildCommand: |
+        bash ${GARDENER_DEV_DIR}/push-helm.sh ./charts/gardener-extension-admission-acl/charts/runtime/ .image
+    requires:
+    - image: acl-admission
+      alias: IMG
+  - image: charts/acl-admission-application
+    custom:
+      buildCommand: |
+        bash ${GARDENER_DEV_DIR}/push-helm.sh ./charts/gardener-extension-admission-acl/charts/application/
 manifests:
   kustomize:
     paths:
