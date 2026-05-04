@@ -2,7 +2,7 @@
 apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
-  name: acl-ingress-{{ .Values.shootName }}
+  name: acl-ingress-{{ .Values.suffix }}
   namespace: istio-ingress
   labels:
     {{- include "gardener-extension.labels" . | nindent 4 }}

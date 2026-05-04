@@ -8,11 +8,22 @@ spec:
     primary: true
     reconcileTimeout: 3m0s
     type: acl
+    clusterCompatibility:
+    - garden
+    - shoot
   deployment:
     extension:
       helm:
         ociRepository:
           ref: charts/acl
+      # these values will be added to the extension controller deployed for the garden extension
+      runtimeClusterValues:
+        additionalAllowedCidrs:
+          - 0.0.0.0/0
+      # these values will be added to the extension controller deployed in the seed for shoot/seed extension
+      values:
+        additionalAllowedCidrs:
+          - 0.0.0.0/0
     admission:
       runtimeCluster:
         helm:

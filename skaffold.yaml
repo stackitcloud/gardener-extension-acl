@@ -16,21 +16,21 @@ build:
   - image: charts/acl
     custom:
       buildCommand: |
-        bash ${GARDENER_HACK_DIR}/push-helm.sh ./charts/gardener-extension-acl/ .image
+        bash ${GARDENER_DEV_DIR}/push-helm.sh ./charts/gardener-extension-acl/ .image
     requires:
     - image: acl
       alias: IMG
   - image: charts/acl-admission-runtime
     custom:
       buildCommand: |
-        bash ${GARDENER_HACK_DIR}/push-helm.sh ./charts/gardener-extension-admission-acl/charts/runtime/ .image
+        bash ${GARDENER_DEV_DIR}/push-helm.sh ./charts/gardener-extension-admission-acl/charts/runtime/ .image
     requires:
     - image: acl-admission
       alias: IMG
   - image: charts/acl-admission-application
     custom:
       buildCommand: |
-        bash ${GARDENER_HACK_DIR}/push-helm.sh ./charts/gardener-extension-admission-acl/charts/application/
+        bash ${GARDENER_DEV_DIR}/push-helm.sh ./charts/gardener-extension-admission-acl/charts/application/
 manifests:
   rawYaml:
     - ./example/extension.yaml

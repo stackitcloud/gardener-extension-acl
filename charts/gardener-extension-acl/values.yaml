@@ -38,3 +38,6 @@ additionalAllowedCidrs: []
 
 gardener:
   version: ""
+  runtimeCluster:
+    enabled: false
+    priorityClassName: ""

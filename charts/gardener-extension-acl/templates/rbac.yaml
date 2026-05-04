@@ -18,6 +18,16 @@ rules:
   - delete
   resources:
   - envoyfilters
+{{- if .Values.gardener.runtimeCluster.enabled }}
+- apiGroups:
+  - operator.gardener.cloud
+  resources:
+  - gardens
+  verbs:
+  - get
+  - list
+  - watch
+{{- else }}
 - apiGroups:
   - extensions.gardener.cloud
   resources:
@@ -28,6 +38,7 @@ rules:
   - get
   - list
   - watch
+{{- end }}
 - apiGroups:
   - extensions.gardener.cloud
   resources:

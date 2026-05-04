@@ -26,11 +26,10 @@ import (
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
-	v1beta1helper "github.com/gardener/gardener/pkg/api/core/v1beta1/helper"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
-	"github.com/gardener/gardener/pkg/utils/chart"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -40,14 +39,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/stackitcloud/gardener-extension-acl/charts"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/allowedcidrs"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
-	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
 )
 
 const (
@@ -58,10 +58,6 @@ const (
 	// HashAnnotationName name of annotation for triggering the envoyfilter webhook
 	// DEPRECATED: Remove after annotation has been removed from all EnvoyFilters
 	HashAnnotationName = "acl-ext-rule-hash"
-	// ImageName is used for the image vector override.
-	// This is currently not implemented correctly.
-	// TODO implement
-	ImageName          = "image-name"
 	deletionTimeout    = 2 * time.Minute
 	istioGatewayName   = "kube-apiserver"
 	ingressGatewayName = "nginx-ingress-controller"
@@ -83,10 +79,16 @@ type ExtensionState struct {
 }
 
 // NewActuator returns an actuator responsible for Extension resources.
-func NewActuator(mgr manager.Manager, cfg config.Config) extension.Actuator {
+func NewActuator(mgr manager.Manager, gardenCluster cluster.Cluster, cfg config.Config) extension.Actuator {
+	var gardenClient client.Client
+	if gardenCluster != nil {
+		gardenClient = gardenCluster.GetClient()
+	}
+
 	return &actuator{
 		extensionConfig: cfg,
 		client:          mgr.GetClient(),
+		gardenClient:    gardenClient,
 		config:          mgr.GetConfig(),
 		decoder:         serializer.NewCodecFactory(mgr.GetScheme(), serializer.EnableStrict).UniversalDecoder(),
 	}
@@ -94,6 +96,7 @@ func NewActuator(mgr manager.Manager, cfg config.Config) extension.Actuator {
 
 type actuator struct {
 	client          client.Client
+	gardenClient    client.Client
 	config          *rest.Config
 	decoder         runtime.Decoder
 	extensionConfig config.Config
@@ -103,11 +106,6 @@ type actuator struct {
 //
 //nolint:gocyclo // this is the main reconcile loop
 func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extensionsv1alpha1.Extension) error {
-	cluster, err := helper.GetClusterForExtension(ctx, a.client, ex)
-	if err != nil {
-		return err
-	}
-
 	extSpec := &extensionspec.ExtensionSpec{}
 	if ex.Spec.ProviderConfig != nil && ex.Spec.ProviderConfig.Raw != nil {
 		if err := json.Unmarshal(ex.Spec.ProviderConfig.Raw, &extSpec); err != nil {
@@ -119,11 +117,52 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
+	var (
+		cluster       *controller.Cluster
+		allowedCIDRer allowedcidrs.AllowedCIDRer
+	)
+
+	if ex.Spec.Class == nil || *ex.Spec.Class == extensionsv1alpha1.ExtensionClassShoot {
+		var err error
+		cluster, err = helper.GetClusterForExtension(ctx, a.client, ex)
+		if err != nil {
+			return err
+		}
+		allowedCIDRer = &allowedcidrs.Shoot{
+			Cluster:         cluster,
+			ExtensionConfig: a.extensionConfig,
+			Client:          a.client,
+		}
+	} else {
+		// TODO: retrieve garden specific things
+		garden, err := a.getGarden(ctx)
+		if err != nil {
+			return err
+		}
+		allowedCIDRer = &allowedcidrs.Garden{
+			Garden: garden,
+			Client: a.gardenClient,
+		}
+	}
+
+	alwaysAllowedCIDRs, err := allowedCIDRer.AllowedCIDRs(ctx, ex)
+	if err != nil {
+		return err
+	}
+	if len(a.extensionConfig.AdditionalAllowedCIDRs) > 0 {
+		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCIDRs...)
+	}
+
+	hosts, err := allowedCIDRer.Hosts()
+	if err != nil {
+		return err
+	}
+
 	istioNamespace, istioLabels, err := a.findIstioNamespaceForExtension(ctx, ex)
 	if err != nil {
 		// we ignore errors for hibernated clusters if they don't have a Gateway
 		// resource for the extension to get the istio namespace from
-		if controller.IsHibernated(cluster) {
+		if cluster != nil && controller.IsHibernated(cluster) {
 			return client.IgnoreNotFound(err)
 		}
 		return err
@@ -134,37 +173,6 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	hosts := make([]string, 0)
-	if len(cluster.Shoot.Status.AdvertisedAddresses) < 1 {
-		return ErrNoAdvertisedAddresses
-	}
-
-	for _, address := range cluster.Shoot.Status.AdvertisedAddresses {
-		hosts = append(hosts, strings.Split(address.URL, "//")[1])
-	}
-	var shootSpecificCIDRs []string
-	var alwaysAllowedCIDRs []string
-
-	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, helper.GetSeedSpecificAllowedCIDRs(cluster.Seed)...)
-
-	if len(a.extensionConfig.AdditionalAllowedCIDRs) >= 1 {
-		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCIDRs...)
-	}
-
-	// Gardener supports workerless Shoots. These don't have an associated
-	// Infrastructure object and don't need Node- or Pod-specific CIDRs to be
-	// allowed. Therefore, skip these steps for workerless Shoots.
-	if !v1beta1helper.IsWorkerless(cluster.Shoot) {
-		shootSpecificCIDRs = append(shootSpecificCIDRs, helper.GetShootNodeSpecificAllowedCIDRs(cluster.Shoot)...)
-
-		infra, err := helper.GetInfrastructureForExtension(ctx, a.client, ex, cluster.Shoot.Name)
-		if err != nil {
-			return err
-		}
-
-		shootSpecificCIDRs = append(shootSpecificCIDRs, infra.Status.EgressCIDRs...)
-	}
-
 	if err := a.createSeedResources(
 		ctx,
 		log,
@@ -172,7 +180,6 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		extSpec,
 		cluster,
 		hosts,
-		shootSpecificCIDRs,
 		alwaysAllowedCIDRs,
 		istioNamespace,
 		istioLabels,
@@ -260,14 +267,11 @@ func (a *actuator) createSeedResources(
 	spec *extensionspec.ExtensionSpec,
 	cluster *controller.Cluster,
 	hosts []string,
-	shootSpecificCIRDs []string,
 	alwaysAllowedCIDRs []string,
 	istioNamespace string,
 	istioLabels map[string]string,
 ) error {
 	var err error
-
-	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, shootSpecificCIRDs...)
 
 	apiEnvoyFilterSpec, err := envoyfilters.BuildAPIEnvoyFilterSpecForHelmChart(
 		spec.Rule, hosts, alwaysAllowedCIDRs, istioLabels,
@@ -276,37 +280,38 @@ func (a *actuator) createSeedResources(
 		return err
 	}
 
-	vpnEnvoyFilterSpec := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
-		cluster, spec.Rule, alwaysAllowedCIDRs, istioLabels,
-	)
-	httpProxyEnvoyFilterSpec := envoyfilters.BuildHTTPProxyEnvoyFilterSpecForHelmChart(
-		cluster, spec.Rule, alwaysAllowedCIDRs, istioLabels,
-	)
-
-	cfg := map[string]interface{}{
-		"shootName":                cluster.Shoot.Status.TechnicalID,
-		"targetNamespace":          istioNamespace,
-		"apiEnvoyFilterSpec":       apiEnvoyFilterSpec,
-		"vpnEnvoyFilterSpec":       vpnEnvoyFilterSpec,
-		"httpProxyEnvoyFilterSpec": httpProxyEnvoyFilterSpec,
+	values := values{
+		TargetNamespace:    istioNamespace,
+		APIEnvoyFilterSpec: apiEnvoyFilterSpec,
 	}
 
-	defaultLabels, err := a.findDefaultIstioLabels(ctx)
-	if client.IgnoreNotFound(err) != nil {
-		return err
-	} else if err == nil {
-		// The `nginx-ingress-controller` Gateway object only exists in g/g@v1.89, (introduced with
-		// https://github.com/gardener/gardener/pull/9038).
-		// If it doesn't exist yet, we can't apply ACLs to shoot ingresses.
-		ingressEnvoyFilterSpec := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
-			cluster, spec.Rule, alwaysAllowedCIDRs, defaultLabels)
+	if cluster != nil {
+		values.Suffix = cluster.Shoot.Status.TechnicalID
 
-		cfg["ingressEnvoyFilterSpec"] = ingressEnvoyFilterSpec
-	}
+		vpnEnvoyFilterSpec := envoyfilters.BuildVPNEnvoyFilterSpecForHelmChart(
+			cluster, spec.Rule, alwaysAllowedCIDRs, istioLabels,
+		)
+		httpProxyEnvoyFilterSpec := envoyfilters.BuildHTTPProxyEnvoyFilterSpecForHelmChart(
+			cluster, spec.Rule, alwaysAllowedCIDRs, istioLabels,
+		)
 
-	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})
-	if err != nil {
-		return fmt.Errorf("failed to find image version for %s: %v", ImageName, err)
+		values.VPNEnvoyFilterSpec = vpnEnvoyFilterSpec
+		values.HTTPProxyEnvoyFilterSpec = httpProxyEnvoyFilterSpec
+
+		defaultLabels, err := a.findDefaultIstioLabels(ctx)
+		if client.IgnoreNotFound(err) != nil {
+			return err
+		} else if err == nil {
+			// The `nginx-ingress-controller` Gateway object only exists in g/g@v1.89, (introduced with
+			// https://github.com/gardener/gardener/pull/9038).
+			// If it doesn't exist yet, we can't apply ACLs to shoot ingresses.
+			ingressEnvoyFilterSpec := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
+				cluster, spec.Rule, alwaysAllowedCIDRs, defaultLabels)
+
+			values.IngressEnvoyFilterSpec = ingressEnvoyFilterSpec
+		}
+	} else {
+		values.Suffix = "garden"
 	}
 
 	renderer, err := chartrenderer.NewForConfig(a.config)
@@ -316,7 +321,35 @@ func (a *actuator) createSeedResources(
 
 	log.Info("Component is being applied", "component", "component-name", "namespace", namespace)
 
-	return a.createManagedResource(ctx, namespace, ResourceNameSeed, "seed", renderer, ChartNameSeed, namespace, cfg, nil, charts.Seed)
+	return a.createManagedResource(ctx, namespace, ResourceNameSeed, "seed", renderer, ChartNameSeed, namespace, values.AsMap(), nil, charts.Seed)
+}
+
+type values struct {
+	// Suffix is the suffix that gets added to every envoy filter.
+	// For shoot extensions, this is the shoot name.
+	// For garden extension, this is "garden"
+	Suffix string `json:"suffix"`
+
+	// TargetNamespace is the namespace where the envoy filters get created in
+	// This is the namespace where the istio gateway is running in
+	TargetNamespace string `json:"targetNamespace"`
+
+	VPNEnvoyFilterSpec       map[string]any `json:"vpnEnvoyFilterSpec"`
+	IngressEnvoyFilterSpec   map[string]any `json:"ingressEnvoyFilterSpec"`
+	HTTPProxyEnvoyFilterSpec map[string]any `json:"httpProxyEnvoyFilterSpec"`
+	APIEnvoyFilterSpec       map[string]any `json:"apiEnvoyFilterSpec"`
+}
+
+func (v values) AsMap() map[string]any {
+	m := map[string]any{}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return m
+	}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return m
+	}
+	return m
 }
 
 func (a *actuator) deleteSeedResources(ctx context.Context, log logr.Logger, namespace string) error {
@@ -363,6 +396,17 @@ func (a *actuator) createManagedResource(
 	)
 }
 
+func (a *actuator) getGarden(ctx context.Context) (*operatorv1alpha1.Garden, error) {
+	gardens := &operatorv1alpha1.GardenList{}
+	if err := a.client.List(ctx, gardens); err != nil {
+		return nil, err
+	}
+	if len(gardens.Items) == 0 {
+		return nil, errors.New("no garden found")
+	}
+	return &gardens.Items[0], nil
+}
+
 func (a *actuator) updateStatus(
 	ctx context.Context,
 	ex *extensionsv1alpha1.Extension,
@@ -390,6 +434,10 @@ func getExtensionState(ex *extensionsv1alpha1.Extension) (*ExtensionState, error
 	return extState, nil
 }
 
+func (a *actuator) InjectSourceClient(client client.Client) {
+	a.gardenClient = client
+}
+
 // findIstioNamespaceForExtension finds the Istio namespace by the Istio Gateway
 // object named "kube-apiserver", which is expected to be present in every
 // Shoot namespace (except when the Shoot is hibernated - in this case, the
@@ -407,9 +455,15 @@ func (a *actuator) findIstioNamespaceForExtension(
 ) {
 	gw := istionetworkv1beta1.Gateway{}
 
+	gatewayName := istioGatewayName
+
+	if ex.Spec.Class != nil && *ex.Spec.Class == extensionsv1alpha1.ExtensionClassGarden {
+		gatewayName = operatorv1alpha1.VirtualGardenNamePrefix + gatewayName
+	}
+
 	err = a.client.Get(ctx, client.ObjectKey{
 		Namespace: ex.Namespace,
-		Name:      istioGatewayName,
+		Name:      gatewayName,
 	}, &gw)
 	if err != nil {
 		return "", nil, err
@@ -422,6 +476,14 @@ func (a *actuator) findIstioNamespaceForExtension(
 	if err != nil {
 		return "", nil, err
 	}
+	if ex.Spec.Class != nil && *ex.Spec.Class == extensionsv1alpha1.ExtensionClassGarden {
+		for _, dep := range deployments.Items {
+			if dep.Namespace == operatorv1alpha1.VirtualGardenDefaultSNIIngressNamespace {
+				return dep.Namespace, gw.Spec.Selector, nil
+			}
+		}
+	}
+
 	if len(deployments.Items) != 1 {
 		return "", nil, fmt.Errorf("no istio namespace could be selected, because the number of deployments found is %d", len(deployments.Items))
 	}

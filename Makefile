@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ENSURE_GARDENER_MOD         := $(shell go get github.com/gardener/gardener@$$(go list -m -f "{{.Version}}" github.com/gardener/gardener))
-export GARDENER_HACK_DIR           := $(shell go list -mod=mod -m -f "{{.Dir}}" github.com/gardener/gardener)/hack
+GARDENER_HACK_DIR           := $(shell go list -mod=mod -m -f "{{.Dir}}" github.com/gardener/gardener)/hack
+export GARDENER_DEV_DIR     := $(shell go list -mod=mod -m -f "{{.Dir}}" github.com/gardener/gardener)/dev-setup
 
 EXTENSION_PREFIX            := gardener-extension
 NAME                        := acl
@@ -15,6 +16,7 @@ VERSION                     := $(shell git describe --tag --always --dirty)
 export TAG                  := $(VERSION)
 LEADER_ELECTION             := false
 IGNORE_OPERATION_ANNOTATION := false
+REGISTRY 										:= registry.local.gardener.cloud:5001
 
 SHELL=/usr/bin/env bash -o pipefail
 
@@ -145,10 +147,8 @@ verify-extended: verify-tidy verify-generate check format test artifacts
 
 # speed-up skaffold deployments by building all images concurrently
 extension-%: export SKAFFOLD_BUILD_CONCURRENCY = 0
-extension-%: export SKAFFOLD_DEFAULT_REPO ?= registry.local.gardener.cloud:5001
+extension-%: export SKAFFOLD_DEFAULT_REPO ?= $(REGISTRY)
 extension-%: export SKAFFOLD_PUSH = true
-# use static label for skaffold to prevent rolling all gardener components on every `skaffold` invocation
-extension-%: export SKAFFOLD_LABEL = skaffold.dev/run-id=acl
 
 extension-up: $(SKAFFOLD)
 	$(SKAFFOLD) run

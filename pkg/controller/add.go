@@ -17,12 +17,17 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"slices"
 
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -40,10 +45,8 @@ const (
 	suffix = "-extension-service"
 )
 
-var (
-	// DefaultAddOptions are the default AddOptions for AddToManager.
-	DefaultAddOptions = AddOptions{}
-)
+// DefaultAddOptions are the default AddOptions for AddToManager.
+var DefaultAddOptions = AddOptions{}
 
 // AddOptions are options to apply when adding the shoot service controller to the manager.
 type AddOptions struct {
@@ -53,8 +56,8 @@ type AddOptions struct {
 	ExtensionConfig controllerconfig.Config
 	// IgnoreOperationAnnotation specifies whether to ignore the operation annotation or not.
 	IgnoreOperationAnnotation bool
-	// ExtensionClass defines the extension class this extension is responsible for.
-	ExtensionClass extensionsv1alpha1.ExtensionClass
+	// ExtensionClasses defines the extension classes this extension is responsible for.
+	ExtensionClasses []extensionsv1alpha1.ExtensionClass
 }
 
 // AddToManager adds a controller with the default Options to the given Controller Manager.
@@ -65,17 +68,29 @@ func AddToManager(ctx context.Context, mgr manager.Manager) error {
 // AddToManagerWithOptions adds a controller with the given Options to the given manager.
 // The opts.Reconciler is being set with a newly instantiated actuator.
 func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts *AddOptions) error {
-	return extension.Add(mgr, extension.AddArgs{
-		Actuator:          NewActuator(mgr, opts.ExtensionConfig),
+	// configure garden
+	var gardenCluster cluster.Cluster
+	if kFile := os.Getenv("GARDEN_KUBECONFIG"); kFile != "" {
+		var err error
+		gardenCluster, err = setupGardenCluster(mgr, kFile)
+		if err != nil {
+			return fmt.Errorf("unable to set up garden cluster: %w", err)
+		}
+	}
+	args := extension.AddArgs{
+		Actuator:          NewActuator(mgr, gardenCluster, opts.ExtensionConfig),
 		ControllerOptions: opts.ControllerOptions,
 		Name:              Type + suffix,
 		FinalizerSuffix:   Type + suffix,
 		Resync:            0,
 		Predicates:        extension.DefaultPredicates(ctx, mgr, DefaultAddOptions.IgnoreOperationAnnotation),
 		Type:              Type,
-		ExtensionClasses:  []extensionsv1alpha1.ExtensionClass{opts.ExtensionClass},
-		WatchBuilder:      watchInfrastructure(mgr),
-	})
+		ExtensionClasses:  opts.ExtensionClasses,
+	}
+	if !slices.Contains(opts.ExtensionClasses, extensionsv1alpha1.ExtensionClassGarden) {
+		args.WatchBuilder = watchInfrastructure(mgr)
+	}
+	return extension.Add(mgr, args)
 }
 
 func infrastructurePredicate() predicate.TypedFuncs[*extensionsv1alpha1.Infrastructure] {
@@ -118,4 +133,27 @@ func watchInfrastructure(mgr manager.Manager) extensionscontroller.WatchBuilder 
 			infrastructurePredicate(),
 		))
 	})
+}
+
+func setupGardenCluster(mgr manager.Manager, kubeconfigFile string) (cluster.Cluster, error) {
+	gardenRESTConfig, err := kubernetes.RESTConfigFromKubeconfigFile(kubeconfigFile, kubernetes.AuthTokenFile, kubernetes.AuthExec)
+	if err != nil {
+		return nil, err
+	}
+
+	gardenCluster, err := cluster.New(gardenRESTConfig, func(opts *cluster.Options) {
+		opts.Scheme = kubernetes.GardenScheme
+		opts.Cache = cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				// ManagedSeeds (and their underlying Shoots) must always be in the "garden" namespace, so that is the
+				// only one we need to watch.
+				"garden": {},
+			},
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return gardenCluster, mgr.Add(gardenCluster)
 }
