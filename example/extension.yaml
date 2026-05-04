@@ -1,0 +1,24 @@
+apiVersion: operator.gardener.cloud/v1alpha1
+kind: Extension
+metadata:
+  name: acl
+spec:
+  resources:
+  - kind: Extension
+    primary: true
+    reconcileTimeout: 3m0s
+    type: acl
+  deployment:
+    extension:
+      helm:
+        ociRepository:
+          ref: charts/acl
+    admission:
+      runtimeCluster:
+        helm:
+          ociRepository:
+            ref: charts/acl-admission-runtime
+      virtualCluster:
+        helm:
+          ociRepository:
+            ref: charts/acl-admission-application
