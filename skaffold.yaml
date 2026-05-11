@@ -1,28 +1,46 @@
----
-apiVersion: skaffold/v4beta3
+# yaml-language-server: $schema=https://raw.githubusercontent.com/GoogleContainerTools/skaffold/main/docs-v2/content/en/schemas/v4beta7.json
+apiVersion: skaffold/v4beta7
 kind: Config
 metadata:
-  name: extension
+  name: acl
 build:
+  insecureRegistries:
+    - registry.local.gardener.cloud:5001
   artifacts:
-    - image: ghcr.io/stackitcloud/gardener-extension-acl
-      ko:
-        main: ./cmd/gardener-extension-acl
-    - image: ghcr.io/stackitcloud/gardener-extension-admission-acl
-      ko:
-        main: ./cmd/gardener-extension-admission-acl
-resourceSelector:
-  allow:
-    # instruct skaffold to inject the built image reference into the image field in our ControllerDeployment
-    - groupKind: ControllerDeployment.core.gardener.cloud
-      image: [".*"]
+  - image: acl
+    ko:
+      main: ./cmd/gardener-extension-acl/
+  - image: acl-admission
+    ko:
+      main: ./cmd/gardener-extension-admission-acl/
+  - image: charts/acl
+    custom:
+      buildCommand: |
+        bash ${GARDENER_HACK_DIR}/push-helm.sh ./charts/gardener-extension-acl/ .image
+    requires:
+    - image: acl
+      alias: IMG
+  - image: charts/acl-admission-runtime
+    custom:
+      buildCommand: |
+        bash ${GARDENER_HACK_DIR}/push-helm.sh ./charts/gardener-extension-admission-acl/charts/runtime/ .image
+    requires:
+    - image: acl-admission
+      alias: IMG
+  - image: charts/acl-admission-application
+    custom:
+      buildCommand: |
+        bash ${GARDENER_HACK_DIR}/push-helm.sh ./charts/gardener-extension-admission-acl/charts/application/
 manifests:
-  kustomize:
-    paths:
-      - ./deploy/extension/local
+  rawYaml:
+    - ./example/extension.yaml
 deploy:
   kubectl: {}
-  helm:
-    releases:
-      - name: gardener-extension-admission-acl
-        chartPath: ./charts/gardener-extension-admission-acl
+resourceSelector:
+  # instruct skaffold to inject the built image reference into the image field in our Extension
+  allow:
+  - groupKind: Extension.operator.gardener.cloud
+    image:
+    - .spec.deployment.extension.helm.ociRepository.ref
+    - .spec.deployment.admission.runtimeCluster.helm.ociRepository.ref
+    - .spec.deployment.admission.virtualCluster.helm.ociRepository.ref
