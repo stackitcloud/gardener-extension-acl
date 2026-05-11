@@ -20,17 +20,25 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"time"
 
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
+	"github.com/gardener/gardener/pkg/api/indexer"
+	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
+	kubernetesutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -76,6 +84,10 @@ func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts *Add
 		if err != nil {
 			return fmt.Errorf("unable to set up garden cluster: %w", err)
 		}
+
+		if err := indexer.AddManagedSeedShootName(ctx, gardenCluster.GetFieldIndexer()); err != nil {
+			return fmt.Errorf("adding index for managedSeed to garden cluster: %w", err)
+		}
 	}
 	args := extension.AddArgs{
 		Actuator:          NewActuator(mgr, gardenCluster, opts.ExtensionConfig),
@@ -89,6 +101,8 @@ func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts *Add
 	}
 	if !slices.Contains(opts.ExtensionClasses, extensionsv1alpha1.ExtensionClassGarden) {
 		args.WatchBuilder = watchInfrastructure(mgr)
+	} else {
+		args.WatchBuilder = watchShootsOfManagedSeeds(mgr, gardenCluster)
 	}
 	return extension.Add(mgr, args)
 }
@@ -135,6 +149,80 @@ func watchInfrastructure(mgr manager.Manager) extensionscontroller.WatchBuilder 
 	})
 }
 
+// watchShootsOfManagedSeeds watches for Shoot changes that are a managed seed and triggers the Extension reconciliation.
+func watchShootsOfManagedSeeds(mgr manager.Manager, gardenCluster cluster.Cluster) extensionscontroller.WatchBuilder {
+	// Map Infrastructure changes to the Extension
+	mapFunc := func(ctx context.Context, shoot *gardencorev1beta1.Shoot) []reconcile.Request {
+		log := logf.FromContext(ctx).WithValues("shoot", shoot)
+
+		exts := &extensionsv1alpha1.ExtensionList{}
+		if err := mgr.GetCache().List(ctx, exts, client.InNamespace(v1beta1constants.GardenNamespace)); err != nil {
+			log.Error(err, "listing extensions for managedseed enqueue requests")
+			return nil
+		}
+		gardenExtensions := slices.DeleteFunc(exts.Items, func(ext extensionsv1alpha1.Extension) bool {
+			if ext.Spec.Type != "acl" {
+				return true
+			}
+			if ext.Spec.Class == nil {
+				return true
+			}
+			return *ext.Spec.Class != extensionsv1alpha1.ExtensionClassGarden
+		})
+
+		reqs := make([]reconcile.Request, 0, len(gardenExtensions))
+		for _, ext := range gardenExtensions {
+			reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&ext)})
+		}
+		return reqs
+	}
+
+	// Watch for Infrastructure changes outside shoot reconciliation
+	return extensionscontroller.NewWatchBuilder(func(ctrl controller.Controller) error {
+		return ctrl.Watch(source.Kind(gardenCluster.GetCache(), &gardencorev1beta1.Shoot{},
+			handler.TypedEnqueueRequestsFromMapFunc(mapFunc),
+			shootsOfManagedSeedsPredicate(gardenCluster.GetClient()),
+		))
+	})
+}
+
+// shootsOfManagedSeedsPredicate filters change events to only enqueue if the shoot has a managed seed associated with it and the EgressCIDRs changes
+func shootsOfManagedSeedsPredicate(c client.Reader) predicate.TypedFuncs[*gardencorev1beta1.Shoot] {
+	log := logf.Log.WithName("shootsOfManagedSeedsPredicate")
+	return predicate.TypedFuncs[*gardencorev1beta1.Shoot]{
+		UpdateFunc: func(e event.TypedUpdateEvent[*gardencorev1beta1.Shoot]) bool {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			log.WithValues("shoot", e.ObjectNew)
+			ms, err := kubernetesutil.GetManagedSeedWithReader(ctx, c, e.ObjectNew.Namespace, e.ObjectNew.Name)
+			if err != nil {
+				log.Error(err, "getting managedseed from shoot")
+				return false
+			}
+			if ms == nil {
+				log.V(1).Info("no ManagedSeed available for shoot")
+				return false
+			}
+			if e.ObjectNew.Status.Networking == nil || e.ObjectOld.Status.Networking == nil {
+				return false
+			}
+			newEgress := ptr.Deref(e.ObjectNew.Status.Networking, gardencorev1beta1.NetworkingStatus{}).EgressCIDRs
+			oldEgress := ptr.Deref(e.ObjectOld.Status.Networking, gardencorev1beta1.NetworkingStatus{}).EgressCIDRs
+			return !slices.Equal(slices.Sorted(slices.Values(newEgress)), slices.Sorted(slices.Values(oldEgress)))
+		},
+		DeleteFunc: func(event.TypedDeleteEvent[*gardencorev1beta1.Shoot]) bool {
+			// in case of shoot deletion we need to remove the CIDR of the seed
+			return true
+		},
+		GenericFunc: func(event.TypedGenericEvent[*gardencorev1beta1.Shoot]) bool {
+			return false
+		},
+		CreateFunc: func(event.TypedCreateEvent[*gardencorev1beta1.Shoot]) bool {
+			return false
+		},
+	}
+}
+
 func setupGardenCluster(mgr manager.Manager, kubeconfigFile string) (cluster.Cluster, error) {
 	gardenRESTConfig, err := kubernetes.RESTConfigFromKubeconfigFile(kubeconfigFile, kubernetes.AuthTokenFile, kubernetes.AuthExec)
 	if err != nil {
@@ -147,7 +235,7 @@ func setupGardenCluster(mgr manager.Manager, kubeconfigFile string) (cluster.Clu
 			DefaultNamespaces: map[string]cache.Config{
 				// ManagedSeeds (and their underlying Shoots) must always be in the "garden" namespace, so that is the
 				// only one we need to watch.
-				"garden": {},
+				v1beta1constants.GardenNamespace: {},
 			},
 		}
 	})
