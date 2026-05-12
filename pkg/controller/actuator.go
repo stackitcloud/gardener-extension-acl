@@ -51,8 +51,10 @@ import (
 )
 
 const (
-	// ResourceNameSeed is name of the managedResource object
+	// ResourceNameSeed is name of the managedResource object for shoot extension
 	ResourceNameSeed = "acl-seed"
+	// ResourceNameGarden is name of the managedResource object for garden extension
+	ResourceNameGarden = "acl-garden"
 	// ChartNameSeed name of the helm chart
 	ChartNameSeed = "seed"
 	// HashAnnotationName name of annotation for triggering the envoyfilter webhook
@@ -284,6 +286,8 @@ func (a *actuator) createSeedResources(
 		APIEnvoyFilterSpec: apiEnvoyFilterSpec,
 	}
 
+	mrName := ResourceNameSeed
+
 	if cluster != nil {
 		values.Suffix = cluster.Shoot.Status.TechnicalID
 
@@ -311,6 +315,7 @@ func (a *actuator) createSeedResources(
 		}
 	} else {
 		values.Suffix = "garden"
+		mrName = ResourceNameGarden
 	}
 
 	renderer, err := chartrenderer.NewForConfig(a.config)
@@ -320,7 +325,7 @@ func (a *actuator) createSeedResources(
 
 	log.Info("Component is being applied", "component", "component-name", "namespace", namespace)
 
-	return a.createManagedResource(ctx, namespace, ResourceNameSeed, "seed", renderer, ChartNameSeed, namespace, values.AsMap(), nil, charts.Seed)
+	return a.createManagedResource(ctx, namespace, mrName, "seed", renderer, ChartNameSeed, namespace, values.AsMap(), nil, charts.Seed)
 }
 
 type values struct {
