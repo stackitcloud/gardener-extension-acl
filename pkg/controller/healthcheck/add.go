@@ -23,8 +23,11 @@ import (
 	"github.com/gardener/gardener/extensions/pkg/controller/healthcheck/general"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/ptr"
+	"k8s.io/utils/set"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -39,6 +42,23 @@ var DefaultAddOptions = healthcheck.DefaultAddArgs{
 // RegisterHealthChecks registers health checks for each extension resource
 // HealthChecks are grouped by extension (e.g worker), extension.type (e.g aws) and  Health Check Type (e.g SystemComponentsHealthy)
 func RegisterHealthChecks(mgr manager.Manager, opts *healthcheck.DefaultAddArgs) error {
+	checks := []healthcheck.ConditionTypeToHealthCheck{}
+	classes := set.New(opts.ExtensionClasses...)
+	if classes.Has(extensionsv1alpha1.ExtensionClassShoot) {
+		checks = append(checks, healthcheck.ConditionTypeToHealthCheck{
+			ConditionType: string(gardencorev1beta1.SeedExtensionsReady),
+			HealthCheck:   general.CheckManagedResource(controller.ResourceNameSeed),
+			PreCheckFunc:  isExtensionClass(extensionsv1alpha1.ExtensionClassShoot),
+		})
+	}
+	if classes.Has(extensionsv1alpha1.ExtensionClassGarden) {
+		checks = append(checks, healthcheck.ConditionTypeToHealthCheck{
+			ConditionType: string(operatorv1alpha1.VirtualComponentsHealthy),
+			HealthCheck:   general.CheckManagedResource(controller.ResourceNameGarden),
+			PreCheckFunc:  isExtensionClass(extensionsv1alpha1.ExtensionClassGarden),
+		})
+	}
+
 	return healthcheck.DefaultRegistration(
 		controller.Type,
 		extensionsv1alpha1.SchemeGroupVersion.WithKind(extensionsv1alpha1.ExtensionResource),
@@ -47,12 +67,7 @@ func RegisterHealthChecks(mgr manager.Manager, opts *healthcheck.DefaultAddArgs)
 		mgr,
 		*opts,
 		nil,
-		[]healthcheck.ConditionTypeToHealthCheck{
-			{
-				ConditionType: string(gardencorev1beta1.SeedExtensionsReady),
-				HealthCheck:   general.CheckManagedResource(controller.ResourceNameSeed),
-			},
-		},
+		checks,
 		sets.New[gardencorev1beta1.ConditionType](),
 	)
 }
@@ -60,4 +75,17 @@ func RegisterHealthChecks(mgr manager.Manager, opts *healthcheck.DefaultAddArgs)
 // AddToManager adds a controller with the default Options.
 func AddToManager(_ context.Context, mgr manager.Manager) error {
 	return RegisterHealthChecks(mgr, &DefaultAddOptions)
+}
+
+func isExtensionClass(class extensionsv1alpha1.ExtensionClass) healthcheck.PreCheckFunc {
+	return func(_ context.Context, _ client.Client, req client.Object, _ any) bool {
+		ext, ok := req.(*extensionsv1alpha1.Extension)
+		if !ok {
+			return false
+		}
+		if ptr.Deref(ext.Spec.Class, extensionsv1alpha1.ExtensionClassShoot) != class {
+			return false
+		}
+		return true
+	}
 }
