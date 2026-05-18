@@ -38,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -124,7 +125,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		allowedCIDRer allowedcidrs.AllowedCIDRer
 	)
 
-	if ex.Spec.Class == nil || *ex.Spec.Class == extensionsv1alpha1.ExtensionClassShoot {
+	if ptr.Deref(ex.GetExtensionSpec().GetExtensionClass(), extensionsv1alpha1.ExtensionClassShoot) == extensionsv1alpha1.ExtensionClassShoot {
 		var err error
 		cluster, err = helper.GetClusterForExtension(ctx, a.client, ex)
 		if err != nil {
@@ -135,7 +136,6 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 			Client:  a.client,
 		}
 	} else {
-		// TODO: retrieve garden specific things
 		garden, err := a.getGarden(ctx)
 		if err != nil {
 			return err
@@ -174,7 +174,7 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 		return err
 	}
 
-	if err := a.createSeedResources(
+	if err := a.createFilters(
 		ctx,
 		log,
 		ex.GetNamespace(),
@@ -243,7 +243,12 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	namespace := ex.GetNamespace()
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
-	return a.deleteSeedResources(ctx, log, namespace)
+	mrName := ResourceNameSeed
+	if ptr.Deref(ex.GetExtensionSpec().GetExtensionClass(), extensionsv1alpha1.ExtensionClassShoot) == extensionsv1alpha1.ExtensionClassGarden {
+		mrName = ResourceNameGarden
+	}
+
+	return a.deleteManagedResource(ctx, log, namespace, mrName)
 }
 
 // ForceDelete implements Network.Actuator.
@@ -261,7 +266,7 @@ func (a *actuator) Migrate(ctx context.Context, log logr.Logger, ex *extensionsv
 	return a.Delete(ctx, log, ex)
 }
 
-func (a *actuator) createSeedResources(
+func (a *actuator) createFilters(
 	ctx context.Context,
 	log logr.Logger,
 	namespace string,
@@ -356,16 +361,16 @@ func (v values) AsMap() map[string]any {
 	return m
 }
 
-func (a *actuator) deleteSeedResources(ctx context.Context, log logr.Logger, namespace string) error {
-	log.Info("Deleting managed resource for seed", "namespace", namespace)
+func (a *actuator) deleteManagedResource(ctx context.Context, log logr.Logger, namespace, name string) error {
+	log.Info("Deleting managed resource", "namespace", namespace)
 
-	if err := managedresources.Delete(ctx, a.client, namespace, ResourceNameSeed, false); err != nil {
+	if err := managedresources.Delete(ctx, a.client, namespace, name, false); err != nil {
 		return err
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, deletionTimeout)
 	defer cancel()
-	return managedresources.WaitUntilDeleted(timeoutCtx, a.client, namespace, ResourceNameSeed)
+	return managedresources.WaitUntilDeleted(timeoutCtx, a.client, namespace, name)
 }
 
 func (a *actuator) createManagedResource(
