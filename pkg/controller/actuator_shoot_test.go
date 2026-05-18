@@ -20,7 +20,7 @@ import (
 	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
 )
 
-var _ = Describe("actuator test", func() {
+var _ = Describe("actuator shoot test", func() {
 	var (
 		a                                                *actuator
 		shootNamespace1, shootNamespace2                 string
@@ -61,7 +61,7 @@ var _ = Describe("actuator test", func() {
 			}
 			extSpecJSON, err := json.Marshal(extSpec)
 			Expect(err).NotTo(HaveOccurred())
-			ext := createNewExtension(shootNamespace1, extSpecJSON)
+			ext := createNewExtension(shootNamespace1, extSpecJSON, extensionsv1alpha1.ExtensionClassShoot)
 			Expect(ext).To(Not(BeNil()))
 
 			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
@@ -86,7 +86,7 @@ var _ = Describe("actuator test", func() {
 			}
 			extSpecJSON, err := json.Marshal(extSpec)
 			Expect(err).NotTo(HaveOccurred())
-			ext := createNewExtension(shootNamespace1, extSpecJSON)
+			ext := createNewExtension(shootNamespace1, extSpecJSON, extensionsv1alpha1.ExtensionClassShoot)
 			Expect(ext).To(Not(BeNil()))
 
 			// act
@@ -128,7 +128,7 @@ var _ = Describe("actuator test", func() {
 				}
 				extSpecJSON, err := json.Marshal(extSpec)
 				Expect(err).NotTo(HaveOccurred())
-				ext := createNewExtension(shootNamespace1, extSpecJSON)
+				ext := createNewExtension(shootNamespace1, extSpecJSON, extensionsv1alpha1.ExtensionClassShoot)
 				Expect(ext).To(Not(BeNil()))
 
 				Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
@@ -153,7 +153,7 @@ var _ = Describe("actuator test", func() {
 				}
 				extSpecJSON, err := json.Marshal(extSpec)
 				Expect(err).NotTo(HaveOccurred())
-				ext := createNewExtension(shootNamespace1, extSpecJSON)
+				ext := createNewExtension(shootNamespace1, extSpecJSON, extensionsv1alpha1.ExtensionClassShoot)
 				Expect(ext).To(Not(BeNil()))
 
 				Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
@@ -191,11 +191,11 @@ var _ = Describe("actuator test", func() {
 			}
 			extSpecJSON1, err := json.Marshal(extSpec1)
 			Expect(err).NotTo(HaveOccurred())
-			ext1 := createNewExtension(shootNamespace1, extSpecJSON1)
+			ext1 := createNewExtension(shootNamespace1, extSpecJSON1, extensionsv1alpha1.ExtensionClassShoot)
 			Expect(ext1).To(Not(BeNil()))
 
 			// contents of the seconds extension don't matter, it just needs to exist
-			ext2 := createNewExtension(shootNamespace2, []byte("{}"))
+			ext2 := createNewExtension(shootNamespace2, []byte("{}"), extensionsv1alpha1.ExtensionClassShoot)
 			Expect(ext2).To(Not(BeNil()))
 
 			// simulate a hibernated cluster by deleting the Gateway object
@@ -235,7 +235,7 @@ var _ = Describe("actuator test", func() {
 			}
 			extSpecJSON, err := json.Marshal(extSpec)
 			Expect(err).NotTo(HaveOccurred())
-			ext := createNewExtension(shootNamespace1, extSpecJSON)
+			ext := createNewExtension(shootNamespace1, extSpecJSON, extensionsv1alpha1.ExtensionClassShoot)
 			Expect(ext).To(Not(BeNil()))
 
 			// act
@@ -303,7 +303,7 @@ var _ = Describe("actuator test", func() {
 			}
 			extSpecJSON, err := json.Marshal(extSpec)
 			Expect(err).NotTo(HaveOccurred())
-			ext := createNewExtension(shootNamespace1, extSpecJSON)
+			ext := createNewExtension(shootNamespace1, extSpecJSON, extensionsv1alpha1.ExtensionClassShoot)
 			Expect(ext).To(Not(BeNil()))
 
 			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())

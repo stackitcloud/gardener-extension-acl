@@ -151,12 +151,21 @@ func watchInfrastructure(mgr manager.Manager) extensionscontroller.WatchBuilder 
 
 // watchShootsOfManagedSeeds watches for Shoot changes that are a managed seed and triggers the Extension reconciliation.
 func watchShootsOfManagedSeeds(mgr manager.Manager, gardenCluster cluster.Cluster) extensionscontroller.WatchBuilder {
-	// Map Infrastructure changes to the Extension
-	mapFunc := func(ctx context.Context, shoot *gardencorev1beta1.Shoot) []reconcile.Request {
+	// Watch for Infrastructure changes outside shoot reconciliation
+	return extensionscontroller.NewWatchBuilder(func(ctrl controller.Controller) error {
+		return ctrl.Watch(source.Kind(gardenCluster.GetCache(), &gardencorev1beta1.Shoot{},
+			handler.TypedEnqueueRequestsFromMapFunc(mapShootsOfManagedSeedsToExtensions(mgr.GetClient())),
+			shootsOfManagedSeedsPredicate(gardenCluster.GetClient()),
+		))
+	})
+}
+
+func mapShootsOfManagedSeedsToExtensions(r client.Reader) handler.TypedMapFunc[*gardencorev1beta1.Shoot, reconcile.Request] {
+	return func(ctx context.Context, shoot *gardencorev1beta1.Shoot) []reconcile.Request {
 		log := logf.FromContext(ctx).WithValues("shoot", shoot)
 
 		exts := &extensionsv1alpha1.ExtensionList{}
-		if err := mgr.GetCache().List(ctx, exts, client.InNamespace(v1beta1constants.GardenNamespace)); err != nil {
+		if err := r.List(ctx, exts, client.InNamespace(v1beta1constants.GardenNamespace)); err != nil {
 			log.Error(err, "listing extensions for managedseed enqueue requests")
 			return nil
 		}
@@ -176,14 +185,6 @@ func watchShootsOfManagedSeeds(mgr manager.Manager, gardenCluster cluster.Cluste
 		}
 		return reqs
 	}
-
-	// Watch for Infrastructure changes outside shoot reconciliation
-	return extensionscontroller.NewWatchBuilder(func(ctrl controller.Controller) error {
-		return ctrl.Watch(source.Kind(gardenCluster.GetCache(), &gardencorev1beta1.Shoot{},
-			handler.TypedEnqueueRequestsFromMapFunc(mapFunc),
-			shootsOfManagedSeedsPredicate(gardenCluster.GetClient()),
-		))
-	})
 }
 
 // shootsOfManagedSeedsPredicate filters change events to only enqueue if the shoot has a managed seed associated with it and the EgressCIDRs changes
@@ -201,9 +202,6 @@ func shootsOfManagedSeedsPredicate(c client.Reader) predicate.TypedFuncs[*garden
 			}
 			if ms == nil {
 				log.V(1).Info("no ManagedSeed available for shoot")
-				return false
-			}
-			if e.ObjectNew.Status.Networking == nil || e.ObjectOld.Status.Networking == nil {
 				return false
 			}
 			newEgress := ptr.Deref(e.ObjectNew.Status.Networking, gardencorev1beta1.NetworkingStatus{}).EgressCIDRs
