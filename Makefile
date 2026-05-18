@@ -109,9 +109,10 @@ generate: $(HELM) $(YQ)
 format: $(GOIMPORTS) $(GOIMPORTSREVISER)
 	@bash $(GARDENER_HACK_DIR)/format.sh ./cmd ./pkg
 
-.PHONY: test
+.PHONY: test 
+test: DIRS ?= "./cmd/... ./pkg/..."
 test: $(REPORT_COLLECTOR) $(SETUP_ENVTEST)
-	@./hack/test.sh ./cmd/... ./pkg/...
+	@./hack/test.sh $(DIRS)
 
 .PHONY: test-cov
 test-cov:

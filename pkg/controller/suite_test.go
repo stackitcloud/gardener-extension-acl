@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -10,9 +11,12 @@ import (
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	gardenercorev1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
+	seedmanagementinstall "github.com/gardener/gardener/pkg/apis/seedmanagement/install"
+	gardenlogger "github.com/gardener/gardener/pkg/logger"
+	gardenerenvtest "github.com/gardener/gardener/test/envtest"
 	"github.com/go-logr/logr"
-	"github.com/go-logr/logr/testr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"istio.io/api/networking/v1beta1"
@@ -30,21 +34,24 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-var cfg *rest.Config
-var k8sClient client.Client
-var testEnv *envtest.Environment
-var clientScheme *runtime.Scheme
-var logger logr.Logger
-var ctx = context.TODO()
-var shootNamespaceCounter = 1
-var istioNamespaceCounter = 1
+var (
+	cfg                   *rest.Config
+	k8sClient             client.Client
+	testEnv               *envtest.Environment
+	gardenTestEnv         *gardenerenvtest.GardenerTestEnvironment
+	clientScheme          *runtime.Scheme
+	logger                logr.Logger
+	ctx                   = context.TODO()
+	shootNamespaceCounter = 1
+	istioNamespaceCounter = 1
+)
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	logger = testr.New(t)
 
 	RunSpecs(t, "Extension Test Suite")
 }
@@ -52,10 +59,22 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 	var err error
 
+	logf.SetLogger(gardenlogger.MustNewZapLogger(gardenlogger.DebugLevel, gardenlogger.FormatJSON, zap.WriteTo(GinkgoWriter)))
+	logger = logf.Log.WithName("foo")
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "upstream-crds")},
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "upstream-crds"),
+		},
 		ErrorIfCRDPathMissing: true,
+	}
+
+	gardenTestEnv = &gardenerenvtest.GardenerTestEnvironment{
+		Environment: testEnv,
+		GardenerAPIServer: &gardenerenvtest.GardenerAPIServer{
+			Args: []string{"--disable-admission-plugins="},
+		},
 	}
 
 	clientScheme = runtime.NewScheme()
@@ -63,12 +82,13 @@ var _ = BeforeSuite(func() {
 	Expect(extensionsv1alpha1.AddToScheme(clientScheme)).To(Succeed())
 	Expect(resourcesv1alpha1.AddToScheme(clientScheme)).To(Succeed())
 	Expect(apiextensions.AddToScheme(clientScheme)).To(Succeed())
+	Expect(operatorv1alpha1.AddToScheme(clientScheme)).To(Succeed())
 	Expect(istionetworkingv1beta1.AddToScheme(clientScheme)).To(Succeed())
 	Expect(istionetworkingv1alpha3.AddToScheme(clientScheme)).To(Succeed())
+	Expect(seedmanagementinstall.AddToScheme(clientScheme)).To(Succeed())
 
-	cfg, err = testEnv.Start()
+	cfg, err = gardenTestEnv.Start()
 	Expect(err).ToNot(HaveOccurred())
-	Expect(cfg).NotTo(BeNil())
 
 	//+kubebuilder:scaffold:scheme
 
@@ -80,8 +100,7 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
+	Expect(gardenTestEnv.Stop()).To(Succeed())
 })
 
 func createGardenNamespace() {
@@ -188,7 +207,7 @@ func updateServiceStatus(name, namespace string, status corev1.ServiceStatus) {
 	Expect(k8sClient.Status().Update(ctx, svc)).ShouldNot(HaveOccurred())
 }
 
-func createNewExtension(shootNamespace string, providerConfig []byte) *extensionsv1alpha1.Extension {
+func createNewExtension(shootNamespace string, providerConfig []byte, class extensionsv1alpha1.ExtensionClass) *extensionsv1alpha1.Extension {
 	ext := &extensionsv1alpha1.Extension{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "acl",
@@ -196,7 +215,8 @@ func createNewExtension(shootNamespace string, providerConfig []byte) *extension
 		},
 		Spec: extensionsv1alpha1.ExtensionSpec{
 			DefaultSpec: extensionsv1alpha1.DefaultSpec{
-				Type: "acl",
+				Class: &class,
+				Type:  "acl",
 				ProviderConfig: &runtime.RawExtension{
 					Raw: providerConfig,
 				},
@@ -274,6 +294,65 @@ func createNewCluster(shootNamespace string) {
 	}
 
 	Expect(k8sClient.Create(ctx, cluster)).ShouldNot(HaveOccurred())
+}
+
+var (
+	virtualGardenPodCIDR  = netip.MustParsePrefix("10.0.0.0/16")
+	virtualGardenNodeCIDR = netip.MustParsePrefix("192.168.0.0/16")
+	virtualGardenURL      = "virtual-garden"
+)
+
+func createNewGarden() {
+	garden := &operatorv1alpha1.Garden{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "garden",
+		},
+		Spec: operatorv1alpha1.GardenSpec{
+			VirtualCluster: operatorv1alpha1.VirtualCluster{
+				Networking: operatorv1alpha1.Networking{
+					Services: []string{"10.254.0.0/16"},
+				},
+				Gardener: operatorv1alpha1.Gardener{
+					ClusterIdentity: "foo",
+				},
+				Kubernetes: operatorv1alpha1.Kubernetes{
+					Version: "1.30.1",
+				},
+				Maintenance: operatorv1alpha1.Maintenance{
+					TimeWindow: gardencorev1beta1.MaintenanceTimeWindow{
+						Begin: "220000+0100",
+						End:   "230000+0100",
+					},
+				},
+			},
+			RuntimeCluster: operatorv1alpha1.RuntimeCluster{
+				Networking: operatorv1alpha1.RuntimeNetworking{
+					Pods:     []string{virtualGardenPodCIDR.String()},
+					Nodes:    []string{virtualGardenNodeCIDR.String()},
+					Services: []string{"10.255.0.0/16"},
+				},
+				Ingress: operatorv1alpha1.Ingress{
+					Controller: gardencorev1beta1.IngressController{
+						Kind: "nginx",
+					},
+				},
+			},
+		},
+	}
+
+	Expect(k8sClient.Create(ctx, garden)).ShouldNot(HaveOccurred())
+	garden.Status = operatorv1alpha1.GardenStatus{
+		VirtualClusterStatus: &operatorv1alpha1.VirtualClusterStatus{
+			AdvertisedAddresses: []operatorv1alpha1.AdvertisedAddress{
+				{
+					Name: operatorv1alpha1.AdvertisedAddressVirtual,
+					URL:  "https://" + virtualGardenURL,
+				},
+			},
+		},
+	}
+
+	Expect(k8sClient.Status().Update(ctx, garden)).To(Succeed())
 }
 
 func createShootInfo(cidrs []string) {
