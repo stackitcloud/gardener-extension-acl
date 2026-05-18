@@ -245,7 +245,12 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	namespace := ex.GetNamespace()
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
-	return a.deleteSeedResources(ctx, log, namespace)
+	mrName := ResourceNameSeed
+	if ptr.Deref(ex.GetExtensionSpec().GetExtensionClass(), extensionsv1alpha1.ExtensionClassShoot) == extensionsv1alpha1.ExtensionClassGarden {
+		mrName = ResourceNameGarden
+	}
+
+	return a.deleteManagedResource(ctx, log, namespace, mrName)
 }
 
 // ForceDelete implements Network.Actuator.
@@ -263,7 +268,7 @@ func (a *actuator) Migrate(ctx context.Context, log logr.Logger, ex *extensionsv
 	return a.Delete(ctx, log, ex)
 }
 
-func (a *actuator) createSeedResources(
+func (a *actuator) createFilters(
 	ctx context.Context,
 	log logr.Logger,
 	namespace string,
@@ -358,16 +363,16 @@ func (v values) AsMap() map[string]any {
 	return m
 }
 
-func (a *actuator) deleteSeedResources(ctx context.Context, log logr.Logger, namespace string) error {
-	log.Info("Deleting managed resource for seed", "namespace", namespace)
+func (a *actuator) deleteManagedResource(ctx context.Context, log logr.Logger, namespace, name string) error {
+	log.Info("Deleting managed resource", "namespace", namespace)
 
-	if err := managedresources.Delete(ctx, a.client, namespace, ResourceNameSeed, false); err != nil {
+	if err := managedresources.Delete(ctx, a.client, namespace, name, false); err != nil {
 		return err
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, deletionTimeout)
 	defer cancel()
-	return managedresources.WaitUntilDeleted(timeoutCtx, a.client, namespace, ResourceNameSeed)
+	return managedresources.WaitUntilDeleted(timeoutCtx, a.client, namespace, name)
 }
 
 func (a *actuator) createManagedResource(
