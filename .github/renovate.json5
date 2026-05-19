@@ -14,12 +14,8 @@
   automergeStrategy: 'squash',
   // required for automerging patch updates
   separateMinorPatch: true,
-  reviewers: [
-    'team:ske-networking'
-  ],
   additionalReviewers: [
-    'robinschneider',
-    'timebertt',
+    'team:ske-networking'
   ],
   customManagers: [
     {
