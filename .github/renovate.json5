@@ -15,8 +15,7 @@
   // required for automerging patch updates
   separateMinorPatch: true,
   additionalReviewers: [
-    'robinschneider',
-    'timebertt',
+    'team:ske-networking'
   ],
   customManagers: [
     {
