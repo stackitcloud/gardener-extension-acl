@@ -5,8 +5,8 @@ go 1.25.6
 toolchain go1.26.3
 
 require (
-	github.com/gardener/gardener v1.140.4
-	github.com/gardener/gardener/pkg/apis v1.140.4
+	github.com/gardener/gardener v1.140.5
+	github.com/gardener/gardener/pkg/apis v1.140.5
 	github.com/go-logr/logr v1.4.3
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo/v2 v2.28.3
