@@ -25,9 +25,7 @@ spec:
         networking.resources.gardener.cloud/to-garden-virtual-garden-kube-apiserver-tcp-443: allowed
 {{ include "labels" . | indent 8 }}
     spec:
-      {{- if .Values.gardener.runtimeCluster.priorityClassName }}
-      priorityClassName: {{ .Values.gardener.runtimeCluster.priorityClassName }}
-      {{- end }}
+      priorityClassName: {{ default "gardener-system-900" .Values.gardener.runtimeCluster.priorityClassName }}
       serviceAccountName: {{ include "name" . }}
       containers:
       - name: {{ include "name" . }}
@@ -54,7 +52,7 @@ spec:
         env:
         {{- if .Values.gardener.runtimeCluster.enabled }}
         - name: GARDEN_KUBECONFIG
-          value: /var/run/secrets/gardener.cloud/shoot/generic-kubeconfig/kubeconfig
+          value: /var/run/secrets/gardener.cloud/garden/generic-kubeconfig/kubeconfig
         {{- end }}
         - name: LEADER_ELECTION_NAMESPACE
           valueFrom:
@@ -80,7 +78,7 @@ spec:
         volumeMounts:
         {{- if .Values.gardener.runtimeCluster.enabled }}
         - name: kubeconfig
-          mountPath: /var/run/secrets/gardener.cloud/shoot/generic-kubeconfig
+          mountPath: /var/run/secrets/gardener.cloud/garden/generic-kubeconfig
           readOnly: true
         {{- end }}
         {{- if .Values.imageVectorOverwrite }}
