@@ -36,6 +36,8 @@ import (
 	"github.com/pkg/errors"
 	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
@@ -48,6 +50,8 @@ import (
 	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 const (
@@ -146,6 +150,21 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	var alwaysAllowedCIDRs []string
 
 	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, helper.GetSeedSpecificAllowedCIDRs(cluster.Seed)...)
+
+	// This relies on the LB hairpinning in-cluster traffic out and back in
+	// through the Seed's egress IP, which is the common case when the LB
+	// exposes ipMode: Proxy and the CNI does not short-circuit clusterIP
+	// traffic (e.g., Cilium with bpfSocketLBHostnsOnly: true).
+	if ok, err := a.usesProxyTypeLBService(ctx, istioNamespace); err != nil {
+		log.Error(err, "unable to get Istio Ingressgateway service", "namespace", istioNamespace)
+		return fmt.Errorf("unable to get istio service: %w", err)
+	} else if ok {
+		egressCIDRs, err := a.getSeedEgressIPOnManagedSeeds(ctx)
+		if err != nil {
+			return err
+		}
+		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, egressCIDRs...)
+	}
 
 	if len(a.extensionConfig.AdditionalAllowedCIDRs) >= 1 {
 		alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, a.extensionConfig.AdditionalAllowedCIDRs...)
@@ -260,14 +279,14 @@ func (a *actuator) createSeedResources(
 	spec *extensionspec.ExtensionSpec,
 	cluster *controller.Cluster,
 	hosts []string,
-	shootSpecificCIRDs []string,
+	shootSpecificCIDRs []string,
 	alwaysAllowedCIDRs []string,
 	istioNamespace string,
 	istioLabels map[string]string,
 ) error {
 	var err error
 
-	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, shootSpecificCIRDs...)
+	alwaysAllowedCIDRs = append(alwaysAllowedCIDRs, shootSpecificCIDRs...)
 
 	apiEnvoyFilterSpec, err := envoyfilters.BuildAPIEnvoyFilterSpecForHelmChart(
 		spec.Rule, hosts, alwaysAllowedCIDRs, istioLabels,
@@ -446,4 +465,67 @@ func (a *actuator) findDefaultIstioLabels(
 	}
 
 	return gw.Spec.Selector, nil
+}
+
+// usesProxyTypeLBService checks the `istio-ingressgateway` LoadBalancer Service
+// selected by its labels whether it is exposing the service with the Proxy IPMode
+func (a *actuator) usesProxyTypeLBService(
+	ctx context.Context,
+	namespace string,
+) (bool, error) {
+	svc := corev1.Service{}
+	err := a.client.Get(
+		ctx,
+		client.ObjectKey{
+			Name:      v1beta1constants.DefaultSNIIngressServiceName,
+			Namespace: namespace,
+		},
+		&svc)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	for _, ing := range svc.Status.LoadBalancer.Ingress {
+		if m := ing.IPMode; m != nil && *m == corev1.LoadBalancerIPModeProxy {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// getSeedEgressIPOnManagedSeeds returns the egressIP CIDRs of the ManagedSeed, if the
+// Seed is not a shoot, it will return an empty list
+func (a *actuator) getSeedEgressIPOnManagedSeeds(ctx context.Context) ([]string, error) {
+	cm := corev1.ConfigMap{}
+	if err := a.client.Get(ctx,
+		client.ObjectKey{
+			Name:      v1beta1constants.ConfigMapNameShootInfo,
+			Namespace: metav1.NamespaceSystem,
+		},
+		&cm); err != nil {
+		if apierrors.IsNotFound(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	cidrsStr, ok := cm.Data["egressCIDRs"]
+	if !ok {
+		return nil, errors.New("unable to get egress CIDRs from shoot-info ConfigMap")
+	}
+
+	var cidrs []string
+	for i := range strings.SplitSeq(cidrsStr, ",") {
+		_, _, err := net.ParseCIDR(i)
+		if err != nil {
+			return nil, err
+		}
+		cidrs = append(cidrs, i)
+	}
+
+	return cidrs, nil
 }
