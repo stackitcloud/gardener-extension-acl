@@ -30,6 +30,7 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
+	reconcilerutils "github.com/gardener/gardener/pkg/controllerutils/reconciler"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -68,12 +69,11 @@ const (
 
 // Error variables for controller pkg
 var (
-	ErrSpecAction            = errors.New("action must either be 'ALLOW' or 'DENY'")
-	ErrSpecRule              = errors.New("rule must be present")
-	ErrSpecType              = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
-	ErrSpecCIDR              = errors.New("CIDRs must not be empty")
-	ErrSpecTooManyCIDRs      = errors.New("number of CIDRs exceeds the maximum allowed")
-	ErrNoAdvertisedAddresses = errors.New("advertised addresses are not available, likely because cluster creation has not yet completed")
+	ErrSpecAction       = errors.New("action must either be 'ALLOW' or 'DENY'")
+	ErrSpecRule         = errors.New("rule must be present")
+	ErrSpecType         = errors.New("type must either be 'direct_remote_ip', 'remote_ip' or 'source_ip'")
+	ErrSpecCIDR         = errors.New("CIDRs must not be empty")
+	ErrSpecTooManyCIDRs = errors.New("number of CIDRs exceeds the maximum allowed")
 )
 
 // ExtensionState contains the State of the Extension
@@ -173,6 +173,12 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 
 	hosts, err := allowedCIDRer.Hosts()
 	if err != nil {
+		if errors.Is(err, allowedcidrs.ErrNoAdvertisedAddresses) {
+			return &reconcilerutils.RequeueAfterError{
+				Cause:        err,
+				RequeueAfter: 10 * time.Second,
+			}
+		}
 		return err
 	}
 
