@@ -1,0 +1,42 @@
+{{- if not .Values.gardener.runtimeCluster.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "name" . }}:shoot
+  labels:
+{{ include "labels" . | indent 4 }}
+rules:
+- apiGroups:
+  - extensions.gardener.cloud
+  resources:
+  - clusters
+  - dnsrecords
+  - infrastructures
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "name" . }}:shoot
+  labels:
+{{ include "labels" . | indent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "name" . }}:shoot
+subjects:
+- kind: ServiceAccount
+  name: {{ include "name" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
