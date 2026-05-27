@@ -24,6 +24,7 @@ type Garden struct {
 // AllowedCIDRs returns always allowed cidrs for garden ACL
 func (g *Garden) AllowedCIDRs(ctx context.Context, _ *extensionsv1alpha1.Extension) ([]string, error) {
 	var cidrs []string
+	// add node and pod CIDR from runtime cluster to ensure garden components (e.g. scheduler, controller-manager etc.) are able to access the virtual garden
 	cidrs = append(cidrs, helper.GetGardenSpecificAllowedCIDRs(g.Garden)...)
 
 	seedCidrs, err := g.managedSeedsEgressCIDRs(ctx)
