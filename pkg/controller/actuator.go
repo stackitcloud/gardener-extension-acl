@@ -246,7 +246,7 @@ func (a *actuator) Delete(ctx context.Context, log logr.Logger, ex *extensionsv1
 	log.Info("Component is being deleted", "component", "", "namespace", namespace)
 
 	mrName := ResourceNameSeed
-	if ptr.Deref(ex.GetExtensionSpec().GetExtensionClass(), extensionsv1alpha1.ExtensionClassShoot) == extensionsv1alpha1.ExtensionClassGarden {
+	if hasClassGarden(ex) {
 		mrName = ResourceNameGarden
 	}
 
@@ -467,8 +467,7 @@ func (a *actuator) findIstioNamespaceForExtension(
 	gw := istionetworkv1beta1.Gateway{}
 
 	gatewayName := istioGatewayName
-
-	if ex.Spec.Class != nil && *ex.Spec.Class == extensionsv1alpha1.ExtensionClassGarden {
+	if hasClassGarden(ex) {
 		gatewayName = operatorv1alpha1.VirtualGardenNamePrefix + gatewayName
 	}
 
@@ -487,7 +486,7 @@ func (a *actuator) findIstioNamespaceForExtension(
 	if err != nil {
 		return "", nil, err
 	}
-	if ex.Spec.Class != nil && *ex.Spec.Class == extensionsv1alpha1.ExtensionClassGarden {
+	if hasClassGarden(ex) {
 		for _, dep := range deployments.Items {
 			if dep.Namespace == operatorv1alpha1.VirtualGardenDefaultSNIIngressNamespace {
 				return dep.Namespace, gw.Spec.Selector, nil
