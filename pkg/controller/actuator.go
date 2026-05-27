@@ -492,13 +492,6 @@ func (a *actuator) findIstioNamespaceForExtension(
 	if err != nil {
 		return "", nil, err
 	}
-	if hasClassGarden(ex) {
-		for _, dep := range deployments.Items {
-			if dep.Namespace == operatorv1alpha1.VirtualGardenDefaultSNIIngressNamespace {
-				return dep.Namespace, gw.Spec.Selector, nil
-			}
-		}
-	}
 
 	if len(deployments.Items) != 1 {
 		return "", nil, fmt.Errorf("no istio namespace could be selected, because the number of deployments found is %d", len(deployments.Items))
