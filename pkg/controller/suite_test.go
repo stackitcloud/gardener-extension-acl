@@ -342,12 +342,10 @@ func createNewGarden() {
 
 	Expect(k8sClient.Create(ctx, garden)).ShouldNot(HaveOccurred())
 	garden.Status = operatorv1alpha1.GardenStatus{
-		VirtualClusterStatus: &operatorv1alpha1.VirtualClusterStatus{
-			AdvertisedAddresses: []operatorv1alpha1.AdvertisedAddress{
-				{
-					Name: operatorv1alpha1.AdvertisedAddressVirtual,
-					URL:  "https://" + virtualGardenURL,
-				},
+		AdvertisedAddresses: []operatorv1alpha1.AdvertisedAddress{
+			{
+				Name: operatorv1alpha1.AdvertisedAddressVirtualGarden,
+				URL:  "https://" + virtualGardenURL,
 			},
 		},
 	}

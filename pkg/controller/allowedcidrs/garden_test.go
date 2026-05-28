@@ -88,16 +88,14 @@ var _ = Describe("#Garden", func() {
 		})
 
 		It("should return only addresses of virtual garden", func() {
-			garden.Garden.Status.VirtualClusterStatus = &operatorv1alpha1.VirtualClusterStatus{
-				AdvertisedAddresses: []operatorv1alpha1.AdvertisedAddress{
-					{
-						Name: "foo",
-						URL:  "https://foo",
-					},
-					{
-						Name: operatorv1alpha1.AdvertisedAddressVirtual,
-						URL:  "https://bar",
-					},
+			garden.Garden.Status.AdvertisedAddresses = []operatorv1alpha1.AdvertisedAddress{
+				{
+					Name: "foo",
+					URL:  "https://foo",
+				},
+				{
+					Name: operatorv1alpha1.AdvertisedAddressVirtualGarden,
+					URL:  "https://bar",
 				},
 			}
 			hosts, err := garden.Hosts()
