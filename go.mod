@@ -4,6 +4,19 @@ go 1.26.0
 
 toolchain go1.26.3
 
+// gardener still uses v0.35 and build is breaking with v0.36
+replace (
+	k8s.io/api => k8s.io/api v0.35.5
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.35.5
+	k8s.io/apimachinery => k8s.io/apimachinery v0.35.5
+	k8s.io/apimachinery/pkg/sharding => k8s.io/apimachinery/pkg/sharding v0.35.5
+	k8s.io/apiserver => k8s.io/apiserver v0.35.5
+	k8s.io/client-go => k8s.io/client-go v0.35.5
+	k8s.io/code-generator => k8s.io/code-generator v0.35.5
+	k8s.io/component-base => k8s.io/component-base v0.35.5
+	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.23.3
+)
+
 require (
 	github.com/gardener/gardener v1.143.1
 	github.com/gardener/gardener/pkg/apis v1.143.1
@@ -19,10 +32,10 @@ require (
 	istio.io/api v1.29.3
 	istio.io/client-go v1.29.2
 	k8s.io/api v0.36.1
-	k8s.io/apiextensions-apiserver v0.36.1
+	k8s.io/apiextensions-apiserver v0.36.0
 	k8s.io/apimachinery v0.36.1
 	k8s.io/client-go v0.36.1
-	k8s.io/code-generator v0.36.1
+	k8s.io/code-generator v0.36.0
 	k8s.io/component-base v0.36.1
 	k8s.io/utils v0.0.0-20260507154919-ff6756f316d2
 	sigs.k8s.io/controller-runtime v0.24.1
@@ -108,6 +121,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/google/btree v1.1.3 // indirect
 	github.com/google/cel-go v0.27.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
@@ -116,6 +130,7 @@ require (
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3 // indirect
+	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -139,6 +154,7 @@ require (
 	github.com/muhlemmer/gu v0.3.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
+	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
 	github.com/nexucis/lamenv v0.5.2 // indirect
 	github.com/perses/common v0.30.2 // indirect
 	github.com/perses/perses v0.53.1 // indirect
@@ -230,7 +246,6 @@ require (
 	k8s.io/kubelet v0.35.5 // indirect
 	k8s.io/metrics v0.35.5 // indirect
 	k8s.io/pod-security-admission v0.35.5 // indirect
-	k8s.io/streaming v0.36.1 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.34.0 // indirect
 	sigs.k8s.io/controller-tools v0.20.1 // indirect
 	sigs.k8s.io/gateway-api v1.5.0 // indirect
