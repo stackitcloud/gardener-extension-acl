@@ -8,6 +8,9 @@ spec:
     primary: true
     reconcileTimeout: 3m0s
     type: acl
+    clusterCompatibility:
+    - shoot
+    - garden
   deployment:
     extension:
       helm:
