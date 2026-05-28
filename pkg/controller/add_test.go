@@ -25,11 +25,10 @@ import (
 	seedmanagementv1alpha1 "github.com/gardener/gardener/pkg/apis/seedmanagement/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
-
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -120,7 +119,7 @@ var _ = Describe("shootsOfManagedSeeds", func() {
 
 			p = shootsOfManagedSeedsPredicate(c)
 			shoot = &gardencorev1beta1.Shoot{
-				ObjectMeta: v1.ObjectMeta{
+				ObjectMeta: metav1.ObjectMeta{
 					Name: "foo",
 				},
 				Status: gardencorev1beta1.ShootStatus{
@@ -128,7 +127,7 @@ var _ = Describe("shootsOfManagedSeeds", func() {
 				},
 			}
 			ms = &seedmanagementv1alpha1.ManagedSeed{
-				ObjectMeta: v1.ObjectMeta{
+				ObjectMeta: metav1.ObjectMeta{
 					Name: "seed",
 				},
 				Spec: seedmanagementv1alpha1.ManagedSeedSpec{
@@ -172,7 +171,7 @@ var _ = Describe("shootsOfManagedSeeds", func() {
 				WithScheme(scheme).
 				Build()
 			shoot = &gardencorev1beta1.Shoot{
-				ObjectMeta: v1.ObjectMeta{
+				ObjectMeta: metav1.ObjectMeta{
 					Name: "foo",
 				},
 			}
@@ -181,7 +180,7 @@ var _ = Describe("shootsOfManagedSeeds", func() {
 		It("should return only acl extensions and extensions of class garden inside garden namespace", func(ctx context.Context) {
 			extensions := []*extensionsv1alpha1.Extension{
 				{
-					ObjectMeta: v1.ObjectMeta{
+					ObjectMeta: metav1.ObjectMeta{
 						Name: "not-in-garden-namespace",
 					},
 					Spec: extensionsv1alpha1.ExtensionSpec{
@@ -192,7 +191,7 @@ var _ = Describe("shootsOfManagedSeeds", func() {
 					},
 				},
 				{
-					ObjectMeta: v1.ObjectMeta{
+					ObjectMeta: metav1.ObjectMeta{
 						Name:      "not-garden-extension",
 						Namespace: "garden",
 					},
@@ -204,7 +203,7 @@ var _ = Describe("shootsOfManagedSeeds", func() {
 					},
 				},
 				{
-					ObjectMeta: v1.ObjectMeta{
+					ObjectMeta: metav1.ObjectMeta{
 						Name:      "not-acl-extension",
 						Namespace: "garden",
 					},
@@ -216,7 +215,7 @@ var _ = Describe("shootsOfManagedSeeds", func() {
 					},
 				},
 				{
-					ObjectMeta: v1.ObjectMeta{
+					ObjectMeta: metav1.ObjectMeta{
 						Name:      "garden-acl-extension",
 						Namespace: "garden",
 					},
