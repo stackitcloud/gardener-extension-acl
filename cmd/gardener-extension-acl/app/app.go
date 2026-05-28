@@ -17,12 +17,18 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"slices"
 
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/util"
+	"github.com/gardener/gardener/pkg/api/indexer"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	operatorv1alpha1 "github.com/gardener/gardener/pkg/apis/operator/v1alpha1"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/spf13/cobra"
 	istionetworkv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
@@ -33,6 +39,7 @@ import (
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
@@ -126,6 +133,21 @@ func (o *Options) run(ctx context.Context) error {
 		return fmt.Errorf("could not add controllers to manager: %s", err)
 	}
 
+	var gardenCluster cluster.Cluster
+	if slices.Contains(controller.DefaultAddOptions.ExtensionClasses, extensionsv1alpha1.ExtensionClassGarden) {
+		gardenCluster, err = setupGardenCluster(mgr)
+		if err != nil {
+			return fmt.Errorf("unable to set up garden cluster: %w", err)
+		}
+		if err := indexer.AddManagedSeedShootName(ctx, gardenCluster.GetFieldIndexer()); err != nil {
+			return fmt.Errorf("adding index for managedSeed to garden cluster: %w", err)
+		}
+	}
+
+	if err := controller.AddToManager(ctx, mgr, gardenCluster); err != nil {
+		return fmt.Errorf("could not add controller to manager: %w", err)
+	}
+
 	// TODO(Wieneo): Remove this once a couple extension versions included the migration code
 	// migration code: remove mutating webhook from cluster as it is not served by this controller anymore
 	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
@@ -142,4 +164,32 @@ func (o *Options) run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func setupGardenCluster(mgr manager.Manager) (cluster.Cluster, error) {
+	// configure garden
+	kubeconfigFile := os.Getenv("GARDEN_KUBECONFIG")
+	if kubeconfigFile == "" {
+		return nil, errors.New("GARDEN_KUBECONFIG environment variable is empty, cannot setup garden cluster")
+	}
+	gardenRESTConfig, err := kubernetes.RESTConfigFromKubeconfigFile(kubeconfigFile, kubernetes.AuthTokenFile, kubernetes.AuthExec)
+	if err != nil {
+		return nil, err
+	}
+
+	gardenCluster, err := cluster.New(gardenRESTConfig, func(opts *cluster.Options) {
+		opts.Scheme = kubernetes.GardenScheme
+		opts.Cache = cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				// ManagedSeeds (and their underlying Shoots) must always be in the "garden" namespace, so that is the
+				// only one we need to watch.
+				v1beta1constants.GardenNamespace: {},
+			},
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return gardenCluster, mgr.Add(gardenCluster)
 }

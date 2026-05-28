@@ -17,22 +17,17 @@ package controller
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"slices"
 	"time"
 
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/extension"
-	"github.com/gardener/gardener/pkg/api/indexer"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
-	"github.com/gardener/gardener/pkg/client/kubernetes"
 	kubernetesutil "github.com/gardener/gardener/pkg/utils/kubernetes"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -69,26 +64,13 @@ type AddOptions struct {
 }
 
 // AddToManager adds a controller with the default Options to the given Controller Manager.
-func AddToManager(ctx context.Context, mgr manager.Manager) error {
-	return AddToManagerWithOptions(ctx, mgr, &DefaultAddOptions)
+func AddToManager(ctx context.Context, mgr manager.Manager, gardenCluster cluster.Cluster) error {
+	return AddToManagerWithOptions(ctx, mgr, gardenCluster, &DefaultAddOptions)
 }
 
 // AddToManagerWithOptions adds a controller with the given Options to the given manager.
 // The opts.Reconciler is being set with a newly instantiated actuator.
-func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, opts *AddOptions) error {
-	// configure garden
-	var gardenCluster cluster.Cluster
-	if kFile := os.Getenv("GARDEN_KUBECONFIG"); kFile != "" {
-		var err error
-		gardenCluster, err = setupGardenCluster(mgr, kFile)
-		if err != nil {
-			return fmt.Errorf("unable to set up garden cluster: %w", err)
-		}
-
-		if err := indexer.AddManagedSeedShootName(ctx, gardenCluster.GetFieldIndexer()); err != nil {
-			return fmt.Errorf("adding index for managedSeed to garden cluster: %w", err)
-		}
-	}
+func AddToManagerWithOptions(ctx context.Context, mgr manager.Manager, gardenCluster cluster.Cluster, opts *AddOptions) error {
 	args := extension.AddArgs{
 		Actuator:          NewActuator(mgr, gardenCluster, opts.ExtensionConfig),
 		ControllerOptions: opts.ControllerOptions,
@@ -219,27 +201,4 @@ func shootsOfManagedSeedsPredicate(c client.Reader) predicate.TypedFuncs[*garden
 			return false
 		},
 	}
-}
-
-func setupGardenCluster(mgr manager.Manager, kubeconfigFile string) (cluster.Cluster, error) {
-	gardenRESTConfig, err := kubernetes.RESTConfigFromKubeconfigFile(kubeconfigFile, kubernetes.AuthTokenFile, kubernetes.AuthExec)
-	if err != nil {
-		return nil, err
-	}
-
-	gardenCluster, err := cluster.New(gardenRESTConfig, func(opts *cluster.Options) {
-		opts.Scheme = kubernetes.GardenScheme
-		opts.Cache = cache.Options{
-			DefaultNamespaces: map[string]cache.Config{
-				// ManagedSeeds (and their underlying Shoots) must always be in the "garden" namespace, so that is the
-				// only one we need to watch.
-				v1beta1constants.GardenNamespace: {},
-			},
-		}
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return gardenCluster, mgr.Add(gardenCluster)
 }

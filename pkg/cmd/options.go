@@ -23,7 +23,6 @@ import (
 	extensionshealthcheckcontroller "github.com/gardener/gardener/extensions/pkg/controller/healthcheck"
 	"github.com/spf13/pflag"
 
-	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	healthcheckcontroller "github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
 )
@@ -80,7 +79,6 @@ func (o *ExtensionOptions) ApplyHealthCheckConfig(config *extensionsconfigv1alph
 // ControllerSwitches are the cmd.SwitchOptions for the provider controllers.
 func ControllerSwitches() *extensionscmdcontroller.SwitchOptions {
 	return extensionscmdcontroller.NewSwitchOptions(
-		extensionscmdcontroller.Switch(controller.Type, controller.AddToManager),
 		extensionscmdcontroller.Switch(extensionshealthcheckcontroller.ControllerName, healthcheckcontroller.AddToManager),
 	)
 }
