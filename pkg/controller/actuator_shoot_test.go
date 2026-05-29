@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	gardenercorev1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
@@ -14,7 +15,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
@@ -27,13 +27,11 @@ var _ = Describe("actuator shoot test", func() {
 		shootNamespace1, shootNamespace2                 string
 		istioNamespace1, istioNamespace2                 string
 		istioNamespace1Selector, istioNamespace2Selector map[string]string
-		istioIngressGatewayServiceName                   string
 	)
 
 	BeforeEach(func() {
 		shootNamespace1 = createNewShootNamespace()
 		istioNamespace1 = createNewIstioNamespace()
-		istioIngressGatewayServiceName = "istio-ingressgateway"
 		istioNamespace1Selector = map[string]string{
 			"app":   "istio-ingressgateway",
 			"istio": istioNamespace1,
@@ -44,24 +42,6 @@ var _ = Describe("actuator shoot test", func() {
 		createNewIstioDeployment(istioNamespace1, istioNamespace1Selector)
 		createNewCluster(shootNamespace1)
 		createNewInfrastructure(shootNamespace1)
-		createNewService(
-			istioIngressGatewayServiceName,
-			istioNamespace1,
-			istioNamespace1Selector,
-			corev1.ServiceTypeLoadBalancer,
-		)
-		updateServiceStatus(
-			istioIngressGatewayServiceName,
-			istioNamespace1,
-			corev1.ServiceStatus{
-				LoadBalancer: corev1.LoadBalancerStatus{
-					Ingress: []corev1.LoadBalancerIngress{{
-						IP:     "1.1.1.1",
-						IPMode: ptr.To(corev1.LoadBalancerIPModeProxy),
-					}},
-				},
-			},
-		)
 
 		a = getNewActuator()
 	})
@@ -239,65 +219,37 @@ var _ = Describe("actuator shoot test", func() {
 			Expect(secret.Data["seed"]).To(ContainSubstring("1.2.3.4"))
 			Expect(secret.Data["seed"]).To(ContainSubstring(istioNamespace1))
 			Expect(secret.Data["seed"]).To(ContainSubstring("acl-vpn-" + shootNamespace1))
-
 		})
 	})
 
 	Describe("reconciliation of an extension object running on a managedSeed", func() {
 		AfterEach(func() {
 			deleteShootInfo()
-		})
-
-		It("should not get the egressIPs if the LoadBalancer IPMode is not set to Proxy", func() {
-			updateServiceStatus(
-				istioIngressGatewayServiceName,
-				istioNamespace1,
-				corev1.ServiceStatus{},
-			)
-			Expect(a.usesProxyTypeLBService(ctx, istioNamespace1)).To(BeFalse())
-
-			updateServiceStatus(
-				istioIngressGatewayServiceName,
-				istioNamespace1,
-				corev1.ServiceStatus{
-					LoadBalancer: corev1.LoadBalancerStatus{
-						Ingress: []corev1.LoadBalancerIngress{{
-							IP:     "1.1.1.1",
-							IPMode: ptr.To(corev1.LoadBalancerIPModeVIP),
-						}},
+			Expect(func() error {
+				svc := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      gardenercorev1beta1constants.DefaultSNIIngressServiceName,
+						Namespace: istioNamespace1,
 					},
-				},
-			)
-			Expect(a.usesProxyTypeLBService(ctx, istioNamespace1)).To(BeFalse())
-		})
-
-		It("should get the egressIPs if the LoadBalancer IPMode is set to Proxy", func() {
-			Expect(a.usesProxyTypeLBService(ctx, istioNamespace1)).To(BeTrue())
-		})
-
-		It("should return an empty slice of egressIPs if no shoot-info ConfigMap exists", func() {
-			cidrs, err := a.getSeedEgressIPOnManagedSeeds(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(cidrs).To(BeEmpty())
-		})
-
-		It("should fail to return egressIPs if the shoot-info ConfigMap contains invalid CIDRs", func() {
-			createShootInfo([]string{"1.1.1.1", "1.1.1.2/32"})
-
-			_, err := a.getSeedEgressIPOnManagedSeeds(ctx)
-			Expect(err).To(HaveOccurred())
-		})
-
-		It("should return the egressIP CIDRs of the shoot-info ConfigMap", func() {
-			c := []string{"1.1.1.1/32", "1.1.1.2/32"}
-			createShootInfo(c)
-
-			cidrs, err := a.getSeedEgressIPOnManagedSeeds(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(cidrs).To(BeEquivalentTo(c))
+				}
+				err := k8sClient.Delete(ctx, svc)
+				if err != nil && !apierrors.IsNotFound(err) {
+					return err
+				}
+				return nil
+			}()).ShouldNot(HaveOccurred())
 		})
 
 		It("should create ACLs including egressIPs of managedSeed", func() {
+			createNewService(gardenercorev1beta1constants.DefaultSNIIngressServiceName, istioNamespace1, corev1.ServiceTypeLoadBalancer)
+			updateServiceStatus(gardenercorev1beta1constants.DefaultSNIIngressServiceName, istioNamespace1, corev1.ServiceStatus{
+				LoadBalancer: corev1.LoadBalancerStatus{
+					Ingress: []corev1.LoadBalancerIngress{{
+						IP:     "10.0.0.2",
+						IPMode: new(corev1.LoadBalancerIPModeProxy),
+					}},
+				},
+			})
 			createShootInfo([]string{"1.1.1.1/32", "1.1.1.2/32"})
 
 			extSpec := extensionspec.ExtensionSpec{
@@ -309,7 +261,7 @@ var _ = Describe("actuator shoot test", func() {
 			}
 			extSpecJSON, err := json.Marshal(extSpec)
 			Expect(err).NotTo(HaveOccurred())
-			ext := createNewExtension(shootNamespace1, extSpecJSON)
+			ext := createNewExtension(shootNamespace1, extSpecJSON, extensionsv1alpha1.ExtensionClassShoot)
 			Expect(ext).To(Not(BeNil()))
 
 			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
@@ -431,7 +383,6 @@ var _ = Describe("actuator shoot test", func() {
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)
 			Expect(err).To(HaveOccurred())
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-
 		})
 	})
 })

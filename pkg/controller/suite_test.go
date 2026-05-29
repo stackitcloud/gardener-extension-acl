@@ -182,10 +182,9 @@ func createNewGateway(name, shootNamespace string, labels map[string]string) *is
 	return gw
 }
 
-func createNewService(name, namespace string, labels map[string]string, serviceType corev1.ServiceType) {
+func createNewService(name, namespace string, serviceType corev1.ServiceType) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:    labels,
 			Name:      name,
 			Namespace: namespace,
 		},
@@ -196,7 +195,7 @@ func createNewService(name, namespace string, labels map[string]string, serviceT
 			}},
 		},
 	}
-	logr.Logger{}.Info("creating service", "name", svc.Name, "namespace", svc.Namespace, "labels", svc.Labels)
+	GinkgoLogr.Info("creating service", "name", svc.Name, "namespace", svc.Namespace, "labels", svc.Labels)
 	Expect(k8sClient.Create(ctx, svc)).ShouldNot(HaveOccurred())
 }
 
