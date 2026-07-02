@@ -168,12 +168,20 @@ func CreateIngressConfigPatchFromRule(
 										},
 									},
 								}},
-								"principals": []map[string]interface{}{{
-									"remote_ip": map[string]interface{}{
-										"address_prefix": "0.0.0.0",
-										"prefix_len":     0,
+								"principals": []map[string]interface{}{
+									{
+										"remote_ip": map[string]interface{}{
+											"address_prefix": "0.0.0.0",
+											"prefix_len":     0,
+										},
 									},
-								}},
+									{
+										"remote_ip": map[string]interface{}{
+											"address_prefix": "::",
+											"prefix_len":     0,
+										},
+									},
+								},
 							},
 							shootID: map[string]interface{}{
 								"permissions": []map[string]interface{}{{
@@ -241,12 +249,20 @@ func buildProxyEnvoyFilterSpecForHelmChart(p httpProxyFilterOptions) map[string]
 										"header": headerMatcher,
 									},
 								}},
-								"principals": []map[string]interface{}{{
-									"remote_ip": map[string]interface{}{
-										"address_prefix": "0.0.0.0",
-										"prefix_len":     0,
+								"principals": []map[string]interface{}{
+									{
+										"remote_ip": map[string]interface{}{
+											"address_prefix": "0.0.0.0",
+											"prefix_len":     0,
+										},
 									},
-								}},
+									{
+										"remote_ip": map[string]interface{}{
+											"address_prefix": "::",
+											"prefix_len":     0,
+										},
+									},
+								},
 							},
 							p.ShortShootID: map[string]interface{}{
 								"permissions": []map[string]interface{}{{
