@@ -70,16 +70,14 @@ require a unique way of handling them, respectively.
    additional `EnvoyFilter` per shoot with enabled ACL extension. It contains a
    filter patch that matches on the shoot SNI name and specifies an `ALLOW` rule
    with the provided IPs.
-2. **Apiserver-Proxy / VPN Access** - All apiserver-proxy and VPN traffic moves through the same listener. This
-   requires us to create only a single `EnvoyFilter` for VPN that contains
-   **all** rules of all shoots that have the extension enabled. And, conversely,
-   we need to make sure that traffic of all shoots that don't have the
-   extension enabled is still able to pass through this filter unhindered. We
-   achieve this by not only creating a policy for every shoot with ACL enabled,
-   but also an "inverted" policy which matches all shoots that don't have ACL
-   enabled. All these policies are then put in a single EnvoyFilter patch.
+2. **Apiserver-Proxy / VPN Access**
 
-Because of the last point, we currently see no way of allowing the user to
+    All apiserver-proxy and VPN traffic routes through a single listener, meaning we can only apply a single `EnvoyFilter`. To make sure this single filter does not accidentally disrupt regular traffic, we bundle two types of policies into one `EnvoyFilter` patch:
+
+      1. **Standard Policies**: Custom rules tailored for every shoot that has the ACL extension enabled.
+      2. **An Inverted Policy (Bypass Rule)**: A catch-all fallback rule that explicitly matches and permits traffic for all shoots without the extension enabled.
+
+Because of the second point, we currently see no way of allowing the user to
 define multiple rules of different action types (`ALLOW` or `DENY`). Instead, we
 only support a single `ALLOW` rule per shoot, which is in our opinion the best
 trade-off to efficiently secure Kubernetes API servers.
