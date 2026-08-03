@@ -552,6 +552,115 @@ var _ = Describe("actuator unit test", func() {
 	})
 })
 
+var _ = Describe("actuator test with a configured default rule", func() {
+	var (
+		a                       *actuator
+		shootNamespace1         string
+		istioNamespace1         string
+		istioNamespace1Selector map[string]string
+	)
+
+	BeforeEach(func() {
+		shootNamespace1 = createNewShootNamespace()
+		istioNamespace1 = createNewIstioNamespace()
+		istioNamespace1Selector = map[string]string{
+			"app":   "istio-ingressgateway",
+			"istio": istioNamespace1,
+		}
+
+		createNewEnvoyFilter(shootNamespace1, istioNamespace1)
+		createNewGateway("kube-apiserver", shootNamespace1, istioNamespace1Selector)
+		createNewIstioDeployment(istioNamespace1, istioNamespace1Selector)
+		createNewCluster(shootNamespace1)
+		createNewInfrastructure(shootNamespace1)
+
+		a = getNewActuator()
+		a.extensionConfig.DefaultRule = &envoyfilters.ACLRule{
+			Cidrs:  []string{"5.6.7.8/32"},
+			Action: "ALLOW",
+			Type:   "remote_ip",
+		}
+	})
+
+	AfterEach(func() {
+		deleteNamespace(shootNamespace1)
+		deleteNamespace(istioNamespace1)
+	})
+
+	Describe("reconciliation of an ACL extension object without a providerConfig", func() {
+		It("should apply the default rule (auto-enabled extension case)", func() {
+			ext := createNewExtension(shootNamespace1, nil)
+			Expect(ext).To(Not(BeNil()))
+
+			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
+
+			mr := &v1alpha1.ManagedResource{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
+			secret := &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
+			Expect(secret.Data["seed"]).To(ContainSubstring("5.6.7.8"))
+			Expect(secret.Data["seed"]).To(ContainSubstring("acl-api-" + shootNamespace1))
+		})
+	})
+
+	Describe("reconciliation of an ACL extension object with a providerConfig", func() {
+		It("should use the rule from the providerConfig, not the default rule", func() {
+			extSpec := extensionspec.ExtensionSpec{
+				Rule: &envoyfilters.ACLRule{
+					Cidrs:  []string{"1.2.3.4/24"},
+					Action: "ALLOW",
+					Type:   "remote_ip",
+				},
+			}
+			extSpecJSON, err := json.Marshal(extSpec)
+			Expect(err).NotTo(HaveOccurred())
+			ext := createNewExtension(shootNamespace1, extSpecJSON)
+			Expect(ext).To(Not(BeNil()))
+
+			Expect(a.Reconcile(ctx, logger, ext)).To(Succeed())
+
+			mr := &v1alpha1.ManagedResource{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
+			secret := &corev1.Secret{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
+			Expect(secret.Data["seed"]).To(ContainSubstring("1.2.3.4"))
+			Expect(secret.Data["seed"]).NotTo(ContainSubstring("5.6.7.8"))
+		})
+	})
+})
+
+var _ = Describe("applyDefaultRule", func() {
+	var defaultRule *envoyfilters.ACLRule
+
+	BeforeEach(func() {
+		defaultRule = &envoyfilters.ACLRule{
+			Cidrs:  []string{"10.0.0.0/8"},
+			Action: "ALLOW",
+			Type:   "remote_ip",
+		}
+	})
+
+	It("should apply the default rule when the spec has no rule", func() {
+		extSpec := &extensionspec.ExtensionSpec{}
+		applyDefaultRule(extSpec, defaultRule)
+		Expect(extSpec.Rule).To(Equal(defaultRule))
+	})
+
+	It("should not override an existing rule", func() {
+		extSpec := &extensionspec.ExtensionSpec{}
+		addRuleToSpec(extSpec, "ALLOW", "remote_ip", []string{"1.2.3.4/32"})
+		ownRule := extSpec.Rule
+		applyDefaultRule(extSpec, defaultRule)
+		Expect(extSpec.Rule).To(BeIdenticalTo(ownRule))
+	})
+
+	It("should leave the spec untouched when no default rule is configured", func() {
+		extSpec := &extensionspec.ExtensionSpec{}
+		applyDefaultRule(extSpec, nil)
+		Expect(extSpec.Rule).To(BeNil())
+	})
+})
+
 func getNewActuator() *actuator {
 	return &actuator{
 		client: k8sClient,

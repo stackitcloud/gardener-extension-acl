@@ -15,6 +15,8 @@
 
 package config
 
+import "github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+
 // Config contains configuration for the extension service.
 type Config struct {
 	// TODO define options
@@ -23,4 +25,11 @@ type Config struct {
 	AdditionalAllowedCIDRs []string
 	// MaxAllowedCIDRs is the maximum number of allowed CIDRs per cluster
 	MaxAllowedCIDRs int
+	// DefaultRule is applied to Extension resources that do not define a rule of
+	// their own (i.e. have no providerConfig). This allows operators to enable
+	// the extension for all shoots (e.g. via autoEnable in the
+	// ControllerRegistration) with a sensible default, while individual shoots
+	// can still provide their own rule to override it. When nil, Extension
+	// resources without a rule are rejected (previous behavior).
+	DefaultRule *envoyfilters.ACLRule
 }

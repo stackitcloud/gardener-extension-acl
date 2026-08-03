@@ -16,6 +16,7 @@
 package cmd
 
 import (
+	"fmt"
 	"time"
 
 	extensionsconfigv1alpha1 "github.com/gardener/gardener/extensions/pkg/apis/config/v1alpha1"
@@ -26,6 +27,8 @@ import (
 	"github.com/stackitcloud/gardener-extension-acl/pkg/controller"
 	controllerconfig "github.com/stackitcloud/gardener-extension-acl/pkg/controller/config"
 	healthcheckcontroller "github.com/stackitcloud/gardener-extension-acl/pkg/controller/healthcheck"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/envoyfilters"
+	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
 )
 
 const (
@@ -40,6 +43,11 @@ type ExtensionOptions struct {
 	HealthCheckSyncPeriod  time.Duration
 	ChartPath              string
 	AdditionalAllowedCIDRs []string
+	DefaultRuleAction      string
+	DefaultRuleType        string
+	DefaultRuleCIDRs       []string
+
+	defaultRule *envoyfilters.ACLRule
 }
 
 // AddFlags implements Flagger.AddFlags.
@@ -52,11 +60,45 @@ func (o *ExtensionOptions) AddFlags(fs *pflag.FlagSet) {
 		nil,
 		"List of IPs that will be added to the list of allowed CIDRs, e.g. '192.168.1.40/32,10.250.0.0/16'",
 	)
+	fs.StringVar(
+		&o.DefaultRuleAction,
+		"default-rule-action",
+		"ALLOW",
+		"Action of the default rule applied to Extension resources without a rule of their own. Only used when --default-rule-cidrs is set.",
+	)
+	fs.StringVar(
+		&o.DefaultRuleType,
+		"default-rule-type",
+		"remote_ip",
+		"Type of the default rule applied to Extension resources without a rule of their own ('source_ip', 'direct_remote_ip' or 'remote_ip'). Only used when --default-rule-cidrs is set.",
+	)
+	fs.StringSliceVar(
+		&o.DefaultRuleCIDRs,
+		"default-rule-cidrs",
+		nil,
+		"List of CIDRs for a default rule that is applied to Extension resources that do not define a rule of their own (e.g. extensions enabled via autoEnable without a providerConfig). "+
+			"When unset, Extension resources without a rule are rejected (previous behavior). A rule from the Shoot's providerConfig always takes precedence.",
+	)
 }
 
 // Complete implements Completer.Complete.
 func (o *ExtensionOptions) Complete() error {
-	// TODO validate mandatory input options
+	if len(o.DefaultRuleCIDRs) == 0 {
+		return nil
+	}
+
+	o.defaultRule = &envoyfilters.ACLRule{
+		Action: o.DefaultRuleAction,
+		Type:   o.DefaultRuleType,
+		Cidrs:  o.DefaultRuleCIDRs,
+	}
+
+	// Fail fast on an invalid operator-provided default rule (the per-shoot
+	// maximum is not applied to the operator-configured default).
+	if err := controller.ValidateExtensionSpec(&extensionspec.ExtensionSpec{Rule: o.defaultRule}, 0); err != nil {
+		return fmt.Errorf("invalid default rule: %w", err)
+	}
+
 	return nil
 }
 
@@ -70,6 +112,7 @@ func (o *ExtensionOptions) Apply(config *controllerconfig.Config) {
 	// TODO pass controller options from extensionoptions to config param
 	config.ChartPath = o.ChartPath
 	config.AdditionalAllowedCIDRs = o.AdditionalAllowedCIDRs
+	config.DefaultRule = o.defaultRule
 }
 
 // ApplyHealthCheckConfig applies the ExtensionOptions to the passed HealthCheckConfig.
