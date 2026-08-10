@@ -29,6 +29,18 @@ disableControllers: []
 
 additionalAllowedCidrs: []
 
+# Default rule applied to Extension resources that do not define a rule of
+# their own (e.g. when the extension is enabled for all shoots via autoEnable
+# and a Shoot does not specify a providerConfig). A rule from the Shoot's
+# providerConfig always takes precedence. When unset, Extension resources
+# without a rule are rejected (previous behavior).
+defaultRule: {}
+# defaultRule:
+#   action: ALLOW
+#   type: remote_ip
+#   cidrs:
+#     - "0.0.0.0/0"
+
 # imageVectorOverwrite: |
 #   images:
 #   - name: example

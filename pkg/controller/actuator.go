@@ -118,6 +118,14 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 			return err
 		}
 	}
+
+	// Apply the operator-configured default rule if the Extension resource does
+	// not define a rule of its own. This happens, for example, when the
+	// extension is enabled for all shoots via autoEnable and the Shoot does not
+	// specify a providerConfig. A rule provided by the shoot always takes
+	// precedence over the default rule.
+	applyDefaultRule(extSpec, a.extensionConfig.DefaultRule)
+
 	// validate the ExtensionSpec
 	if err := ValidateExtensionSpec(extSpec, a.extensionConfig.MaxAllowedCIDRs); err != nil {
 		return err
@@ -202,6 +210,16 @@ func (a *actuator) Reconcile(ctx context.Context, log logr.Logger, ex *extension
 	extState.IstioNamespace = &istioNamespace
 
 	return a.updateStatus(ctx, ex, extState)
+}
+
+// applyDefaultRule sets the given default rule on the ExtensionSpec if the spec
+// does not define a rule of its own. A rule from the spec (i.e. from the Shoot's
+// providerConfig) always takes precedence; the default is only used as a
+// fallback. A nil defaultRule leaves the spec untouched.
+func applyDefaultRule(spec *extensionspec.ExtensionSpec, defaultRule *envoyfilters.ACLRule) {
+	if spec.Rule == nil && defaultRule != nil {
+		spec.Rule = defaultRule
+	}
 }
 
 // ValidateExtensionSpec checks if the ExtensionSpec exists, and if its action,

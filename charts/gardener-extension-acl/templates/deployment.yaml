@@ -40,6 +40,11 @@ spec:
         {{- if .Values.additionalAllowedCidrs }}
         - --additional-allowed-cidrs={{ .Values.additionalAllowedCidrs | join "," }}
         {{- end }}
+        {{- if and .Values.defaultRule .Values.defaultRule.cidrs }}
+        - --default-rule-action={{ .Values.defaultRule.action | default "ALLOW" }}
+        - --default-rule-type={{ .Values.defaultRule.type | default "remote_ip" }}
+        - --default-rule-cidrs={{ .Values.defaultRule.cidrs | join "," }}
+        {{- end }}
         {{- if .Values.gardener.version }}
         - --gardener-version={{ .Values.gardener.version }}
         {{- end }}
