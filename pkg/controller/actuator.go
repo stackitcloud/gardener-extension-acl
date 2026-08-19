@@ -37,6 +37,7 @@ import (
 	istionetworkv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -50,8 +51,6 @@ import (
 	"github.com/stackitcloud/gardener-extension-acl/pkg/extensionspec"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/helper"
 	"github.com/stackitcloud/gardener-extension-acl/pkg/imagevector"
-
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 const (

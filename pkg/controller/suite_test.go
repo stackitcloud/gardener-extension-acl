@@ -236,7 +236,7 @@ func createNewCluster(shootNamespace string) {
 		},
 		Spec: extensionsv1alpha1.ClusterSpec{
 			CloudProfile: runtime.RawExtension{Raw: []byte("{}")},
-			Seed: runtime.RawExtension{
+			Seed: &runtime.RawExtension{
 				Object: &gardencorev1beta1.Seed{
 					Spec: gardencorev1beta1.SeedSpec{
 						Networks: gardencorev1beta1.SeedNetworks{
