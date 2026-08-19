@@ -81,6 +81,17 @@
       ],
     },
     {
+      matchDatasources: [
+        'go',
+      ],
+      matchPackageNames: [
+        'github.com/gardener/gardener{/,}**',
+      ],
+      reviewers: [
+        'team:ske-gardener',
+      ],
+    },
+    {
       // automerge k8s.io/utils updates
       matchDatasources: [
         'go',
