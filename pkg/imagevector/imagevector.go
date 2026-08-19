@@ -25,12 +25,15 @@ import (
 var imageVector imagevector.ImageVector
 
 func init() {
-	var err error
+	var (
+		err      error
+		caBundle *imagevector.CABundle
+	)
 
-	imageVector, err = imagevector.Read([]byte(charts.ImagesYAML))
+	imageVector, caBundle, err = imagevector.Read([]byte(charts.ImagesYAML))
 	runtime.Must(err)
 
-	imageVector, err = imagevector.WithEnvOverride(imageVector, imagevector.OverrideEnv)
+	imageVector, _, err = imagevector.WithEnvOverride(imageVector, caBundle, imagevector.OverrideEnv)
 	runtime.Must(err)
 }
 
