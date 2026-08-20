@@ -5,9 +5,9 @@ go 1.26.5
 toolchain go1.26.7
 
 require (
-	github.com/gardener/gardener v1.149.2
-	github.com/gardener/gardener/hack/tools v1.149.2
-	github.com/gardener/gardener/pkg/apis v1.149.2
+	github.com/gardener/gardener v1.149.3
+	github.com/gardener/gardener/hack/tools v1.149.3
+	github.com/gardener/gardener/pkg/apis v1.149.3
 	github.com/go-logr/logr v1.4.4
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo/v2 v2.32.1
@@ -19,12 +19,12 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	istio.io/api v1.29.6
 	istio.io/client-go v1.29.2
-	k8s.io/api v0.36.3
-	k8s.io/apiextensions-apiserver v0.36.3
-	k8s.io/apimachinery v0.36.3
-	k8s.io/client-go v0.36.3
-	k8s.io/code-generator v0.36.3
-	k8s.io/component-base v0.36.3
+	k8s.io/api v0.36.4
+	k8s.io/apiextensions-apiserver v0.36.4
+	k8s.io/apimachinery v0.36.4
+	k8s.io/client-go v0.36.4
+	k8s.io/code-generator v0.36.4
+	k8s.io/component-base v0.36.4
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/controller-runtime v0.24.1
 )
@@ -225,7 +225,7 @@ require (
 	k8s.io/kubelet v0.36.3 // indirect
 	k8s.io/metrics v0.36.3 // indirect
 	k8s.io/pod-security-admission v0.36.3 // indirect
-	k8s.io/streaming v0.36.3 // indirect
+	k8s.io/streaming v0.36.4 // indirect
 	sigs.k8s.io/gateway-api v1.6.1 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
