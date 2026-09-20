@@ -458,11 +458,33 @@ func (a *actuator) findIstioNamespaceForExtension(
 	if err != nil {
 		return "", nil, err
 	}
-	if len(deployments.Items) != 1 {
-		return "", nil, fmt.Errorf("no istio namespace could be selected, because the number of deployments found is %d", len(deployments.Items))
+	if len(deployments.Items) == 1 {
+		return deployments.Items[0].Namespace, gw.Spec.Selector, nil
 	}
 
-	return deployments.Items[0].Namespace, gw.Spec.Selector, nil
+	// More than one gateway deployment matches the selector. This happens when the seed is also the
+	// gardener-operator runtime cluster: the virtual-garden ingress gateway carries the same labels as the
+	// seed's istio-ingress gateway. Only gardenlet-managed seed ingress namespaces can serve a shoot.
+	candidates := filterSeedIstioIngressDeployments(deployments.Items)
+	if len(candidates) != 1 {
+		return "", nil, fmt.Errorf("no istio namespace could be selected, because the number of deployments found is %d (%d in seed istio-ingress namespaces)", len(deployments.Items), len(candidates))
+	}
+
+	return candidates[0].Namespace, gw.Spec.Selector, nil
+}
+
+// filterSeedIstioIngressDeployments keeps only deployments living in a gardenlet seed ingress namespace:
+// the default one (`istio-ingress`), zonal ones (`istio-ingress--<zone>`) and exposure-class handlers
+// (`istio-ingress-handler-<name>`). The gardener-operator's `virtual-garden-istio-ingress` is excluded.
+func filterSeedIstioIngressDeployments(deployments []appsv1.Deployment) []appsv1.Deployment {
+	var out []appsv1.Deployment
+	for _, d := range deployments {
+		ns := d.Namespace
+		if ns == v1beta1constants.DefaultSNIIngressNamespace || strings.HasPrefix(ns, v1beta1constants.DefaultSNIIngressNamespace+"-") {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 func (a *actuator) findDefaultIstioLabels(
