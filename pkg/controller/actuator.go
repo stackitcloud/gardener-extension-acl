@@ -434,6 +434,13 @@ func getExtensionState(ex *extensionsv1alpha1.Extension) (*ExtensionState, error
 // The Gateway object has a Selector field that selects a Deployment in the
 // namespace we need. We list Deployments filtered by the labelSelector and
 // return the namespace of the returned Deployment.
+const (
+	// istioRoleLabelKey is set by gardenlet/gardener-operator on istio ingress gateway deployments.
+	istioRoleLabelKey = "istio-role"
+	// istioRoleSeed marks the seed's ingress gateway (the virtual garden gateway uses "garden").
+	istioRoleSeed = "seed"
+)
+
 func (a *actuator) findIstioNamespaceForExtension(
 	ctx context.Context, ex *extensionsv1alpha1.Extension,
 ) (
@@ -451,39 +458,35 @@ func (a *actuator) findIstioNamespaceForExtension(
 		return "", nil, err
 	}
 
-	labelsSelector := client.MatchingLabels(gw.Spec.Selector)
-
-	deployments := appsv1.DeploymentList{}
-	err = a.client.List(ctx, &deployments, labelsSelector)
-	if err != nil {
+	// Prefer the seed's ingress gateway: gardenlet labels it with istio-role=seed, the gardener-operator's virtual
+	// garden gateway (present on the same cluster when the seed is also the runtime cluster) with istio-role=garden.
+	deployments := &appsv1.DeploymentList{}
+	if err := a.client.List(ctx, deployments, client.MatchingLabels(seedIngressGatewaySelector(gw.Spec.Selector))); err != nil {
 		return "", nil, err
 	}
-	if len(deployments.Items) == 1 {
-		return deployments.Items[0].Namespace, gw.Spec.Selector, nil
-	}
-
-	// More than one gateway deployment matches the selector. This happens when the seed is also the
-	// gardener-operator runtime cluster: the virtual-garden ingress gateway carries the same labels as the
-	// seed's istio-ingress gateway. Only gardenlet-managed seed ingress namespaces can serve a shoot.
-	candidates := filterSeedIstioIngressDeployments(deployments.Items)
-	if len(candidates) != 1 {
-		return "", nil, fmt.Errorf("no istio namespace could be selected, because the number of deployments found is %d (%d in seed istio-ingress namespaces)", len(deployments.Items), len(candidates))
-	}
-
-	return candidates[0].Namespace, gw.Spec.Selector, nil
-}
-
-// filterSeedIstioIngressDeployments keeps only deployments living in a gardenlet seed ingress namespace:
-// the default one (`istio-ingress`), zonal ones (`istio-ingress--<zone>`) and exposure-class handlers
-// (`istio-ingress-handler-<name>`). The gardener-operator's `virtual-garden-istio-ingress` is excluded.
-func filterSeedIstioIngressDeployments(deployments []appsv1.Deployment) []appsv1.Deployment {
-	var out []appsv1.Deployment
-	for _, d := range deployments {
-		ns := d.Namespace
-		if ns == v1beta1constants.DefaultSNIIngressNamespace || strings.HasPrefix(ns, v1beta1constants.DefaultSNIIngressNamespace+"-") {
-			out = append(out, d)
+	if len(deployments.Items) == 0 {
+		// Older gardenlets do not set the istio-role label yet: fall back to the plain gateway selector.
+		if err := a.client.List(ctx, deployments, client.MatchingLabels(gw.Spec.Selector)); err != nil {
+			return "", nil, err
 		}
 	}
+	if len(deployments.Items) != 1 {
+		return "", nil, fmt.Errorf("no istio namespace could be selected, because the number of deployments found is %d", len(deployments.Items))
+	}
+
+	return deployments.Items[0].Namespace, gw.Spec.Selector, nil
+}
+
+// seedIngressGatewaySelector narrows a gateway selector to the seed's istio ingress gateway. gardenlet labels
+// its ingress gateway deployments with `istio-role=seed`, while the gardener-operator's virtual garden gateway
+// (which lives on the same cluster when the seed is also the runtime cluster) carries `istio-role=garden`
+// and otherwise identical labels.
+func seedIngressGatewaySelector(selector map[string]string) map[string]string {
+	out := make(map[string]string, len(selector)+1)
+	for k, v := range selector {
+		out[k] = v
+	}
+	out[istioRoleLabelKey] = istioRoleSeed
 	return out
 }
 

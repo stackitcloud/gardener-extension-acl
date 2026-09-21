@@ -1,47 +1,90 @@
 package controller
 
 import (
-	"testing"
-
-	appsv1 "k8s.io/api/apps/v1"
+	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func deploymentIn(ns string) appsv1.Deployment {
-	return appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "istio-ingressgateway", Namespace: ns}}
-}
+var _ = Describe("seedIngressGatewaySelector", func() {
+	It("adds the seed istio-role label to the gateway selector", func() {
+		selector := map[string]string{"app": "istio-ingressgateway", "istio": "ingressgateway"}
 
-func TestFilterSeedIstioIngressDeployments(t *testing.T) {
-	tests := []struct {
-		name       string
-		namespaces []string
-		want       []string
-	}{
-		{"seed default + operator virtual garden", []string{"istio-ingress", "virtual-garden-istio-ingress"}, []string{"istio-ingress"}},
-		{"zonal gateway", []string{"istio-ingress--eu-west-1a", "virtual-garden-istio-ingress"}, []string{"istio-ingress--eu-west-1a"}},
-		{"exposure class handler", []string{"istio-ingress-handler-internal", "virtual-garden-istio-ingress"}, []string{"istio-ingress-handler-internal"}},
-		{"still ambiguous", []string{"istio-ingress", "istio-ingress--eu-west-1a"}, []string{"istio-ingress", "istio-ingress--eu-west-1a"}},
-		{"nothing seed-like", []string{"virtual-garden-istio-ingress", "foo"}, nil},
+		Expect(seedIngressGatewaySelector(selector)).To(Equal(map[string]string{
+			"app":        "istio-ingressgateway",
+			"istio":      "ingressgateway",
+			"istio-role": "seed",
+		}))
+	})
+
+	It("does not modify the original selector", func() {
+		selector := map[string]string{"istio": "ingressgateway"}
+
+		_ = seedIngressGatewaySelector(selector)
+
+		Expect(selector).To(Equal(map[string]string{"istio": "ingressgateway"}))
+	})
+
+	It("overrides a foreign istio-role value", func() {
+		Expect(seedIngressGatewaySelector(map[string]string{"istio-role": "garden"})).To(HaveKeyWithValue("istio-role", "seed"))
+	})
+})
+
+var _ = Describe("findIstioNamespaceForExtension", func() {
+	var (
+		a              *actuator
+		shootNamespace string
+		selector       map[string]string
+		ex             *extensionsv1alpha1.Extension
+	)
+
+	BeforeEach(func() {
+		a = getNewActuator()
+		shootNamespace = createNewShootNamespace()
+		selector = map[string]string{"app": "istio-ingressgateway", "istio": shootNamespace}
+		createNewGateway(istioGatewayName, shootNamespace, selector)
+		ex = &extensionsv1alpha1.Extension{ObjectMeta: metav1.ObjectMeta{Namespace: shootNamespace}}
+	})
+
+	It("selects the istio-role=seed gateway when the virtual garden gateway matches the same selector", func() {
+		seedNamespace := createNewIstioNamespace()
+		gardenNamespace := createNewIstioNamespace()
+		createNewIstioDeployment(seedNamespace, withLabel(selector, istioRoleLabelKey, istioRoleSeed))
+		createNewIstioDeployment(gardenNamespace, withLabel(selector, istioRoleLabelKey, "garden"))
+
+		namespace, labels, err := a.findIstioNamespaceForExtension(ctx, ex)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(namespace).To(Equal(seedNamespace))
+		Expect(labels).To(Equal(selector))
+	})
+
+	It("falls back to the plain selector when no gateway carries the istio-role label", func() {
+		seedNamespace := createNewIstioNamespace()
+		createNewIstioDeployment(seedNamespace, selector)
+
+		namespace, _, err := a.findIstioNamespaceForExtension(ctx, ex)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(namespace).To(Equal(seedNamespace))
+	})
+
+	It("still fails when several unlabelled gateways match", func() {
+		createNewIstioDeployment(createNewIstioNamespace(), selector)
+		createNewIstioDeployment(createNewIstioNamespace(), selector)
+
+		_, _, err := a.findIstioNamespaceForExtension(ctx, ex)
+
+		Expect(err).To(MatchError(ContainSubstring("number of deployments found is 2")))
+	})
+})
+
+func withLabel(labels map[string]string, key, value string) map[string]string {
+	out := make(map[string]string, len(labels)+1)
+	for k, v := range labels {
+		out[k] = v
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			var in []appsv1.Deployment
-			for _, ns := range tc.namespaces {
-				in = append(in, deploymentIn(ns))
-			}
-			got := filterSeedIstioIngressDeployments(in)
-			var gotNS []string
-			for _, d := range got {
-				gotNS = append(gotNS, d.Namespace)
-			}
-			if len(gotNS) != len(tc.want) {
-				t.Fatalf("got %v, want %v", gotNS, tc.want)
-			}
-			for i := range tc.want {
-				if gotNS[i] != tc.want[i] {
-					t.Fatalf("got %v, want %v", gotNS, tc.want)
-				}
-			}
-		})
-	}
+	out[key] = value
+	return out
 }
