@@ -39,12 +39,12 @@ var _ = Describe("findIstioNamespaceForExtension", func() {
 		// Recent gardener: the Gateway selector itself carries the istio-role label,
 		// so a single list resolves the seed gateway even though the virtual-garden
 		// gateway shares the app/istio labels.
-		seedSelector := withLabel(selector, istio.RoleKey, istio.RoleSeed)
+		seedSelector := withIstioRole(selector, istio.RoleSeed)
 		createNewGateway(istioGatewayName, shootNamespace, seedSelector)
 		seedNamespace := createNewIstioNamespace()
 		gardenNamespace := createNewIstioNamespace()
 		createNewIstioDeployment(seedNamespace, seedSelector)
-		createNewIstioDeployment(gardenNamespace, withLabel(selector, istio.RoleKey, istio.RoleGarden))
+		createNewIstioDeployment(gardenNamespace, withIstioRole(selector, istio.RoleGarden))
 
 		namespace, labels, err := a.findIstioNamespaceForExtension(ctx, ex)
 
@@ -60,8 +60,8 @@ var _ = Describe("findIstioNamespaceForExtension", func() {
 		createNewGateway(istioGatewayName, shootNamespace, selector)
 		seedNamespace := createNewIstioNamespace()
 		gardenNamespace := createNewIstioNamespace()
-		createNewIstioDeployment(seedNamespace, withLabel(selector, istio.RoleKey, istio.RoleSeed))
-		createNewIstioDeployment(gardenNamespace, withLabel(selector, istio.RoleKey, istio.RoleGarden))
+		createNewIstioDeployment(seedNamespace, withIstioRole(selector, istio.RoleSeed))
+		createNewIstioDeployment(gardenNamespace, withIstioRole(selector, istio.RoleGarden))
 
 		namespace, labels, err := a.findIstioNamespaceForExtension(ctx, ex)
 
@@ -81,11 +81,11 @@ var _ = Describe("findIstioNamespaceForExtension", func() {
 	})
 })
 
-func withLabel(labels map[string]string, key, value string) map[string]string {
+func withIstioRole(labels map[string]string, role string) map[string]string {
 	out := make(map[string]string, len(labels)+1)
 	for k, v := range labels {
 		out[k] = v
 	}
-	out[key] = value
+	out[istio.RoleKey] = role
 	return out
 }
