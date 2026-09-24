@@ -2,34 +2,11 @@ package controller
 
 import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/component/networking/istio"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-var _ = Describe("seedIngressGatewaySelector", func() {
-	It("adds the seed istio-role label to the gateway selector", func() {
-		selector := map[string]string{"app": "istio-ingressgateway", "istio": "ingressgateway"}
-
-		Expect(seedIngressGatewaySelector(selector)).To(Equal(map[string]string{
-			"app":        "istio-ingressgateway",
-			"istio":      "ingressgateway",
-			"istio-role": "seed",
-		}))
-	})
-
-	It("does not modify the original selector", func() {
-		selector := map[string]string{"istio": "ingressgateway"}
-
-		_ = seedIngressGatewaySelector(selector)
-
-		Expect(selector).To(Equal(map[string]string{"istio": "ingressgateway"}))
-	})
-
-	It("overrides a foreign istio-role value", func() {
-		Expect(seedIngressGatewaySelector(map[string]string{"istio-role": "garden"})).To(HaveKeyWithValue("istio-role", "seed"))
-	})
-})
 
 var _ = Describe("findIstioNamespaceForExtension", func() {
 	var (
@@ -43,15 +20,13 @@ var _ = Describe("findIstioNamespaceForExtension", func() {
 		a = getNewActuator()
 		shootNamespace = createNewShootNamespace()
 		selector = map[string]string{"app": "istio-ingressgateway", "istio": shootNamespace}
-		createNewGateway(istioGatewayName, shootNamespace, selector)
 		ex = &extensionsv1alpha1.Extension{ObjectMeta: metav1.ObjectMeta{Namespace: shootNamespace}}
 	})
 
-	It("selects the istio-role=seed gateway when the virtual garden gateway matches the same selector", func() {
+	It("selects the single gateway matching the plain selector", func() {
+		createNewGateway(istioGatewayName, shootNamespace, selector)
 		seedNamespace := createNewIstioNamespace()
-		gardenNamespace := createNewIstioNamespace()
-		createNewIstioDeployment(seedNamespace, withLabel(selector, istioRoleLabelKey, istioRoleSeed))
-		createNewIstioDeployment(gardenNamespace, withLabel(selector, istioRoleLabelKey, "garden"))
+		createNewIstioDeployment(seedNamespace, selector)
 
 		namespace, labels, err := a.findIstioNamespaceForExtension(ctx, ex)
 
@@ -60,17 +35,43 @@ var _ = Describe("findIstioNamespaceForExtension", func() {
 		Expect(labels).To(Equal(selector))
 	})
 
-	It("falls back to the plain selector when no gateway carries the istio-role label", func() {
+	It("selects the seed gateway directly when the Gateway selector already carries istio-role=seed", func() {
+		// Recent gardener: the Gateway selector itself carries the istio-role label,
+		// so a single list resolves the seed gateway even though the virtual-garden
+		// gateway shares the app/istio labels.
+		seedSelector := withLabel(selector, istio.RoleKey, istio.RoleSeed)
+		createNewGateway(istioGatewayName, shootNamespace, seedSelector)
 		seedNamespace := createNewIstioNamespace()
-		createNewIstioDeployment(seedNamespace, selector)
+		gardenNamespace := createNewIstioNamespace()
+		createNewIstioDeployment(seedNamespace, seedSelector)
+		createNewIstioDeployment(gardenNamespace, withLabel(selector, istio.RoleKey, istio.RoleGarden))
 
-		namespace, _, err := a.findIstioNamespaceForExtension(ctx, ex)
+		namespace, labels, err := a.findIstioNamespaceForExtension(ctx, ex)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(namespace).To(Equal(seedNamespace))
+		Expect(labels).To(Equal(seedSelector))
 	})
 
-	It("still fails when several unlabelled gateways match", func() {
+	It("narrows to the seed gateway when the plain selector matches both seed and virtual-garden gateways", func() {
+		// Older gardener: the Gateway selector does not carry istio-role, so the plain
+		// selector matches both the seed and the virtual-garden gateway Deployments.
+		// The function must then narrow by istio-role=seed rather than error.
+		createNewGateway(istioGatewayName, shootNamespace, selector)
+		seedNamespace := createNewIstioNamespace()
+		gardenNamespace := createNewIstioNamespace()
+		createNewIstioDeployment(seedNamespace, withLabel(selector, istio.RoleKey, istio.RoleSeed))
+		createNewIstioDeployment(gardenNamespace, withLabel(selector, istio.RoleKey, istio.RoleGarden))
+
+		namespace, labels, err := a.findIstioNamespaceForExtension(ctx, ex)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(namespace).To(Equal(seedNamespace))
+		Expect(labels).To(Equal(selector))
+	})
+
+	It("fails when several matching gateways cannot be disambiguated by istio-role", func() {
+		createNewGateway(istioGatewayName, shootNamespace, selector)
 		createNewIstioDeployment(createNewIstioNamespace(), selector)
 		createNewIstioDeployment(createNewIstioNamespace(), selector)
 
