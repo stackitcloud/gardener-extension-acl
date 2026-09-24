@@ -30,6 +30,7 @@ import (
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/chartrenderer"
+	"github.com/gardener/gardener/pkg/component/networking/istio"
 	"github.com/gardener/gardener/pkg/utils/chart"
 	"github.com/gardener/gardener/pkg/utils/managedresources"
 	"github.com/go-logr/logr"
@@ -431,9 +432,15 @@ func getExtensionState(ex *extensionsv1alpha1.Extension) (*ExtensionState, error
 // Shoot namespace (except when the Shoot is hibernated - in this case, the
 // function returns a NotFoundError which the caller should handle).
 //
-// The Gateway object has a Selector field that selects a Deployment in the
-// namespace we need. We list Deployments filtered by the labelSelector and
-// return the namespace of the returned Deployment.
+// The Gateway object has a Selector field that selects the ingress gateway
+// Deployment whose namespace we need. On recent gardener the Gateway selector
+// already carries istio.RoleKey=istio.RoleSeed, so a single list by the
+// selector resolves the seed's ingress gateway unambiguously - even when the
+// seed is also the gardener-operator runtime cluster, whose virtual-garden
+// gateway carries istio.RoleKey=istio.RoleGarden and otherwise identical labels.
+// Only if more than one Deployment matches (an older gardener whose Gateway
+// selector predates the istio-role label) do we narrow to the seed gateway by
+// adding istio.RoleKey=istio.RoleSeed.
 func (a *actuator) findIstioNamespaceForExtension(
 	ctx context.Context, ex *extensionsv1alpha1.Extension,
 ) (
@@ -451,12 +458,27 @@ func (a *actuator) findIstioNamespaceForExtension(
 		return "", nil, err
 	}
 
-	labelsSelector := client.MatchingLabels(gw.Spec.Selector)
-
-	deployments := appsv1.DeploymentList{}
-	err = a.client.List(ctx, &deployments, labelsSelector)
-	if err != nil {
+	deployments := &appsv1.DeploymentList{}
+	if err := a.client.List(ctx, deployments, client.MatchingLabels(gw.Spec.Selector)); err != nil {
 		return "", nil, err
+	}
+	if matched := len(deployments.Items); matched > 1 {
+		// Older gardener whose Gateway selector does not yet carry the istio-role
+		// label: narrow to the seed's ingress gateway so we never select the
+		// gardener-operator's virtual-garden gateway on a runtime-is-seed cluster.
+		seedSelector := make(map[string]string, len(gw.Spec.Selector)+1)
+		for k, v := range gw.Spec.Selector {
+			seedSelector[k] = v
+		}
+		seedSelector[istio.RoleKey] = istio.RoleSeed
+		if err := a.client.List(ctx, deployments, client.MatchingLabels(seedSelector)); err != nil {
+			return "", nil, err
+		}
+		if len(deployments.Items) != 1 {
+			// Narrowing did not resolve to a single seed gateway either; report the
+			// original ambiguous match count, which is the actionable signal.
+			return "", nil, fmt.Errorf("no istio namespace could be selected, because the number of deployments found is %d", matched)
+		}
 	}
 	if len(deployments.Items) != 1 {
 		return "", nil, fmt.Errorf("no istio namespace could be selected, because the number of deployments found is %d", len(deployments.Items))

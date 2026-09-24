@@ -173,6 +173,8 @@ github.com/fxamacker/cbor/v2 v2.9.2 h1:X4Ksno9+x3cz0TZv69ec1hxP/+tymuR8PXQJyDwfh
 github.com/fxamacker/cbor/v2 v2.9.2/go.mod h1:vM4b+DJCtHn+zz7h3FFp/hDAI9WNWCsZj23V5ytsSxQ=
 github.com/gardener/cert-management v0.22.0 h1:82uZiLzYs+W/Qp/z1XnUSN+nmNDCMFUcdgn5sX5xP7M=
 github.com/gardener/cert-management v0.22.0/go.mod h1:hJvxHEKHwdSywZUxDqO7vUZN4D7udfhgtpdfDOoaKNs=
+github.com/gardener/dependency-watchdog v1.8.0 h1:+3FE8sR1V6YM9JsGqX7m9oUjhr1wXhedQo29r6fsC+I=
+github.com/gardener/dependency-watchdog v1.8.0/go.mod h1:jRIyBZ4ySWy+EdQjfLm/N+90vBPdWJ7khiBN7CGQs18=
 github.com/gardener/etcd-druid/api v0.38.2 h1:ltaqC9PV5rd39kj766UW+ZsN7LputyF1JplgcohsRHE=
 github.com/gardener/etcd-druid/api v0.38.2/go.mod h1:HsqEM/h4XuxPC4cFDm20V9TPAUqv0tjtnzds/nZ5p7Y=
 github.com/gardener/gardener v1.151.1 h1:DWncJdATn0GF/kH2fXnfZAoLnjuNODIbL8PPDaNfwGY=
@@ -895,6 +897,8 @@ k8s.io/autoscaler/vertical-pod-autoscaler v1.7.1/go.mod h1:4Snt7tcJZFk+ZCItWVp48
 k8s.io/client-go v0.19.0/go.mod h1:H9E/VT95blcFQnlyShFgnFT9ZnJOAceiUHM3MlRC+mU=
 k8s.io/client-go v0.37.0 h1:nsN31fy8wBySuZ+QRnKmrjRSQLOG2rvoGN0tKd12zhQ=
 k8s.io/client-go v0.37.0/go.mod h1:FcGqw+Ll/gNQiq+nPGY1Oyt9y7SgDh1d3MW3RFDEbn0=
+k8s.io/cluster-bootstrap v0.36.4 h1:5M50BP7ICe69bZX5hpIt5aWRzvTmc5/aL7hC5syPqJc=
+k8s.io/cluster-bootstrap v0.36.4/go.mod h1:5E8V95icgPg1dMiqhMkpZuTiJ+FrF8EASsGyh7SKXgc=
 k8s.io/code-generator v0.19.0/go.mod h1:moqLn7w0t9cMs4+5CQyxnfA/HV8MF6aAVENF+WZZhgk=
 k8s.io/code-generator v0.37.0 h1:AC915wukzlVHHODAQYxvQ25WKibPh95faJ2kxf8dzuo=
 k8s.io/code-generator v0.37.0/go.mod h1:qg7E/uDlyvevVRL1V8+h2z9UWmi/8gxaRka/lVXUBdk=
