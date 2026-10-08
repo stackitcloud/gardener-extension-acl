@@ -12,20 +12,17 @@
     'gomodTidy',
   ],
   automergeStrategy: 'squash',
-  // required for automerging patch updates
   separateMinorPatch: true,
   additionalReviewers: [
-    'team:ske-networking'
+    'team:ske-networking',
   ],
   customManagers: [
     {
-      // Update `_VERSION` and `_version` variables in Makefiles and scripts.
-      // Inspired by `customManagers:githubActionsVersions` preset.
       customType: 'regex',
-      fileMatch: [
-        'Makefile$',
-        '\\.mk$',
-        '\\.sh$',
+      managerFilePatterns: [
+        '/Makefile$/',
+        '/\\.mk$/',
+        '/\\.sh$/',
       ],
       matchStrings: [
         '# renovate: datasource=(?<datasource>[a-zA-Z0-9-._]+?) depName=(?<depName>[^\\s]+?)(?: (?:lookupName|packageName)=(?<packageName>[^\\s]+?))?(?: versioning=(?<versioning>[^\\s]+?))?(?: extractVersion=(?<extractVersion>[^\\s]+?))?(?: registryUrl=(?<registryUrl>[^\\s]+?))?\\s+[A-Za-z0-9_]+?_(VERSION|version)\\s*[?:]?=\\s*["\']?(?<currentValue>.+?)["\']?\\s',
@@ -34,21 +31,18 @@
   ],
   packageRules: [
     {
-      // automerge patch updates
       matchUpdateTypes: [
         'patch',
       ],
       automerge: true,
     },
     {
-      // bump k8s, controller-runtime and gardener/gardener go dependencies together
       groupName: 'k8s packages',
       groupSlug: 'k8s-go',
       matchDatasources: [
         'go',
       ],
       matchPackageNames: [
-        // from "group:kubernetes"
         'k8s.io/api{/,}**',
         'k8s.io/apiextensions-apiserver{/,}**',
         'k8s.io/apimachinery{/,}**',
@@ -75,7 +69,6 @@
         'k8s.io/sample-apiserver{/,}**',
         'k8s.io/sample-cli-plugin{/,}**',
         'k8s.io/sample-controller{/,}**',
-        // added packages
         'sigs.k8s.io/controller-runtime{/,}**',
         'github.com/gardener/gardener{/,}**',
       ],
@@ -92,7 +85,6 @@
       ],
     },
     {
-      // automerge k8s.io/utils updates
       matchDatasources: [
         'go',
       ],
@@ -105,7 +97,6 @@
       automerge: true,
     },
     {
-      // setup-envtest is not tagged, don't create a PR for every commit in controller-runtime
       matchDatasources: [
         'go',
       ],
@@ -115,7 +106,6 @@
       enabled: false,
     },
     {
-      // jsonpatch has to be kept in sync with k8s and controller-runtime dependencies
       matchDatasources: [
         'go',
       ],
@@ -125,7 +115,6 @@
       ],
     },
     {
-      // the istio go dependencies should be kept in sync with the gardener/gardener version
       enabled: false,
       matchPackageNames: [
         'istio.io/api{/,}**',
