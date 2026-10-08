@@ -2,7 +2,7 @@ module github.com/stackitcloud/gardener-extension-acl
 
 go 1.26.5
 
-toolchain go1.27.1
+toolchain go1.27.2
 
 require (
 	github.com/gardener/gardener v1.152.0
