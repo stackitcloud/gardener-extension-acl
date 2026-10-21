@@ -31,10 +31,6 @@ service:
     enabled: false
 
 gardener:
-  virtualCluster:
-    enabled: true
-    serviceAccount: {}
-#     name: gardener-extension-admission-acl
-#     namespace: kube-system
+  virtualCluster: {}
   runtimeCluster: {}
 #   priorityClassName: gardener-garden-system-400
