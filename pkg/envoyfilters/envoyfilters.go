@@ -413,6 +413,8 @@ func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []*envoy_r
 		p := new(envoy_rbacv3.Principal)
 		switch strings.ToLower(rule.Type) {
 		case "source_ip":
+			//nolint:staticcheck // SA1019 currently still supported in the extension, need to handle deprecation gracefully
+			//TODO: remove support for source_ip rule type as it's deprecated in envoy
 			p.Identifier = &envoy_rbacv3.Principal_SourceIp{SourceIp: &cidrRange}
 		case "remote_ip":
 			p.Identifier = &envoy_rbacv3.Principal_RemoteIp{RemoteIp: &cidrRange}
