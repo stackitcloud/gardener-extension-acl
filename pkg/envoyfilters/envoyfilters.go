@@ -39,10 +39,10 @@ type ACLRule struct {
 }
 
 func (r *ACLRule) actionProto() (envoy_rbacv3.RBAC_Action, error) {
-	switch r.Action {
-	case "DENY":
+	switch strings.ToLower(r.Action) {
+	case "deny":
 		return envoy_rbacv3.RBAC_DENY, nil
-	case "ALLOW":
+	case "allow":
 		return envoy_rbacv3.RBAC_ALLOW, nil
 	default:
 		return -1, fmt.Errorf("unknown action %s", r.Action)
@@ -50,7 +50,7 @@ func (r *ACLRule) actionProto() (envoy_rbacv3.RBAC_Action, error) {
 }
 
 // FilterPatch represents the object beneath EnvoyFilter.spec.configPatches.patch.value
-// It holds the name of the filter and it's typed config to inject into the envoy config
+// It holds the name of the filter and its typed config to inject into the envoy config
 type FilterPatch struct {
 	Name        string           `json:"name"`
 	TypedConfig *structpb.Struct `json:"typed_config"`
@@ -221,6 +221,14 @@ func createIngressConfigPatchFromRule(
 								},
 							},
 						},
+						{
+							Identifier: &envoy_rbacv3.Principal_RemoteIp{
+								RemoteIp: &envoy_corev3.CidrRange{
+									AddressPrefix: "::",
+									PrefixLen:     wrapperspb.UInt32(0),
+								},
+							},
+						},
 					},
 				},
 				shootID: {
@@ -324,6 +332,14 @@ func buildProxyEnvoyFilterSpecForHelmChart(p httpProxyFilterOptions) (*istio_net
 								},
 							},
 						},
+						{
+							Identifier: &envoy_rbacv3.Principal_RemoteIp{
+								RemoteIp: &envoy_corev3.CidrRange{
+									AddressPrefix: "::",
+									PrefixLen:     wrapperspb.UInt32(0),
+								},
+							},
+						},
 					},
 				},
 				p.ShortShootID: {
@@ -411,7 +427,7 @@ func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []*envoy_r
 	// if the rule has action "ALLOW" (which means "limit the access to only the
 	// specified IPs", we need to insert the node CIDR range to not block
 	// cluster-internal communication)
-	if rule.Action == "ALLOW" {
+	if strings.ToLower(rule.Action) == "allow" {
 		for _, cidr := range alwaysAllowedCIDRs {
 			prefix, length, err := getPrefixAndPrefixLength(cidr)
 			if err != nil {
