@@ -13,9 +13,6 @@ import (
 	envoy_networkrbacv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/rbac/v3"
 	envoy_matcherv3 "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"github.com/gardener/gardener/extensions/pkg/controller"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	istio_networkingv1alpha3 "istio.io/api/networking/v1alpha3"
 
@@ -47,25 +44,6 @@ func (r *ACLRule) actionProto() (envoy_rbacv3.RBAC_Action, error) {
 	default:
 		return -1, fmt.Errorf("unknown action %s", r.Action)
 	}
-}
-
-// FilterPatch represents the object beneath EnvoyFilter.spec.configPatches.patch.value
-// It holds the name of the filter and its typed config to inject into the envoy config
-type FilterPatch struct {
-	Name        string           `json:"name"`
-	TypedConfig *structpb.Struct `json:"typed_config"`
-}
-
-// asStructPB returns FilterPatch represented as a structpb.Struct
-func (f *FilterPatch) asStructPB() (*structpb.Struct, error) {
-	pb, err := structpb.NewStruct(map[string]any{
-		"name":         f.Name,
-		"typed_config": f.TypedConfig.AsMap(),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return pb, nil
 }
 
 // BuildAPIEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for API server
@@ -157,7 +135,7 @@ func createAPIConfigPatchFromRule(
 	if err != nil {
 		return nil, err
 	}
-	principals := ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs)
+	principals := ruleCIDRsToPrincipal(rule, action, alwaysAllowedCIDRs)
 	principalPatch, err := principalsToPatch(rbacName, action, principals)
 	if err != nil {
 		return nil, err
@@ -189,6 +167,10 @@ func createIngressConfigPatchFromRule(
 ) (*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch, error) {
 	rbacName := "acl-ingress"
 	ingressSuffix := "-" + shootID + "." + seedIngressDomain
+	action, err := rule.actionProto()
+	if err != nil {
+		return nil, err
+	}
 
 	requestedServerNameRule := &envoy_rbacv3.Permission_RequestedServerName{
 		RequestedServerName: &envoy_matcherv3.StringMatcher{
@@ -232,7 +214,7 @@ func createIngressConfigPatchFromRule(
 					},
 				},
 				shootID: {
-					Principals: ruleCIDRsToPrincipal(rule, alwaysAllowedCIDRs),
+					Principals: ruleCIDRsToPrincipal(rule, action, alwaysAllowedCIDRs),
 					Permissions: []*envoy_rbacv3.Permission{
 						{
 							Rule: requestedServerNameRule,
@@ -244,15 +226,11 @@ func createIngressConfigPatchFromRule(
 		StatPrefix: "envoyrbac",
 	}
 
-	typedConfig, err := protoMessageToTypedConfig(rbacFilter)
-	if err != nil {
-		return nil, err
+	filterPatch := &filterPatch{
+		Name:   rbacName,
+		Config: rbacFilter,
 	}
-	filterPatch := &FilterPatch{
-		Name:        rbacName,
-		TypedConfig: typedConfig,
-	}
-	pb, err := filterPatch.asStructPB()
+	filter, err := filterPatch.AsStructPB()
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +249,7 @@ func createIngressConfigPatchFromRule(
 		},
 		Patch: &istio_networkingv1alpha3.EnvoyFilter_Patch{
 			Operation: istio_networkingv1alpha3.EnvoyFilter_Patch_INSERT_FIRST,
-			Value:     pb,
+			Value:     filter,
 		},
 	}, nil
 }
@@ -289,6 +267,10 @@ type httpProxyFilterOptions struct {
 
 func buildProxyEnvoyFilterSpecForHelmChart(p httpProxyFilterOptions) (*istio_networkingv1alpha3.EnvoyFilter, error) {
 	rbacName := "acl" + p.NameSuffix
+	action, err := p.Rule.actionProto()
+	if err != nil {
+		return nil, err
+	}
 	headerMatcher := envoy_routev3.HeaderMatcher{
 		Name: p.Header,
 		HeaderMatchSpecifier: &envoy_routev3.HeaderMatcher_StringMatch{
@@ -350,20 +332,16 @@ func buildProxyEnvoyFilterSpecForHelmChart(p httpProxyFilterOptions) (*istio_net
 							},
 						},
 					},
-					Principals: ruleCIDRsToPrincipal(p.Rule, p.AlwaysAllowedCIDRs),
+					Principals: ruleCIDRsToPrincipal(p.Rule, action, p.AlwaysAllowedCIDRs),
 				},
 			},
 		},
 	}
-	typedConfig, err := protoMessageToTypedConfig(rbacFilter)
-	if err != nil {
-		return nil, err
+	filterPatch := &filterPatch{
+		Name:   rbacName,
+		Config: rbacFilter,
 	}
-	filterPatch := &FilterPatch{
-		Name:        rbacName,
-		TypedConfig: typedConfig,
-	}
-	pb, err := filterPatch.asStructPB()
+	pb, err := filterPatch.AsStructPB()
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +376,7 @@ func buildProxyEnvoyFilterSpecForHelmChart(p httpProxyFilterOptions) (*istio_net
 // into a list of envoy principals. The function checks for the rule action: If
 // the action is "ALLOW", the alwaysAllowedCIDRs are appended to the principals
 // to guarantee the downstream flow for these CIDRs is not blocked.
-func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []*envoy_rbacv3.Principal {
+func ruleCIDRsToPrincipal(rule *ACLRule, action envoy_rbacv3.RBAC_Action, alwaysAllowedCIDRs []string) []*envoy_rbacv3.Principal {
 	principals := []*envoy_rbacv3.Principal{}
 
 	for _, cidr := range rule.Cidrs {
@@ -429,7 +407,7 @@ func ruleCIDRsToPrincipal(rule *ACLRule, alwaysAllowedCIDRs []string) []*envoy_r
 	// if the rule has action "ALLOW" (which means "limit the access to only the
 	// specified IPs", we need to insert the node CIDR range to not block
 	// cluster-internal communication)
-	if strings.ToLower(rule.Action) == "allow" {
+	if action == envoy_rbacv3.RBAC_ALLOW {
 		for _, cidr := range alwaysAllowedCIDRs {
 			prefix, length, err := getPrefixAndPrefixLength(cidr)
 			if err != nil {
@@ -465,21 +443,17 @@ func principalsToPatch(
 	rbacName string, ruleAction envoy_rbacv3.RBAC_Action, principals []*envoy_rbacv3.Principal,
 ) (*istio_networkingv1alpha3.EnvoyFilter_Patch, error) {
 	rbacFilter := newRBACFilter(rbacName, ruleAction, principals)
-	typedConfig, err := protoMessageToTypedConfig(rbacFilter)
-	if err != nil {
-		return nil, err
+	filterPatch := &filterPatch{
+		Name:   rbacName,
+		Config: rbacFilter,
 	}
-	filter := &FilterPatch{
-		Name:        rbacName,
-		TypedConfig: typedConfig,
-	}
-	pb, err := filter.asStructPB()
+	filter, err := filterPatch.AsStructPB()
 	if err != nil {
 		return nil, err
 	}
 	return &istio_networkingv1alpha3.EnvoyFilter_Patch{
 		Operation: istio_networkingv1alpha3.EnvoyFilter_Patch_INSERT_FIRST,
-		Value:     pb,
+		Value:     filter,
 	}, nil
 }
 
@@ -502,20 +476,4 @@ func newRBACFilter(rbacName string, ruleAction envoy_rbacv3.RBAC_Action, princip
 			},
 		},
 	}
-}
-
-func protoMessageToTypedConfig(m proto.Message) (*structpb.Struct, error) {
-	raw, err := protojson.MarshalOptions{
-		UseProtoNames: true,
-	}.Marshal(m)
-	if err != nil {
-		return nil, err
-	}
-	s := new(structpb.Struct)
-	if err := protojson.Unmarshal(raw, s); err != nil {
-		return nil, err
-	}
-	typeName := fmt.Sprintf("type.googleapis.com/%s", proto.MessageName(m))
-	s.Fields["@type"] = structpb.NewStringValue(typeName)
-	return s, nil
 }

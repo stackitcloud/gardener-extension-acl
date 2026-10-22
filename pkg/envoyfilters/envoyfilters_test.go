@@ -40,8 +40,8 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 
 	Describe("BuildAPIEnvoyFilterSpecForHelmChart", func() {
 		When("there is an extension resource with one rule", func() {
-			It("Should create a envoyFilter spec matching the expected one", func() {
-				rule := createRule("ALLOW", "source_ip", "0.0.0.0/0")
+			DescribeTable("Should create a envoyFilter spec matching the expected one", func(action, testFile string) {
+				rule := createRule(action, "source_ip", "0.0.0.0/0")
 				hosts := []string{
 					"api.test.garden.s.testseed.dev.ske.eu01.stackit.cloud",
 					"api.test.garden.internal.testseed.dev.ske.eu01.stackit.cloud",
@@ -53,8 +53,11 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 				result, err := BuildAPIEnvoyFilterSpecForHelmChart(rule, hosts, alwaysAllowedCIDRs, labels)
 
 				Expect(err).ToNot(HaveOccurred())
-				checkIfFilterEquals(result, "apiEnvoyFilterSpecWithOneAllowRule.yaml")
-			})
+				checkIfFilterEquals(result, testFile)
+			},
+				Entry("allow rule", "allow", "apiEnvoyFilterSpecWithOneAllowRule.yaml"),
+				Entry("deny rule", "deny", "apiEnvoyFilterSpecWithOneDenyRule.yaml"),
+			)
 		})
 	})
 
