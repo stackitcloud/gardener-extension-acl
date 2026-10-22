@@ -5,7 +5,7 @@ go 1.26.8
 toolchain go1.27.3
 
 require (
-	github.com/envoyproxy/go-control-plane/envoy v1.39.0
+	github.com/envoyproxy/go-control-plane/envoy v1.40.0
 	github.com/gardener/gardener v1.153.1
 	github.com/gardener/gardener/hack/tools v1.153.1
 	github.com/gardener/gardener/pkg/apis v1.153.1
