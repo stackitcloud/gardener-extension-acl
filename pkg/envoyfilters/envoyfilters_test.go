@@ -2,8 +2,8 @@ package envoyfilters
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
-	"path"
 
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	"github.com/gardener/gardener/pkg/extensions"
@@ -150,7 +150,7 @@ func createRule(action, ruleType, cidr string) *ACLRule {
 // Fails the test if strings differ. The file contents are unmarshaled and
 // marshaled again to guarantee the strings are comparable.
 func checkIfFilterEquals(input any, relTestingFilePath string) {
-	goldenYAMLBytes, err := os.ReadFile(path.Join("./testdata", relTestingFilePath))
+	goldenYAMLBytes, err := fs.ReadFile(os.DirFS("testdata"), relTestingFilePath)
 	Expect(err).ToNot(HaveOccurred())
 
 	goldenJSON, err := yaml.YAMLToJSON(goldenYAMLBytes)

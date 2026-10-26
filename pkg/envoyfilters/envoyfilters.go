@@ -386,7 +386,7 @@ func ruleCIDRsToPrincipal(rule *ACLRule, action envoy_rbacv3.RBAC_Action, always
 		}
 		cidrRange := envoy_corev3.CidrRange{
 			AddressPrefix: prefix,
-			PrefixLen:     wrapperspb.UInt32(uint32(length)),
+			PrefixLen:     wrapperspb.UInt32(uint32(length)), //nolint:gosec // G115: Mask.Size() returns 0-128
 		}
 		p := new(envoy_rbacv3.Principal)
 		switch strings.ToLower(rule.Type) {
@@ -417,7 +417,7 @@ func ruleCIDRsToPrincipal(rule *ACLRule, action envoy_rbacv3.RBAC_Action, always
 				Identifier: &envoy_rbacv3.Principal_RemoteIp{
 					RemoteIp: &envoy_corev3.CidrRange{
 						AddressPrefix: prefix,
-						PrefixLen:     wrapperspb.UInt32(uint32(length)),
+						PrefixLen:     wrapperspb.UInt32(uint32(length)), //nolint:gosec // G115: Mask.Size() returns 0-128
 					},
 				},
 			})
