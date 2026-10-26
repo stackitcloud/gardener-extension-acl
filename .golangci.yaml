@@ -4,15 +4,16 @@ run:
 
 linters:
   enable:
-    - revive
-    - importas
     - copyloopvar
-    - nilerr
-    - whitespace
-    - misspell
     - ginkgolinter
+    - gosec
+    - importas
+    - misspell
+    - nilerr
+    - revive
     - unconvert
     - unparam
+    - whitespace
 
   settings:
     exclusions:
