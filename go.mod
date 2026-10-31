@@ -6,9 +6,9 @@ toolchain go1.27.3
 
 require (
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0
-	github.com/gardener/gardener v1.154.0
-	github.com/gardener/gardener/hack/tools v1.154.0
-	github.com/gardener/gardener/pkg/apis v1.154.0
+	github.com/gardener/gardener v1.154.1
+	github.com/gardener/gardener/hack/tools v1.154.1
+	github.com/gardener/gardener/pkg/apis v1.154.1
 	github.com/go-logr/logr v1.4.4
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo/v2 v2.33.1
@@ -20,12 +20,12 @@ require (
 	google.golang.org/protobuf v1.36.12
 	istio.io/api v1.29.9
 	istio.io/client-go v1.29.2
-	k8s.io/api v0.37.1
-	k8s.io/apiextensions-apiserver v0.37.1
-	k8s.io/apimachinery v0.37.1
-	k8s.io/client-go v0.37.1
-	k8s.io/code-generator v0.37.1
-	k8s.io/component-base v0.37.1
+	k8s.io/api v0.37.2
+	k8s.io/apiextensions-apiserver v0.37.2
+	k8s.io/apimachinery v0.37.2
+	k8s.io/client-go v0.37.2
+	k8s.io/code-generator v0.37.2
+	k8s.io/component-base v0.37.2
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/yaml v1.6.0
@@ -84,8 +84,8 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
 	github.com/gardener/cert-management v0.22.0 // indirect
-	github.com/gardener/etcd-druid/api v0.39.0 // indirect
-	github.com/gardener/machine-controller-manager v0.63.0 // indirect
+	github.com/gardener/etcd-druid/api v0.39.1 // indirect
+	github.com/gardener/machine-controller-manager v0.63.1 // indirect
 	github.com/gardener/pvc-autoscaler v0.3.1 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.5 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -222,7 +222,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	helm.sh/helm/v4 v4.3.1 // indirect
-	k8s.io/apiserver v0.37.1 // indirect
+	k8s.io/apiserver v0.37.2 // indirect
 	k8s.io/autoscaler/vertical-pod-autoscaler v1.7.2 // indirect
 	k8s.io/gengo/v2 v2.0.0-20260408192533-25e2208e0dc3 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
@@ -231,7 +231,7 @@ require (
 	k8s.io/kubelet v0.37.1 // indirect
 	k8s.io/metrics v0.37.1 // indirect
 	k8s.io/pod-security-admission v0.37.1 // indirect
-	k8s.io/streaming v0.37.1 // indirect
+	k8s.io/streaming v0.37.2 // indirect
 	sigs.k8s.io/gateway-api v1.6.1 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
