@@ -66,24 +66,27 @@ func BuildAPIEnvoyFilterSpecForHelmChart(
 }
 
 // BuildIngressEnvoyFilterSpecForHelmChart assembles EnvoyFilter patches for
-// endpoints using the seed ingress domain.
+// endpoints using the seed ingress domain. ingressHosts is the list of ingress
+// hostnames for this shoot (one patch per host, exact SNI match).
 func BuildIngressEnvoyFilterSpecForHelmChart(
-	cluster *controller.Cluster, rule *ACLRule, alwaysAllowedCIDRs []string, istioLabels map[string]string,
+	rule *ACLRule, ingressHosts, alwaysAllowedCIDRs []string, istioLabels map[string]string,
 ) (*istio_networkingv1alpha3.EnvoyFilter, error) {
-	seedIngressDomain := helper.GetSeedIngressDomain(cluster.Seed)
-	if seedIngressDomain == "" {
+	if len(ingressHosts) == 0 {
 		return nil, nil
 	}
-	shootID := helper.ComputeShortShootID(cluster.Shoot)
-	patch, err := createIngressConfigPatchFromRule(rule, seedIngressDomain, shootID, alwaysAllowedCIDRs)
-	if err != nil {
-		return nil, err
+	patches := make([]*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch, 0, len(ingressHosts))
+	for _, host := range ingressHosts {
+		patch, err := createIngressConfigPatchFromRule(rule, host, alwaysAllowedCIDRs)
+		if err != nil {
+			return nil, err
+		}
+		patches = append(patches, patch)
 	}
 	return &istio_networkingv1alpha3.EnvoyFilter{
 		WorkloadSelector: &istio_networkingv1alpha3.WorkloadSelector{
 			Labels: istioLabels,
 		},
-		ConfigPatches: []*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch{patch},
+		ConfigPatches: patches,
 	}, nil
 }
 
@@ -163,74 +166,15 @@ func createAPIConfigPatchFromRule(
 }
 
 func createIngressConfigPatchFromRule(
-	rule *ACLRule, seedIngressDomain, shootID string, alwaysAllowedCIDRs []string,
+	rule *ACLRule, host string, alwaysAllowedCIDRs []string,
 ) (*istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectPatch, error) {
 	rbacName := "acl-ingress"
-	ingressSuffix := "-" + shootID + "." + seedIngressDomain
 	action, err := rule.actionProto()
 	if err != nil {
 		return nil, err
 	}
-
-	requestedServerNameRule := &envoy_rbacv3.Permission_RequestedServerName{
-		RequestedServerName: &envoy_matcherv3.StringMatcher{
-			MatchPattern: &envoy_matcherv3.StringMatcher_Suffix{
-				Suffix: ingressSuffix,
-			},
-		},
-	}
-
-	rbacFilter := &envoy_networkrbacv3.RBAC{
-		Rules: &envoy_rbacv3.RBAC{
-			Action: envoy_rbacv3.RBAC_ALLOW,
-			Policies: map[string]*envoy_rbacv3.Policy{
-				shootID + "-inverse": {
-					Permissions: []*envoy_rbacv3.Permission{
-						{
-							Rule: &envoy_rbacv3.Permission_NotRule{
-								NotRule: &envoy_rbacv3.Permission{
-									Rule: requestedServerNameRule,
-								},
-							},
-						},
-					},
-					Principals: []*envoy_rbacv3.Principal{
-						{
-							Identifier: &envoy_rbacv3.Principal_RemoteIp{
-								RemoteIp: &envoy_corev3.CidrRange{
-									AddressPrefix: "0.0.0.0",
-									PrefixLen:     wrapperspb.UInt32(0),
-								},
-							},
-						},
-						{
-							Identifier: &envoy_rbacv3.Principal_RemoteIp{
-								RemoteIp: &envoy_corev3.CidrRange{
-									AddressPrefix: "::",
-									PrefixLen:     wrapperspb.UInt32(0),
-								},
-							},
-						},
-					},
-				},
-				shootID: {
-					Principals: ruleCIDRsToPrincipal(rule, action, alwaysAllowedCIDRs),
-					Permissions: []*envoy_rbacv3.Permission{
-						{
-							Rule: requestedServerNameRule,
-						},
-					},
-				},
-			},
-		},
-		StatPrefix: "envoyrbac",
-	}
-
-	filterPatch := &filterPatch{
-		Name:   rbacName,
-		Config: rbacFilter,
-	}
-	filter, err := filterPatch.AsStructPB()
+	principals := ruleCIDRsToPrincipal(rule, action, alwaysAllowedCIDRs)
+	principalPatch, err := principalsToPatch(rbacName, action, principals)
 	if err != nil {
 		return nil, err
 	}
@@ -242,15 +186,12 @@ func createIngressConfigPatchFromRule(
 			ObjectTypes: &istio_networkingv1alpha3.EnvoyFilter_EnvoyConfigObjectMatch_Listener{
 				Listener: &istio_networkingv1alpha3.EnvoyFilter_ListenerMatch{
 					FilterChain: &istio_networkingv1alpha3.EnvoyFilter_ListenerMatch_FilterChainMatch{
-						Sni: "*." + seedIngressDomain,
+						Sni: host,
 					},
 				},
 			},
 		},
-		Patch: &istio_networkingv1alpha3.EnvoyFilter_Patch{
-			Operation: istio_networkingv1alpha3.EnvoyFilter_Patch_INSERT_FIRST,
-			Value:     filter,
-		},
+		Patch: principalPatch,
 	}, nil
 }
 
