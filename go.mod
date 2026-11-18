@@ -6,9 +6,9 @@ toolchain go1.27.4
 
 require (
 	github.com/envoyproxy/go-control-plane/envoy v1.40.0
-	github.com/gardener/gardener v1.155.0
-	github.com/gardener/gardener/hack/tools v1.155.0
-	github.com/gardener/gardener/pkg/apis v1.155.0
+	github.com/gardener/gardener v1.155.1
+	github.com/gardener/gardener/hack/tools v1.155.1
+	github.com/gardener/gardener/pkg/apis v1.155.1
 	github.com/go-logr/logr v1.4.4
 	github.com/golang/mock v1.6.0
 	github.com/onsi/ginkgo/v2 v2.34.0
@@ -27,7 +27,7 @@ require (
 	k8s.io/code-generator v0.37.2
 	k8s.io/component-base v0.37.2
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
-	sigs.k8s.io/controller-runtime v0.25.2
+	sigs.k8s.io/controller-runtime v0.25.3
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -86,7 +86,7 @@ require (
 	github.com/gardener/cert-management v0.22.0 // indirect
 	github.com/gardener/etcd-druid/api v0.39.2 // indirect
 	github.com/gardener/machine-controller-manager v0.63.1 // indirect
-	github.com/gardener/pvc-autoscaler v0.3.2 // indirect
+	github.com/gardener/pvc-autoscaler v0.3.3 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.6 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
