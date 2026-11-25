@@ -325,7 +325,7 @@ func (a *actuator) createSeedResources(
 		return err
 	}
 
-	ingressGroups, err := a.findIngressGatewayGroups(ctx, namespace, helper.GetSeedIngressDomain(cluster.Seed))
+	ingressGroups, err := a.findIngressGatewayGroups(ctx, log, namespace, helper.GetSeedIngressDomain(cluster.Seed))
 	if err != nil {
 		return err
 	}
@@ -490,14 +490,16 @@ type ingressGroup struct {
 // findIngressGatewayGroups lists all Istio Gateway resources in the shoot
 // namespace, groups them by selector, and resolves each selector to the istio
 // namespace of the matching Deployment. Returns one group per distinct selector.
-func (a *actuator) findIngressGatewayGroups(ctx context.Context, namespace, seedIngressDomain string) ([]ingressGroup, error) {
+func (a *actuator) findIngressGatewayGroups(ctx context.Context, log logr.Logger, namespace, seedIngressDomain string) ([]ingressGroup, error) {
 	if seedIngressDomain == "" {
+		log.Info("findIngressGatewayGroups: no seed ingress domain, skipping")
 		return nil, nil
 	}
 	gwList := istionetworkv1beta1.GatewayList{}
 	if err := a.client.List(ctx, &gwList, client.InNamespace(namespace)); err != nil {
 		return nil, err
 	}
+	log.Info("findIngressGatewayGroups: listed gateways", "count", len(gwList.Items), "namespace", namespace, "seedIngressDomain", seedIngressDomain)
 
 	type key = string // JSON-encoded selector map, used for deduplication
 	hostsByKey := map[key][]string{}
@@ -505,15 +507,18 @@ func (a *actuator) findIngressGatewayGroups(ctx context.Context, namespace, seed
 
 	suffix := "." + seedIngressDomain
 	for i := range gwList.Items {
-		sel := gwList.Items[i].Spec.Selector
+		gw := gwList.Items[i]
+		sel := gw.Spec.Selector
 		if len(sel) == 0 {
+			log.Info("findIngressGatewayGroups: skipping gateway with empty selector", "gateway", gw.Name)
 			continue
 		}
 		k := selectorKey(sel)
 		selectorByKey[k] = sel
-		for _, server := range gwList.Items[i].Spec.Servers {
+		for _, server := range gw.Spec.Servers {
 			for _, host := range server.Hosts {
 				if strings.HasSuffix(host, suffix) {
+					log.Info("findIngressGatewayGroups: found ingress host", "gateway", gw.Name, "host", host, "selector", sel)
 					hostsByKey[k] = append(hostsByKey[k], host)
 					break // one host per server entry suffices (avoids duplicate patches on same filter chain)
 				}
@@ -525,12 +530,14 @@ func (a *actuator) findIngressGatewayGroups(ctx context.Context, namespace, seed
 	for k, sel := range selectorByKey {
 		hosts := hostsByKey[k]
 		if len(hosts) == 0 {
+			log.Info("findIngressGatewayGroups: no ingress hosts for selector, skipping", "selector", sel)
 			continue
 		}
 		deployments := appsv1.DeploymentList{}
 		if err := a.client.List(ctx, &deployments, client.MatchingLabels(sel)); err != nil {
 			return nil, err
 		}
+		log.Info("findIngressGatewayGroups: deployment lookup", "selector", sel, "found", len(deployments.Items))
 		if len(deployments.Items) != 1 {
 			return nil, fmt.Errorf("could not resolve istio namespace for ingress selector %v: found %d deployments", sel, len(deployments.Items))
 		}
@@ -540,6 +547,7 @@ func (a *actuator) findIngressGatewayGroups(ctx context.Context, namespace, seed
 			Hosts:     hosts,
 		})
 	}
+	log.Info("findIngressGatewayGroups: returning groups", "count", len(groups))
 	return groups, nil
 }
 
