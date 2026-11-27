@@ -149,6 +149,22 @@ func createNewIstioDeployment(namespace string, labels map[string]string) {
 	Expect(k8sClient.Create(ctx, deployment)).ShouldNot(HaveOccurred())
 }
 
+func createNewGatewayWithHosts(name, shootNamespace string, labels map[string]string, hosts []string) *istionetworkingv1beta1.Gateway {
+	gw := &istionetworkingv1beta1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: shootNamespace,
+		},
+		Spec: v1beta1.Gateway{
+			Selector: labels,
+			Servers:  []*v1beta1.Server{{Hosts: hosts}},
+		},
+	}
+	Expect(k8sClient.Create(ctx, gw)).ShouldNot(HaveOccurred())
+	return gw
+}
+
+//nolint:unparam
 func createNewGateway(name, shootNamespace string, labels map[string]string) *istionetworkingv1beta1.Gateway {
 	gw := &istionetworkingv1beta1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{

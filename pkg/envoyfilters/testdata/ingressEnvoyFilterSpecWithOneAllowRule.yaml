@@ -4,7 +4,7 @@ configPatches:
     context: GATEWAY
     listener:
       filterChain:
-        sni: '*.ingress.testseed.dev.ske.eu01.stackit.cloud'
+        sni: otc-bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud
   patch:
     operation: INSERT_FIRST
     value:
@@ -14,10 +14,9 @@ configPatches:
         rules:
           # action: ALLOW # allow is not being marshaled by protojson as it is the default enum value (0)
           policies:
-            bar--foo:
+            acl-ingress:
               permissions:
-              - requested_server_name:
-                  suffix: -bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud
+              - any: true
               principals:
               - remote_ip:
                   address_prefix: 10.180.0.0
@@ -28,18 +27,90 @@ configPatches:
               - remote_ip:
                   address_prefix: 10.96.0.0
                   prefix_len: 11
-            bar--foo-inverse: 
+        stat_prefix: envoyrbac
+- applyTo: NETWORK_FILTER
+  match:
+    context: GATEWAY
+    listener:
+      filterChain:
+        sni: v-bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud
+  patch:
+    operation: INSERT_FIRST
+    value:
+      name: acl-ingress
+      typed_config:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC
+        rules:
+          policies:
+            acl-ingress:
               permissions:
-                  - not_rule:
-                      requested_server_name:
-                        suffix: -bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud
+              - any: true
               principals:
               - remote_ip:
-                  address_prefix: 0.0.0.0
-                  prefix_len: 0
+                  address_prefix: 10.180.0.0
+                  prefix_len: 16
               - remote_ip:
-                  address_prefix: '::'
-                  prefix_len: 0
+                  address_prefix: 10.250.0.0
+                  prefix_len: 16
+              - remote_ip:
+                  address_prefix: 10.96.0.0
+                  prefix_len: 11
+        stat_prefix: envoyrbac
+- applyTo: NETWORK_FILTER
+  match:
+    context: GATEWAY
+    listener:
+      filterChain:
+        sni: gu-bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud
+  patch:
+    operation: INSERT_FIRST
+    value:
+      name: acl-ingress
+      typed_config:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC
+        rules:
+          policies:
+            acl-ingress:
+              permissions:
+              - any: true
+              principals:
+              - remote_ip:
+                  address_prefix: 10.180.0.0
+                  prefix_len: 16
+              - remote_ip:
+                  address_prefix: 10.250.0.0
+                  prefix_len: 16
+              - remote_ip:
+                  address_prefix: 10.96.0.0
+                  prefix_len: 11
+        stat_prefix: envoyrbac
+- applyTo: NETWORK_FILTER
+  match:
+    context: GATEWAY
+    listener:
+      filterChain:
+        sni: p-bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud
+  patch:
+    operation: INSERT_FIRST
+    value:
+      name: acl-ingress
+      typed_config:
+        '@type': type.googleapis.com/envoy.extensions.filters.network.rbac.v3.RBAC
+        rules:
+          policies:
+            acl-ingress:
+              permissions:
+              - any: true
+              principals:
+              - remote_ip:
+                  address_prefix: 10.180.0.0
+                  prefix_len: 16
+              - remote_ip:
+                  address_prefix: 10.250.0.0
+                  prefix_len: 16
+              - remote_ip:
+                  address_prefix: 10.96.0.0
+                  prefix_len: 11
         stat_prefix: envoyrbac
 workloadSelector:
   labels:

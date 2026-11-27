@@ -126,12 +126,11 @@ var _ = Describe("actuator test", func() {
 			Expect(*extState.IstioNamespace).To(Equal(istioNamespace1))
 		})
 
-		// gardener >= v1.89, including https://github.com/gardener/gardener/pull/9038
-		Context("ingress-nginx is exposed via istio", func() {
+		Context("shoot has ingress Gateways", func() {
 			BeforeEach(func() {
-				gateway := createNewGateway("nginx-ingress-controller", "garden", map[string]string{
-					"app":   "istio-ingressgateway",
-					"istio": "ingressgateway",
+				gateway := createNewGatewayWithHosts("logging", shootNamespace1, istioNamespace1Selector, []string{
+					"otc-" + shootNamespace1 + ".ingress.test",
+					"v-" + shootNamespace1 + ".ingress.test",
 				})
 
 				DeferCleanup(func() {
@@ -158,12 +157,11 @@ var _ = Describe("actuator test", func() {
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
 				secret := &corev1.Secret{}
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
-				Expect(secret.Data["seed"]).To(ContainSubstring("acl-ingress-" + shootNamespace1))
+				Expect(secret.Data["seed"]).To(ContainSubstring("acl-ingress-" + shootNamespace1 + "-0"))
 			})
 		})
 
-		// gardener < v1.89
-		Context("ingress-nginx is not exposed via istio", func() {
+		Context("shoot has no ingress Gateways", func() {
 			It("should create managed resource not including acl-ingress-shoot EnvoyFilter object", func() {
 				extSpec := extensionspec.ExtensionSpec{
 					Rule: &envoyfilters.ACLRule{

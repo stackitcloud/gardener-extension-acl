@@ -1,10 +1,11 @@
-{{- if .Values.ingressEnvoyFilterSpec }}
+{{- range $i, $entry := .Values.ingressEnvoyFilterSpecs }}
+---
 apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
-  name: acl-ingress-{{ .Values.shootName }}
-  namespace: istio-ingress
+  name: acl-ingress-{{ $.Values.shootName }}-{{ $i }}
+  namespace: {{ $entry.namespace }}
   labels:
-    {{- include "gardener-extension.labels" . | nindent 4 }}
-spec: {{- .Values.ingressEnvoyFilterSpec | toYaml | nindent 2 }}
+    {{- include "gardener-extension.labels" $ | nindent 4 }}
+spec: {{- $entry.spec | toYaml | nindent 2 }}
 {{- end }}

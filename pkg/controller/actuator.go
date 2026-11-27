@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"time"
 
@@ -64,10 +65,9 @@ const (
 	// ImageName is used for the image vector override.
 	// This is currently not implemented correctly.
 	// TODO implement
-	ImageName          = "image-name"
-	deletionTimeout    = 2 * time.Minute
-	istioGatewayName   = "kube-apiserver"
-	ingressGatewayName = "nginx-ingress-controller"
+	ImageName        = "image-name"
+	deletionTimeout  = 2 * time.Minute
+	istioGatewayName = "kube-apiserver"
 )
 
 // Error variables for controller pkg
@@ -325,28 +325,33 @@ func (a *actuator) createSeedResources(
 		return err
 	}
 
+	ingressGroups, err := a.findIngressGatewayGroups(ctx, log, namespace, helper.GetSeedIngressDomain(cluster.Seed))
+	if err != nil {
+		return err
+	}
+
+	var ingressEnvoyFilterSpecs []map[string]interface{}
+	for _, g := range ingressGroups {
+		spec, err := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
+			spec.Rule, g.Hosts, alwaysAllowedCIDRs, g.Labels)
+		if err != nil {
+			return err
+		}
+		if spec != nil {
+			ingressEnvoyFilterSpecs = append(ingressEnvoyFilterSpecs, map[string]interface{}{
+				"namespace": g.Namespace,
+				"spec":      spec,
+			})
+		}
+	}
+
 	cfg := map[string]interface{}{
 		"shootName":                cluster.Shoot.Status.TechnicalID,
 		"targetNamespace":          istioNamespace,
 		"apiEnvoyFilterSpec":       apiEnvoyFilterSpec,
 		"vpnEnvoyFilterSpec":       vpnEnvoyFilterSpec,
 		"httpProxyEnvoyFilterSpec": httpProxyEnvoyFilterSpec,
-	}
-
-	defaultLabels, err := a.findDefaultIstioLabels(ctx)
-	if client.IgnoreNotFound(err) != nil {
-		return err
-	} else if err == nil {
-		// The `nginx-ingress-controller` Gateway object only exists in g/g@v1.89, (introduced with
-		// https://github.com/gardener/gardener/pull/9038).
-		// If it doesn't exist yet, we can't apply ACLs to shoot ingresses.
-		ingressEnvoyFilterSpec, err := envoyfilters.BuildIngressEnvoyFilterSpecForHelmChart(
-			cluster, spec.Rule, alwaysAllowedCIDRs, defaultLabels)
-		if err != nil {
-			return err
-		}
-
-		cfg["ingressEnvoyFilterSpec"] = ingressEnvoyFilterSpec
+		"ingressEnvoyFilterSpecs":  ingressEnvoyFilterSpecs,
 	}
 
 	cfg, err = chart.InjectImages(cfg, imagevector.ImageVector(), []string{ImageName})
@@ -474,23 +479,90 @@ func (a *actuator) findIstioNamespaceForExtension(
 	return deployments.Items[0].Namespace, gw.Spec.Selector, nil
 }
 
-func (a *actuator) findDefaultIstioLabels(
-	ctx context.Context,
-) (
-	istioLabels map[string]string,
-	err error,
-) {
-	gw := istionetworkv1beta1.Gateway{}
+// ingressGroup holds the hosts and the istio workload selector+namespace for
+// one group of ingress Gateway resources that share the same selector.
+type ingressGroup struct {
+	Namespace string
+	Labels    map[string]string
+	Hosts     []string
+}
 
-	err = a.client.Get(ctx, client.ObjectKey{
-		Namespace: v1beta1constants.GardenNamespace,
-		Name:      ingressGatewayName,
-	}, &gw)
-	if err != nil {
+// findIngressGatewayGroups lists all Istio Gateway resources in the shoot
+// namespace, groups them by selector, and resolves each selector to the istio
+// namespace of the matching Deployment. Returns one group per distinct selector.
+func (a *actuator) findIngressGatewayGroups(ctx context.Context, log logr.Logger, namespace, seedIngressDomain string) ([]ingressGroup, error) {
+	if seedIngressDomain == "" {
+		log.Info("findIngressGatewayGroups: no seed ingress domain, skipping")
+		return nil, nil
+	}
+	gwList := istionetworkv1beta1.GatewayList{}
+	if err := a.client.List(ctx, &gwList, client.InNamespace(namespace)); err != nil {
 		return nil, err
 	}
+	log.Info("findIngressGatewayGroups: listed gateways", "count", len(gwList.Items), "namespace", namespace, "seedIngressDomain", seedIngressDomain)
 
-	return gw.Spec.Selector, nil
+	type key = string // JSON-encoded selector map, used for deduplication
+	hostsByKey := map[key][]string{}
+	selectorByKey := map[key]map[string]string{}
+
+	suffix := "." + seedIngressDomain
+	for i := range gwList.Items {
+		gw := gwList.Items[i]
+		sel := gw.Spec.Selector
+		if len(sel) == 0 {
+			log.Info("findIngressGatewayGroups: skipping gateway with empty selector", "gateway", gw.Name)
+			continue
+		}
+		k := selectorKey(sel)
+		selectorByKey[k] = sel
+		for _, server := range gw.Spec.Servers {
+			for _, host := range server.Hosts {
+				if strings.HasSuffix(host, suffix) {
+					log.Info("findIngressGatewayGroups: found ingress host", "gateway", gw.Name, "host", host, "selector", sel)
+					hostsByKey[k] = append(hostsByKey[k], host)
+					break // one host per server entry suffices (avoids duplicate patches on same filter chain)
+				}
+			}
+		}
+	}
+
+	var groups []ingressGroup
+	for k, sel := range selectorByKey {
+		hosts := hostsByKey[k]
+		if len(hosts) == 0 {
+			log.Info("findIngressGatewayGroups: no ingress hosts for selector, skipping", "selector", sel)
+			continue
+		}
+		deployments := appsv1.DeploymentList{}
+		if err := a.client.List(ctx, &deployments, client.MatchingLabels(sel)); err != nil {
+			return nil, err
+		}
+		log.Info("findIngressGatewayGroups: deployment lookup", "selector", sel, "found", len(deployments.Items))
+		if len(deployments.Items) != 1 {
+			return nil, fmt.Errorf("could not resolve istio namespace for ingress selector %v: found %d deployments", sel, len(deployments.Items))
+		}
+		groups = append(groups, ingressGroup{
+			Namespace: deployments.Items[0].Namespace,
+			Labels:    sel,
+			Hosts:     hosts,
+		})
+	}
+	log.Info("findIngressGatewayGroups: returning groups", "count", len(groups))
+	return groups, nil
+}
+
+// selectorKey returns a stable string key for a label selector map.
+func selectorKey(sel map[string]string) string {
+	keys := make([]string, 0, len(sel))
+	for k := range sel {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(sel))
+	for _, k := range keys {
+		parts = append(parts, k+"="+sel[k])
+	}
+	return strings.Join(parts, ",")
 }
 
 // usesProxyTypeLBService checks the `istio-ingressgateway` LoadBalancer Service
