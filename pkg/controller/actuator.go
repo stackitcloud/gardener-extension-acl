@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"sort"
 	"strings"
 	"time"
 
@@ -509,7 +508,7 @@ func (a *actuator) findIngressGatewayGroups(ctx context.Context, namespace, seed
 		if len(sel) == 0 {
 			continue
 		}
-		k := selectorKey(sel)
+		k := metav1.FormatLabelSelector(metav1.SetAsLabelSelector(sel))
 		selectorByKey[k] = sel
 		for _, server := range gwList.Items[i].Spec.Servers {
 			for _, host := range server.Hosts {
@@ -541,20 +540,6 @@ func (a *actuator) findIngressGatewayGroups(ctx context.Context, namespace, seed
 		})
 	}
 	return groups, nil
-}
-
-// selectorKey returns a stable string key for a label selector map.
-func selectorKey(sel map[string]string) string {
-	keys := make([]string, 0, len(sel))
-	for k := range sel {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(sel))
-	for _, k := range keys {
-		parts = append(parts, k+"="+sel[k])
-	}
-	return strings.Join(parts, ",")
 }
 
 // usesProxyTypeLBService checks the `istio-ingressgateway` LoadBalancer Service
