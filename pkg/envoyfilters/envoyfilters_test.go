@@ -69,19 +69,24 @@ var _ = Describe("EnvoyFilter Unit Tests", func() {
 					"app":   "istio-ingressgateway",
 					"istio": "ingressgateway",
 				}
-				ingressEnvoyFilterSpec, err := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+				ingressHosts := []string{
+					"otc-bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud",
+					"v-bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud",
+					"gu-bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud",
+					"p-bar--foo.ingress.testseed.dev.ske.eu01.stackit.cloud",
+				}
+				ingressEnvoyFilterSpec, err := BuildIngressEnvoyFilterSpecForHelmChart(rule, ingressHosts, alwaysAllowedCIDRs, labels)
 				Expect(err).NotTo(HaveOccurred())
 
 				checkIfFilterEquals(ingressEnvoyFilterSpec, "ingressEnvoyFilterSpecWithOneAllowRule.yaml")
 			})
-			It("Should not create an envoyFilter spec when seed has no ingress", func() {
+			It("Should not create an envoyFilter spec when there are no ingress hosts", func() {
 				rule := createRule("ALLOW", "remote_ip", "10.180.0.0/16")
-				cluster.Seed.Spec.Ingress = nil
 				labels := map[string]string{
 					"app":   "istio-ingressgateway",
 					"istio": "ingressgateway",
 				}
-				ingressEnvoyFilterSpec, err := BuildIngressEnvoyFilterSpecForHelmChart(cluster, rule, alwaysAllowedCIDRs, labels)
+				ingressEnvoyFilterSpec, err := BuildIngressEnvoyFilterSpecForHelmChart(rule, nil, alwaysAllowedCIDRs, labels)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(ingressEnvoyFilterSpec).To(BeNil())
 			})

@@ -126,12 +126,11 @@ var _ = Describe("actuator test", func() {
 			Expect(*extState.IstioNamespace).To(Equal(istioNamespace1))
 		})
 
-		// gardener >= v1.89, including https://github.com/gardener/gardener/pull/9038
-		Context("ingress-nginx is exposed via istio", func() {
+		Context("shoot has ingress Gateways", func() {
 			BeforeEach(func() {
-				gateway := createNewGateway("nginx-ingress-controller", "garden", map[string]string{
-					"app":   "istio-ingressgateway",
-					"istio": "ingressgateway",
+				gateway := createNewGatewayWithHosts("logging", shootNamespace1, istioNamespace1Selector, []string{
+					"otc-" + shootNamespace1 + ".ingress.test",
+					"v-" + shootNamespace1 + ".ingress.test",
 				})
 
 				DeferCleanup(func() {
@@ -158,12 +157,11 @@ var _ = Describe("actuator test", func() {
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ResourceNameSeed, Namespace: shootNamespace1}, mr)).To(Succeed())
 				secret := &corev1.Secret{}
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: mr.Spec.SecretRefs[0].Name, Namespace: shootNamespace1}, secret)).To(Succeed())
-				Expect(secret.Data["seed"]).To(ContainSubstring("acl-ingress-" + shootNamespace1))
+				Expect(secret.Data["seed"]).To(ContainSubstring("acl-ingress-" + shootNamespace1 + "-0"))
 			})
 		})
 
-		// gardener < v1.89
-		Context("ingress-nginx is not exposed via istio", func() {
+		Context("shoot has no ingress Gateways", func() {
 			It("should create managed resource not including acl-ingress-shoot EnvoyFilter object", func() {
 				extSpec := extensionspec.ExtensionSpec{
 					Rule: &envoyfilters.ACLRule{
@@ -658,6 +656,120 @@ var _ = Describe("applyDefaultRule", func() {
 		extSpec := &extensionspec.ExtensionSpec{}
 		applyDefaultRule(extSpec, nil)
 		Expect(extSpec.Rule).To(BeNil())
+	})
+})
+
+var _ = Describe("findIngressGatewayGroups", func() {
+	var (
+		a              *actuator
+		shootNamespace string
+		istioNs        string
+		sel            map[string]string
+	)
+
+	BeforeEach(func() {
+		shootNamespace = createNewShootNamespace()
+		istioNs = createNewIstioNamespace()
+		sel = map[string]string{"app": "istio-ingressgateway", "istio": istioNs}
+		a = getNewActuator()
+	})
+
+	AfterEach(func() {
+		deleteNamespace(shootNamespace)
+		deleteNamespace(istioNs)
+	})
+
+	It("returns nil when seedIngressDomain is empty", func() {
+		groups, err := a.findIngressGatewayGroups(ctx, shootNamespace, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(groups).To(BeNil())
+	})
+
+	It("returns empty when no Gateways exist in the namespace", func() {
+		createNewIstioDeployment(istioNs, sel)
+		groups, err := a.findIngressGatewayGroups(ctx, shootNamespace, "ingress.test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(groups).To(BeEmpty())
+	})
+
+	It("returns empty when Gateway hosts don't match the seed ingress domain", func() {
+		createNewIstioDeployment(istioNs, sel)
+		createNewGatewayWithHosts("obs", shootNamespace, sel, []string{"host.other.domain"})
+		groups, err := a.findIngressGatewayGroups(ctx, shootNamespace, "ingress.test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(groups).To(BeEmpty())
+	})
+
+	It("skips a Gateway with an empty selector", func() {
+		createNewIstioDeployment(istioNs, sel)
+		createNewGatewayWithHosts("obs", shootNamespace, map[string]string{}, []string{"host.ingress.test"})
+		groups, err := a.findIngressGatewayGroups(ctx, shootNamespace, "ingress.test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(groups).To(BeEmpty())
+	})
+
+	It("returns one group with correct namespace and host for a single matching Gateway", func() {
+		createNewIstioDeployment(istioNs, sel)
+		createNewGatewayWithHosts("obs", shootNamespace, sel, []string{"host.ingress.test"})
+		groups, err := a.findIngressGatewayGroups(ctx, shootNamespace, "ingress.test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(groups).To(HaveLen(1))
+		Expect(groups[0].Namespace).To(Equal(istioNs))
+		Expect(groups[0].Hosts).To(ConsistOf("host.ingress.test"))
+		Expect(groups[0].Labels).To(Equal(sel))
+	})
+
+	It("returns two groups for two Gateways with different selectors", func() {
+		istioNs2 := createNewIstioNamespace()
+		DeferCleanup(func() { deleteNamespace(istioNs2) })
+		sel2 := map[string]string{"app": "istio-ingressgateway", "istio": istioNs2}
+		createNewIstioDeployment(istioNs, sel)
+		createNewIstioDeployment(istioNs2, sel2)
+		createNewGatewayWithHosts("obs1", shootNamespace, sel, []string{"host1.ingress.test"})
+		createNewGatewayWithHosts("obs2", shootNamespace, sel2, []string{"host2.ingress.test"})
+		groups, err := a.findIngressGatewayGroups(ctx, shootNamespace, "ingress.test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(groups).To(HaveLen(2))
+		namespaces := []string{groups[0].Namespace, groups[1].Namespace}
+		Expect(namespaces).To(ConsistOf(istioNs, istioNs2))
+	})
+
+	It("merges hosts from two Gateways with the same selector into one group", func() {
+		createNewIstioDeployment(istioNs, sel)
+		createNewGatewayWithHosts("obs1", shootNamespace, sel, []string{"host1.ingress.test"})
+		createNewGatewayWithHosts("obs2", shootNamespace, sel, []string{"host2.ingress.test"})
+		groups, err := a.findIngressGatewayGroups(ctx, shootNamespace, "ingress.test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(groups).To(HaveLen(1))
+		Expect(groups[0].Hosts).To(ConsistOf("host1.ingress.test", "host2.ingress.test"))
+	})
+
+	It("includes only the first matching host per server entry", func() {
+		createNewIstioDeployment(istioNs, sel)
+		// two hosts in one server entry — break after first match, so only first is included
+		gw := createNewGatewayWithHosts("obs", shootNamespace, sel, []string{"first.ingress.test", "second.ingress.test"})
+		DeferCleanup(func() { Expect(k8sClient.Delete(ctx, gw)).To(Or(Succeed(), BeNotFoundError())) })
+		groups, err := a.findIngressGatewayGroups(ctx, shootNamespace, "ingress.test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(groups).To(HaveLen(1))
+		Expect(groups[0].Hosts).To(ConsistOf("first.ingress.test"))
+	})
+
+	It("returns error when selector matches zero Deployments", func() {
+		createNewGatewayWithHosts("obs", shootNamespace, sel, []string{"host.ingress.test"})
+		// no deployment created
+		_, err := a.findIngressGatewayGroups(ctx, shootNamespace, "ingress.test")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("could not resolve istio namespace"))
+	})
+
+	It("returns error when selector matches multiple Deployments", func() {
+		createNewIstioDeployment(istioNs, sel)
+		createNewIstioDeployment(istioNs, sel) // second deployment with same labels
+		createNewGatewayWithHosts("obs", shootNamespace, sel, []string{"host.ingress.test"})
+		_, err := a.findIngressGatewayGroups(ctx, shootNamespace, "ingress.test")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("could not resolve istio namespace"))
 	})
 })
 
